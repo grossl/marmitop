@@ -3,7 +3,6 @@
 import { useState, useMemo } from "react";
 import {
   DndContext,
-  DragOverlay,
   PointerSensor,
   useSensor,
   useSensors,
@@ -224,40 +223,6 @@ function OrderCard({
   );
 }
 
-// ─── Static card (for DragOverlay) ────────────────────────────────────────────
-
-function OrderCardStatic({ order }: { order: Order }) {
-  const contact = contacts.find((c) => c.id === order.contactId);
-  return (
-    <div className="bg-card border-2 border-primary rounded-xl p-4 flex flex-col gap-3 shadow-2xl rotate-2 w-[260px]">
-      <div className="flex items-center gap-2 min-w-0">
-        <GripVertical className="w-4 h-4 text-muted-foreground/40 shrink-0" aria-hidden="true" />
-        <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">
-          {contact?.avatar ?? "?"}
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-foreground truncate">{contact?.name ?? "—"}</p>
-          <p className="text-xs text-muted-foreground font-mono">{order.id}</p>
-        </div>
-      </div>
-      <ul className="space-y-1">
-        {order.items.map((item, i) => (
-          <li key={i} className="flex items-start gap-1.5">
-            <span className="text-xs font-bold text-primary shrink-0 mt-0.5">{item.qty}x</span>
-            <span className="text-xs font-medium text-foreground">{item.name}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="flex items-center justify-between pt-1 border-t border-border">
-        <span className="text-xs text-muted-foreground">{paymentLabels[order.payment]}</span>
-        <span className="text-sm font-bold text-foreground">
-          R$ {order.total.toFixed(2).replace(".", ",")}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 // ─── Kanban column (droppable) ─────────────────────────────────────────────────
 
 function KanbanColumn({
@@ -319,11 +284,6 @@ export function OrdersPage() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
-  );
-
-  const activeOrder = useMemo(
-    () => orderList.find((o) => o.id === activeId) ?? null,
-    [activeId, orderList]
   );
 
   const filtered = useMemo(() => {
@@ -440,9 +400,7 @@ export function OrdersPage() {
             ))}
           </div>
 
-          <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
-            {activeOrder ? <OrderCardStatic order={activeOrder} /> : null}
-          </DragOverlay>
+
         </DndContext>
       </div>
     </div>
