@@ -241,7 +241,7 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex flex-col rounded-xl border min-w-0 flex-1 transition-colors duration-150",
+        "flex flex-col rounded-xl border min-w-0 flex-1 overflow-hidden transition-colors duration-150",
         isOver ? col.dropClass : col.colClass
       )}
     >
@@ -255,7 +255,7 @@ function KanbanColumn({
       </div>
 
       {/* Cards */}
-      <div className="flex flex-col gap-3 p-3 overflow-y-auto flex-1 min-h-[80px]">
+      <div className="flex flex-col gap-3 p-3 overflow-y-auto overflow-x-hidden flex-1 min-h-[80px]">
         {orders.length === 0 && !isOver ? (
           <div className="flex flex-col items-center justify-center py-6 text-center">
             <Icon className="w-6 h-6 text-muted-foreground/30 mb-1" aria-hidden="true" />
