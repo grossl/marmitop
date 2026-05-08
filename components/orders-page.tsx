@@ -20,7 +20,6 @@ import {
   DollarSign,
   MapPin,
   CreditCard,
-  ChevronRight,
   Package,
   Bike,
   UtensilsCrossed,
@@ -31,7 +30,6 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   orders as allOrders,
@@ -115,10 +113,6 @@ const COLUMNS: {
   },
 ];
 
-const STATUS_FLOW: OrderStatus[] = [
-  "aguardando", "confirmado", "preparando", "pronto", "saiu", "entregue",
-];
-
 // ─── KPI card ──────────────────────────────────────────────────────────────────
 
 function KpiCard({
@@ -152,15 +146,9 @@ function KpiCard({
 
 function OrderCard({
   order,
-  badgeClass,
-  onAdvance,
-  isLast,
   isDragging = false,
 }: {
   order: Order;
-  badgeClass: string;
-  onAdvance?: () => void;
-  isLast: boolean;
   isDragging?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
@@ -177,6 +165,8 @@ function OrderCard({
     <div
       ref={setNodeRef}
       style={style}
+      {...listeners}
+      {...attributes}
       className={cn(
         "bg-card border border-border rounded-xl p-4 flex flex-col gap-3 shadow-sm transition-all select-none",
         isDragging ? "opacity-40" : "hover:shadow-md cursor-grab active:cursor-grabbing"
@@ -185,14 +175,7 @@ function OrderCard({
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          {/* Drag handle */}
-          <div
-            {...listeners}
-            {...attributes}
-            className="text-muted-foreground/40 hover:text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing"
-          >
-            <GripVertical className="w-4 h-4" aria-hidden="true" />
-          </div>
+          <GripVertical className="w-4 h-4 text-muted-foreground/40 shrink-0" aria-hidden="true" />
           <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">
             {contact?.avatar ?? "?"}
           </div>
@@ -237,19 +220,6 @@ function OrderCard({
           R$ {order.total.toFixed(2).replace(".", ",")}
         </span>
       </div>
-
-      {/* Advance button */}
-      {!isLast && (
-        <Button
-          size="sm"
-          variant="outline"
-          className="w-full text-xs h-7 gap-1"
-          onClick={onAdvance}
-        >
-          Avançar status
-          <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
-        </Button>
-      )}
     </div>
   );
 }
@@ -293,17 +263,14 @@ function OrderCardStatic({ order }: { order: Order }) {
 function KanbanColumn({
   col,
   orders,
-  onAdvance,
   activeId,
 }: {
   col: (typeof COLUMNS)[number];
   orders: Order[];
-  onAdvance: (orderId: string) => void;
   activeId: string | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.status });
   const Icon = col.icon;
-  const isLast = col.status === "entregue";
 
   return (
     <div
@@ -334,10 +301,7 @@ function KanbanColumn({
             <OrderCard
               key={order.id}
               order={order}
-              badgeClass={col.badgeClass}
-              isLast={isLast}
               isDragging={activeId === order.id}
-              onAdvance={() => onAdvance(order.id)}
             />
           ))
         )}
@@ -388,17 +352,6 @@ export function OrdersPage() {
     if (!STATUS_FLOW.includes(newStatus)) return;
     setOrderList((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
-    );
-  }
-
-  function advanceOrder(orderId: string) {
-    setOrderList((prev) =>
-      prev.map((o) => {
-        if (o.id !== orderId) return o;
-        const idx = STATUS_FLOW.indexOf(o.status);
-        if (idx === -1 || idx >= STATUS_FLOW.length - 1) return o;
-        return { ...o, status: STATUS_FLOW[idx + 1] };
-      })
     );
   }
 
@@ -480,7 +433,6 @@ export function OrdersPage() {
                 key={col.status}
                 col={col}
                 orders={filtered.filter((o) => o.status === col.status)}
-                onAdvance={advanceOrder}
                 activeId={activeId}
               />
             ))}
