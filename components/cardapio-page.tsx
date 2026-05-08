@@ -32,28 +32,16 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
   menuItems as initialMenuItems,
   drinkItems as initialDrinkItems,
-  categoryLabels,
-  categoryColors,
-  drinkCategoryLabels,
-  drinkCategoryColors,
   weekdayLabels,
   ALL_WEEKDAYS,
   type MenuItem,
   type DrinkItem,
-  type MenuCategory,
-  type DrinkCategory,
   type Weekday,
   type SubItem,
 } from "@/lib/marmita-data";
@@ -61,9 +49,6 @@ import {
 // ─── Types & constants ────────────────────────────────────────────────────────
 
 type Tab = "marmitas" | "bebidas";
-const ALL = "todos" as const;
-type FilterMenuCat = MenuCategory | typeof ALL;
-type FilterDrinkCat = DrinkCategory | typeof ALL;
 
 // ─── Weekday pill ─────────────────────────────────────────────────────────────
 
@@ -262,9 +247,6 @@ function MenuItemCard({
       )}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", categoryColors[item.category])}>
-            {categoryLabels[item.category]}
-          </span>
           {item.popular && (
             <span className="flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
               <Star className="w-2.5 h-2.5" /> Popular
@@ -379,9 +361,6 @@ function DrinkItemCard({
       )}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", drinkCategoryColors[item.category])}>
-            {drinkCategoryLabels[item.category]}
-          </span>
           {item.popular && (
             <span className="flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
               <Star className="w-2.5 h-2.5" /> Popular
@@ -462,16 +441,13 @@ function MenuDetailPanel({
       </div>
       <ScrollArea className="flex-1">
         <div className="p-5 flex flex-col gap-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", categoryColors[item.category])}>
-              {categoryLabels[item.category]}
-            </span>
-            {item.popular && (
+          {item.popular && (
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
                 <Star className="w-3 h-3" /> Popular
               </span>
-            )}
-          </div>
+            </div>
+          )}
           <div>
             <h3 className="text-lg font-bold text-foreground leading-tight">{item.name}</h3>
             <p className="text-2xl font-bold text-primary mt-1">
@@ -590,16 +566,13 @@ function DrinkDetailPanel({
       </div>
       <ScrollArea className="flex-1">
         <div className="p-5 flex flex-col gap-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", drinkCategoryColors[item.category])}>
-              {drinkCategoryLabels[item.category]}
-            </span>
-            {item.popular && (
+          {item.popular && (
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
                 <Star className="w-3 h-3" /> Popular
               </span>
-            )}
-          </div>
+            </div>
+          )}
           <div>
             <h3 className="text-lg font-bold text-foreground leading-tight">{item.name}</h3>
             <p className="text-2xl font-bold text-primary mt-1">
@@ -710,23 +683,10 @@ function MenuItemFormDialog({
             <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Descreva os ingredientes e acompanhamentos..." rows={2} className="text-sm resize-none" />
           </div>
 
-          {/* Row 2: category + calories */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-sm">Categoria</Label>
-              <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v as MenuCategory }))}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(categoryLabels) as MenuCategory[]).map((cat) => (
-                    <SelectItem key={cat} value={cat}>{categoryLabels[cat]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-sm">Calorias (kcal)</Label>
-              <Input type="number" min="0" value={form.calories ?? ""} onChange={(e) => setForm((f) => ({ ...f, calories: e.target.value ? parseInt(e.target.value) : undefined }))} placeholder="Ex: 520" className="h-9 text-sm" />
-            </div>
+          {/* Calorias */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-sm">Calorias (kcal)</Label>
+            <Input type="number" min="0" value={form.calories ?? ""} onChange={(e) => setForm((f) => ({ ...f, calories: e.target.value ? parseInt(e.target.value) : undefined }))} placeholder="Ex: 520" className="h-9 text-sm" />
           </div>
 
           {/* Weekdays */}
@@ -825,22 +785,9 @@ function DrinkFormDialog({
             <Label className="text-sm">Descrição</Label>
             <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={2} className="text-sm resize-none" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-sm">Categoria</Label>
-              <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v as DrinkCategory }))}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(drinkCategoryLabels) as DrinkCategory[]).map((cat) => (
-                    <SelectItem key={cat} value={cat}>{drinkCategoryLabels[cat]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-sm">Volume</Label>
-              <Input value={form.volume} onChange={(e) => setForm((f) => ({ ...f, volume: e.target.value }))} placeholder="Ex: 350ml" className="h-9 text-sm" />
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-sm">Volume</Label>
+            <Input value={form.volume} onChange={(e) => setForm((f) => ({ ...f, volume: e.target.value }))} placeholder="Ex: 350ml" className="h-9 text-sm" />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label className="text-sm flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Dias disponíveis</Label>
@@ -876,7 +823,6 @@ export function CardapioPage() {
   // Marmitas state
   const [menuList, setMenuList] = useState<MenuItem[]>(initialMenuItems);
   const [menuSearch, setMenuSearch] = useState("");
-  const [menuCategory, setMenuCategory] = useState<FilterMenuCat>(ALL);
   const [selectedMenu, setSelectedMenu] = useState<MenuItem | null>(null);
   const [editMenu, setEditMenu] = useState<MenuItem | null>(null);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
@@ -885,7 +831,6 @@ export function CardapioPage() {
   // Drinks state
   const [drinkList, setDrinkList] = useState<DrinkItem[]>(initialDrinkItems);
   const [drinkSearch, setDrinkSearch] = useState("");
-  const [drinkCategory, setDrinkCategory] = useState<FilterDrinkCat>(ALL);
   const [selectedDrink, setSelectedDrink] = useState<DrinkItem | null>(null);
   const [editDrink, setEditDrink] = useState<DrinkItem | null>(null);
   const [newDrinkOpen, setNewDrinkOpen] = useState(false);
@@ -893,9 +838,8 @@ export function CardapioPage() {
 
   // ── Marmita handlers ──────────────────────────────────────────────────────
   const filteredMenu = menuList.filter((i) => {
-    const matchCat = menuCategory === ALL || i.category === menuCategory;
     const q = menuSearch.toLowerCase();
-    return matchCat && (q === "" || i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
+    return q === "" || i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q);
   });
 
   const toggleMenuAvailable = (id: string) => {
@@ -921,9 +865,8 @@ export function CardapioPage() {
 
   // ── Drink handlers ────────────────────────────────────────────────────────
   const filteredDrinks = drinkList.filter((i) => {
-    const matchCat = drinkCategory === ALL || i.category === drinkCategory;
     const q = drinkSearch.toLowerCase();
-    return matchCat && (q === "" || i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
+    return q === "" || i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q);
   });
 
   const toggleDrinkAvailable = (id: string) => {
@@ -997,38 +940,15 @@ export function CardapioPage() {
         </header>
 
         {/* Filters */}
-        <div className="flex flex-col gap-3 px-6 py-3 bg-card border-b border-border shrink-0">
-          {activeTab === "marmitas" ? (
-            <>
-              <div className="relative max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input placeholder="Buscar marmita..." value={menuSearch} onChange={(e) => setMenuSearch(e.target.value)} className="pl-9 h-9 text-sm bg-background border-border" />
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <FilterPill active={menuCategory === ALL} onClick={() => setMenuCategory(ALL)}>Todos ({menuList.length})</FilterPill>
-                {(Object.keys(categoryLabels) as MenuCategory[]).map((cat) => (
-                  <FilterPill key={cat} active={menuCategory === cat} onClick={() => setMenuCategory(cat)}>
-                    {categoryLabels[cat]} ({menuList.filter((i) => i.category === cat).length})
-                  </FilterPill>
-                ))}
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="relative max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input placeholder="Buscar bebida..." value={drinkSearch} onChange={(e) => setDrinkSearch(e.target.value)} className="pl-9 h-9 text-sm bg-background border-border" />
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <FilterPill active={drinkCategory === ALL} onClick={() => setDrinkCategory(ALL)}>Todos ({drinkList.length})</FilterPill>
-                {(Object.keys(drinkCategoryLabels) as DrinkCategory[]).map((cat) => (
-                  <FilterPill key={cat} active={drinkCategory === cat} onClick={() => setDrinkCategory(cat)}>
-                    {drinkCategoryLabels[cat]} ({drinkList.filter((i) => i.category === cat).length})
-                  </FilterPill>
-                ))}
-              </div>
-            </>
-          )}
+        <div className="flex items-center gap-3 px-6 py-3 bg-card border-b border-border shrink-0">
+          <div className="relative max-w-sm w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            {activeTab === "marmitas" ? (
+              <Input placeholder="Buscar marmita..." value={menuSearch} onChange={(e) => setMenuSearch(e.target.value)} className="pl-9 h-9 text-sm bg-background border-border" />
+            ) : (
+              <Input placeholder="Buscar bebida..." value={drinkSearch} onChange={(e) => setDrinkSearch(e.target.value)} className="pl-9 h-9 text-sm bg-background border-border" />
+            )}
+          </div>
         </div>
 
         {/* Grid */}
