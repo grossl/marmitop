@@ -242,13 +242,6 @@ function MenuItemCard({
         </div>
       )}
       <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {item.popular && (
-            <span className="flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-              <Star className="w-2.5 h-2.5" /> Popular
-            </span>
-          )}
-        </div>
         <p className="text-base font-bold text-primary shrink-0">
           R$ {item.price.toFixed(2).replace(".", ",")}
         </p>
@@ -348,13 +341,6 @@ function DrinkItemCard({
         </div>
       )}
       <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {item.popular && (
-            <span className="flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-              <Star className="w-2.5 h-2.5" /> Popular
-            </span>
-          )}
-        </div>
         <p className="text-base font-bold text-primary shrink-0">
           R$ {item.price.toFixed(2).replace(".", ",")}
         </p>
