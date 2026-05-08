@@ -185,11 +185,12 @@ function SubItemEditor({
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Switch
+            <input
               id="required-toggle"
+              type="checkbox"
               checked={newRequired}
-              onCheckedChange={setNewRequired}
-              className="scale-75"
+              onChange={(e) => setNewRequired(e.target.checked)}
+              className="w-3.5 h-3.5 accent-primary cursor-pointer"
             />
             <Label htmlFor="required-toggle" className="text-xs text-muted-foreground cursor-pointer">
               Obrigatório
