@@ -188,10 +188,6 @@ function MenuItemCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const displayPrice = item.sizes && item.sizes.length > 0
-    ? `${item.sizes[0].name} R$ ${item.sizes[0].price.toFixed(2).replace(".", ",")}`
-    : `R$ ${item.price.toFixed(2).replace(".", ",")}`;
-
   return (
     <div
       onClick={onSelect}
@@ -202,18 +198,29 @@ function MenuItemCard({
           : "border-border hover:border-primary/40 hover:shadow-sm"
       )}
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="text-base font-bold text-primary shrink-0">{displayPrice}</p>
-        {item.sizes && item.sizes.length > 1 && (
-          <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
-            {item.sizes.length} tamanhos
-          </span>
-        )}
-      </div>
       <h3 className="text-sm font-semibold text-foreground leading-snug mb-1">{item.name}</h3>
-      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 flex-1">
+      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 flex-1 mb-3">
         {item.description}
       </p>
+
+      {/* Sizes */}
+      {item.sizes && item.sizes.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5 mb-1">
+          {item.sizes.map((s) => (
+            <span
+              key={s.id}
+              className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-primary/8 border border-primary/20 text-foreground"
+            >
+              <span className="text-primary">{s.name}</span>
+              <span className="text-muted-foreground font-normal">R$ {s.price.toFixed(2).replace(".", ",")}</span>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm font-bold text-primary mb-1">
+          R$ {item.price.toFixed(2).replace(".", ",")}
+        </p>
+      )}
 
       {/* Days */}
       {item.availableDays && item.availableDays.length > 0 && item.availableDays.length < 7 && (
