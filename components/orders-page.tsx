@@ -343,15 +343,17 @@ export function OrdersPage() {
     setActiveId(String(event.active.id));
   }
 
+  const VALID_STATUSES = new Set<string>(COLUMNS.map((c) => c.status));
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveId(null);
     if (!over) return;
     const orderId = String(active.id);
-    const newStatus = String(over.id) as OrderStatus;
-    if (!STATUS_FLOW.includes(newStatus)) return;
+    const newStatus = String(over.id);
+    if (!VALID_STATUSES.has(newStatus)) return;
     setOrderList((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+      prev.map((o) => (o.id === orderId ? { ...o, status: newStatus as OrderStatus } : o))
     );
   }
 
