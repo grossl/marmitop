@@ -4,6 +4,15 @@ export type OrderStatus = "aguardando" | "confirmado" | "preparando" | "pronto" 
 export type PaymentMethod = "pix" | "dinheiro" | "cartao_credito" | "cartao_debito";
 export type Section = "mensagens" | "pedidos" | "contatos" | "relatorios" | "cardapio";
 export type MenuCategory = "proteinas" | "vegetariano" | "fit" | "executiva" | "especial";
+export type DrinkCategory = "refrigerantes" | "sucos" | "agua" | "alcoolicas" | "quentes";
+export type Weekday = "seg" | "ter" | "qua" | "qui" | "sex" | "sab" | "dom";
+
+export interface SubItem {
+  id: string;
+  name: string;
+  price: number;    // 0 = incluso, >0 = adicional
+  required: boolean; // grupo de escolha obrigatória (ex: acompanhamento)
+}
 
 export interface MenuItem {
   id: string;
@@ -16,6 +25,20 @@ export interface MenuItem {
   calories?: number;
   image?: string;
   extras?: string[];
+  subItems?: SubItem[];
+  availableDays?: Weekday[];
+}
+
+export interface DrinkItem {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  category: DrinkCategory;
+  available: boolean;
+  popular: boolean;
+  volume?: string;
+  availableDays?: Weekday[];
 }
 
 export interface OrderItem {
@@ -510,7 +533,16 @@ export const menuItems: MenuItem[] = [
     available: true,
     popular: true,
     calories: 520,
+    availableDays: ["seg", "ter", "qua", "qui", "sex"],
     extras: ["Arroz integral", "Feijão preto", "Farofa extra"],
+    subItems: [
+      { id: "si-001-1", name: "Arroz branco", price: 0, required: true },
+      { id: "si-001-2", name: "Arroz integral", price: 0, required: true },
+      { id: "si-001-3", name: "Feijão carioca", price: 0, required: false },
+      { id: "si-001-4", name: "Farofa", price: 0, required: false },
+      { id: "si-001-5", name: "Salada mista", price: 0, required: false },
+      { id: "si-001-6", name: "Farofa extra", price: 2.0, required: false },
+    ],
   },
   {
     id: "MI-002",
@@ -521,7 +553,15 @@ export const menuItems: MenuItem[] = [
     available: true,
     popular: true,
     calories: 780,
+    availableDays: ["sex", "sab", "dom"],
     extras: ["Queijo coalho grelhado", "Molho chimichurri"],
+    subItems: [
+      { id: "si-002-1", name: "Arroz branco", price: 0, required: true },
+      { id: "si-002-2", name: "Batata frita", price: 0, required: true },
+      { id: "si-002-3", name: "Vinagrete", price: 0, required: false },
+      { id: "si-002-4", name: "Queijo coalho grelhado", price: 3.5, required: false },
+      { id: "si-002-5", name: "Molho chimichurri", price: 2.0, required: false },
+    ],
   },
   {
     id: "MI-003",
@@ -532,7 +572,14 @@ export const menuItems: MenuItem[] = [
     available: true,
     popular: false,
     calories: 610,
+    availableDays: ["seg", "qua", "sex"],
     extras: ["Ovo frito", "Batata frita"],
+    subItems: [
+      { id: "si-003-1", name: "Arroz branco", price: 0, required: true },
+      { id: "si-003-2", name: "Feijão carioca", price: 0, required: false },
+      { id: "si-003-3", name: "Purê de mandioca", price: 0, required: false },
+      { id: "si-003-4", name: "Ovo frito", price: 2.0, required: false },
+    ],
   },
   {
     id: "MI-004",
@@ -543,7 +590,13 @@ export const menuItems: MenuItem[] = [
     available: true,
     popular: true,
     calories: 690,
+    availableDays: ["ter", "qui", "sab"],
     extras: ["Espaguete ao sugo", "Arroz extra"],
+    subItems: [
+      { id: "si-004-1", name: "Arroz branco", price: 0, required: true },
+      { id: "si-004-2", name: "Espaguete ao sugo", price: 0, required: true },
+      { id: "si-004-3", name: "Arroz extra (porção dobrada)", price: 2.5, required: false },
+    ],
   },
   {
     id: "MI-005",
@@ -554,7 +607,14 @@ export const menuItems: MenuItem[] = [
     available: true,
     popular: false,
     calories: 600,
+    availableDays: ["seg", "ter", "qua", "qui", "sex"],
     extras: ["Arroz integral", "Macarrão"],
+    subItems: [
+      { id: "si-005-1", name: "Arroz branco", price: 0, required: true },
+      { id: "si-005-2", name: "Arroz integral", price: 0, required: true },
+      { id: "si-005-3", name: "Batata palha", price: 0, required: false },
+      { id: "si-005-4", name: "Macarrão no lugar do arroz", price: 0, required: false },
+    ],
   },
   {
     id: "MI-006",
@@ -565,7 +625,16 @@ export const menuItems: MenuItem[] = [
     available: true,
     popular: true,
     calories: 850,
+    availableDays: ["sab"],
     extras: ["Torresmo", "Couve extra"],
+    subItems: [
+      { id: "si-006-1", name: "Arroz branco", price: 0, required: true },
+      { id: "si-006-2", name: "Farofa", price: 0, required: false },
+      { id: "si-006-3", name: "Couve refogada", price: 0, required: false },
+      { id: "si-006-4", name: "Laranja", price: 0, required: false },
+      { id: "si-006-5", name: "Torresmo", price: 4.0, required: false },
+      { id: "si-006-6", name: "Couve extra", price: 2.5, required: false },
+    ],
   },
   {
     id: "MI-007",
@@ -576,7 +645,13 @@ export const menuItems: MenuItem[] = [
     available: true,
     popular: false,
     calories: 460,
+    availableDays: ["ter", "qui"],
     extras: ["Parmesão extra", "Salada verde"],
+    subItems: [
+      { id: "si-007-1", name: "Parmesão ralado", price: 0, required: false },
+      { id: "si-007-2", name: "Salada verde", price: 0, required: false },
+      { id: "si-007-3", name: "Parmesão extra", price: 2.0, required: false },
+    ],
   },
   {
     id: "MI-008",
@@ -587,7 +662,15 @@ export const menuItems: MenuItem[] = [
     available: true,
     popular: false,
     calories: 390,
+    availableDays: ["seg", "ter", "qua", "qui", "sex"],
     extras: ["Hummus", "Pão sírio"],
+    subItems: [
+      { id: "si-008-1", name: "Arroz integral", price: 0, required: true },
+      { id: "si-008-2", name: "Grão-de-bico", price: 0, required: false },
+      { id: "si-008-3", name: "Legumes grelhados", price: 0, required: false },
+      { id: "si-008-4", name: "Hummus", price: 3.0, required: false },
+      { id: "si-008-5", name: "Pão sírio", price: 2.0, required: false },
+    ],
   },
   {
     id: "MI-009",
@@ -598,7 +681,15 @@ export const menuItems: MenuItem[] = [
     available: true,
     popular: true,
     calories: 420,
+    availableDays: ["seg", "ter", "qua", "qui", "sex"],
     extras: ["Ovo mexido", "Batata doce"],
+    subItems: [
+      { id: "si-009-1", name: "Arroz integral", price: 0, required: true },
+      { id: "si-009-2", name: "Batata doce", price: 0, required: true },
+      { id: "si-009-3", name: "Brócolis no vapor", price: 0, required: false },
+      { id: "si-009-4", name: "Cenoura", price: 0, required: false },
+      { id: "si-009-5", name: "Ovo mexido", price: 2.5, required: false },
+    ],
   },
   {
     id: "MI-010",
@@ -609,7 +700,16 @@ export const menuItems: MenuItem[] = [
     available: true,
     popular: false,
     calories: 480,
+    availableDays: ["seg", "qua", "sex"],
     extras: ["Abacate", "Ovos cozidos"],
+    subItems: [
+      { id: "si-010-1", name: "Quinoa", price: 0, required: true },
+      { id: "si-010-2", name: "Frango desfiado", price: 0, required: false },
+      { id: "si-010-3", name: "Grão-de-bico", price: 0, required: false },
+      { id: "si-010-4", name: "Molho de iogurte", price: 0, required: false },
+      { id: "si-010-5", name: "Abacate", price: 3.5, required: false },
+      { id: "si-010-6", name: "Ovos cozidos (2un)", price: 3.0, required: false },
+    ],
   },
   {
     id: "MI-011",
@@ -620,7 +720,17 @@ export const menuItems: MenuItem[] = [
     available: true,
     popular: true,
     calories: 650,
+    availableDays: ["seg", "ter", "qua", "qui", "sex"],
     extras: ["Suco natural", "Sobremesa extra"],
+    subItems: [
+      { id: "si-011-1", name: "Carne do dia", price: 0, required: true },
+      { id: "si-011-2", name: "Frango grelhado", price: 0, required: true },
+      { id: "si-011-3", name: "Peixe grelhado", price: 0, required: true },
+      { id: "si-011-4", name: "Acompanhamento 1 (à escolha)", price: 0, required: false },
+      { id: "si-011-5", name: "Acompanhamento 2 (à escolha)", price: 0, required: false },
+      { id: "si-011-6", name: "Sobremesa", price: 0, required: false },
+      { id: "si-011-7", name: "Suco natural", price: 4.0, required: false },
+    ],
   },
   {
     id: "MI-012",
@@ -631,9 +741,63 @@ export const menuItems: MenuItem[] = [
     available: false,
     popular: false,
     calories: 720,
+    availableDays: ["sex", "sab"],
     extras: ["Vinho da casa (mini)", "Sobremesa especial"],
+    subItems: [
+      { id: "si-012-1", name: "Alcatra", price: 0, required: true },
+      { id: "si-012-2", name: "Fraldinha", price: 0, required: true },
+      { id: "si-012-3", name: "Filé mignon", price: 0, required: true },
+      { id: "si-012-4", name: "Acompanhamento 1", price: 0, required: false },
+      { id: "si-012-5", name: "Acompanhamento 2", price: 0, required: false },
+      { id: "si-012-6", name: "Acompanhamento 3", price: 0, required: false },
+      { id: "si-012-7", name: "Suco natural (incluso)", price: 0, required: false },
+      { id: "si-012-8", name: "Vinho da casa (mini)", price: 8.0, required: false },
+    ],
   },
 ];
+
+export const drinkItems: DrinkItem[] = [
+  { id: "DR-001", name: "Coca-Cola Lata 350ml", description: "Refrigerante gelado.", price: 5.0, category: "refrigerantes", available: true, popular: true, volume: "350ml", availableDays: ["seg","ter","qua","qui","sex","sab","dom"] },
+  { id: "DR-002", name: "Guaraná Antarctica 350ml", description: "Refrigerante de guaraná gelado.", price: 5.0, category: "refrigerantes", available: true, popular: false, volume: "350ml", availableDays: ["seg","ter","qua","qui","sex","sab","dom"] },
+  { id: "DR-003", name: "Suco de Laranja Natural 300ml", description: "Suco espremido na hora, sem adição de açúcar.", price: 8.0, category: "sucos", available: true, popular: true, volume: "300ml", availableDays: ["seg","ter","qua","qui","sex"] },
+  { id: "DR-004", name: "Suco de Maracujá Natural 300ml", description: "Suco de maracujá com água de coco.", price: 8.5, category: "sucos", available: true, popular: false, volume: "300ml", availableDays: ["seg","ter","qua","qui","sex"] },
+  { id: "DR-005", name: "Suco de Abacaxi com Hortelã 300ml", description: "Combinação refrescante de abacaxi e hortelã fresca.", price: 9.0, category: "sucos", available: true, popular: true, volume: "300ml", availableDays: ["seg","ter","qua","qui","sex","sab"] },
+  { id: "DR-006", name: "Água sem Gás 500ml", description: "Água mineral natural.", price: 3.0, category: "agua", available: true, popular: false, volume: "500ml", availableDays: ["seg","ter","qua","qui","sex","sab","dom"] },
+  { id: "DR-007", name: "Água com Gás 500ml", description: "Água mineral gaseificada.", price: 4.0, category: "agua", available: true, popular: false, volume: "500ml", availableDays: ["seg","ter","qua","qui","sex","sab","dom"] },
+  { id: "DR-008", name: "Cerveja Heineken Long Neck 330ml", description: "Cerveja premium importada gelada.", price: 10.0, category: "alcoolicas", available: true, popular: true, volume: "330ml", availableDays: ["sex","sab","dom"] },
+  { id: "DR-009", name: "Caipirinha de Limão", description: "Caipirinha artesanal com limão taiti, cachaça e açúcar.", price: 14.0, category: "alcoolicas", available: true, popular: false, volume: "300ml", availableDays: ["sab","dom"] },
+  { id: "DR-010", name: "Café Expresso", description: "Café expresso forte e encorpado.", price: 5.0, category: "quentes", available: true, popular: false, volume: "50ml", availableDays: ["seg","ter","qua","qui","sex"] },
+  { id: "DR-011", name: "Café com Leite", description: "Café coado com leite quente cremoso.", price: 7.0, category: "quentes", available: true, popular: true, volume: "200ml", availableDays: ["seg","ter","qua","qui","sex"] },
+  { id: "DR-012", name: "Chá Gelado de Pêssego", description: "Chá gelado artesanal de pêssego com hortelã.", price: 7.5, category: "quentes", available: false, popular: false, volume: "300ml", availableDays: ["seg","ter","qua","qui","sex","sab"] },
+];
+
+export const drinkCategoryLabels: Record<DrinkCategory, string> = {
+  refrigerantes: "Refrigerantes",
+  sucos:         "Sucos Naturais",
+  agua:          "Água",
+  alcoolicas:    "Bebidas Alcoólicas",
+  quentes:       "Bebidas Quentes",
+};
+
+export const drinkCategoryColors: Record<DrinkCategory, string> = {
+  refrigerantes: "bg-red-100 text-red-700",
+  sucos:         "bg-orange-100 text-orange-700",
+  agua:          "bg-sky-100 text-sky-700",
+  alcoolicas:    "bg-yellow-100 text-yellow-800",
+  quentes:       "bg-amber-100 text-amber-800",
+};
+
+export const weekdayLabels: Record<Weekday, string> = {
+  seg: "Seg",
+  ter: "Ter",
+  qua: "Qua",
+  qui: "Qui",
+  sex: "Sex",
+  sab: "Sáb",
+  dom: "Dom",
+};
+
+export const ALL_WEEKDAYS: Weekday[] = ["seg","ter","qua","qui","sex","sab","dom"];
 
 export const categoryLabels: Record<MenuCategory, string> = {
   proteinas: "Proteínas",

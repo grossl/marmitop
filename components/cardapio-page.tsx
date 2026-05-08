@@ -12,18 +12,17 @@ import {
   Star,
   Flame,
   ChefHat,
+  GlassWater,
+  Calendar,
+  ListPlus,
+  X,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import {
   Dialog,
   DialogContent,
@@ -43,342 +42,189 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
-  menuItems as initialItems,
+  menuItems as initialMenuItems,
+  drinkItems as initialDrinkItems,
   categoryLabels,
   categoryColors,
+  drinkCategoryLabels,
+  drinkCategoryColors,
+  weekdayLabels,
+  ALL_WEEKDAYS,
   type MenuItem,
+  type DrinkItem,
   type MenuCategory,
+  type DrinkCategory,
+  type Weekday,
+  type SubItem,
 } from "@/lib/marmita-data";
 
+// ─── Types & constants ────────────────────────────────────────────────────────
+
+type Tab = "marmitas" | "bebidas";
 const ALL = "todos" as const;
-type FilterCategory = MenuCategory | typeof ALL;
+type FilterMenuCat = MenuCategory | typeof ALL;
+type FilterDrinkCat = DrinkCategory | typeof ALL;
 
-export function CardapioPage() {
-  const [items, setItems] = useState<MenuItem[]>(initialItems);
-  const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState<FilterCategory>(ALL);
-  const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
-  const [editItem, setEditItem] = useState<MenuItem | null>(null);
-  const [isNewOpen, setIsNewOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+// ─── Weekday pill ─────────────────────────────────────────────────────────────
 
-  // ── derived ──────────────────────────────────────────────────────────────────
-  const filtered = items.filter((item) => {
-    const matchCat = activeCategory === ALL || item.category === activeCategory;
-    const matchSearch =
-      search === "" ||
-      item.name.toLowerCase().includes(search.toLowerCase()) ||
-      item.description.toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchSearch;
-  });
-
-  const countByCategory = (cat: MenuCategory) => items.filter((i) => i.category === cat).length;
-  const totalAvailable = items.filter((i) => i.available).length;
-
-  // ── handlers ─────────────────────────────────────────────────────────────────
-  const toggleAvailable = (id: string) => {
-    setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, available: !i.available } : i))
+function WeekdayPills({
+  selected,
+  onChange,
+}: {
+  selected: Weekday[];
+  onChange: (days: Weekday[]) => void;
+}) {
+  const toggle = (day: Weekday) => {
+    onChange(
+      selected.includes(day)
+        ? selected.filter((d) => d !== day)
+        : [...selected, day]
     );
   };
-
-  const togglePopular = (id: string) => {
-    setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, popular: !i.popular } : i))
-    );
-  };
-
-  const handleDelete = (id: string) => {
-    setItems((prev) => prev.filter((i) => i.id !== id));
-    setDeleteTarget(null);
-    if (selectedItem?.id === id) setSelectedItem(null);
-  };
-
-  const handleSaveEdit = (updated: MenuItem) => {
-    setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
-    setEditItem(null);
-    setSelectedItem(updated);
-  };
-
-  const handleAddNew = (newItem: MenuItem) => {
-    setItems((prev) => [newItem, ...prev]);
-    setIsNewOpen(false);
-  };
-
+  const allSelected = ALL_WEEKDAYS.every((d) => selected.includes(d));
   return (
-    <div className="flex h-full overflow-hidden bg-background">
-      {/* ── Left: list ────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        {/* Header */}
-        <header className="flex items-center justify-between gap-4 px-6 py-4 bg-card border-b border-border shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/10">
-              <UtensilsCrossed className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-base font-bold text-foreground">Cardápio</h1>
-              <p className="text-xs text-muted-foreground">
-                {items.length} itens &middot; {totalAvailable} disponíveis
-              </p>
-            </div>
-          </div>
-          <Button
-            onClick={() => setIsNewOpen(true)}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-9 text-sm"
-          >
-            <Plus className="w-4 h-4" />
-            Novo item
-          </Button>
-        </header>
-
-        {/* Filters + Search */}
-        <div className="flex flex-col gap-3 px-6 py-3 bg-card border-b border-border shrink-0">
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nome ou descrição..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 h-9 text-sm bg-background border-border"
-            />
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setActiveCategory(ALL)}
-              className={cn(
-                "h-7 px-3 rounded-full text-xs font-medium transition-colors border",
-                activeCategory === ALL
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
-              )}
-            >
-              Todos ({items.length})
-            </button>
-            {(Object.keys(categoryLabels) as MenuCategory[]).map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={cn(
-                  "h-7 px-3 rounded-full text-xs font-medium transition-colors border",
-                  activeCategory === cat
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
-                )}
-              >
-                {categoryLabels[cat]} ({countByCategory(cat)})
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Grid */}
-        <ScrollArea className="flex-1">
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filtered.length === 0 && (
-              <div className="col-span-full flex flex-col items-center justify-center py-24 text-center">
-                <ChefHat className="w-12 h-12 text-muted-foreground/40 mb-3" />
-                <p className="text-sm font-medium text-muted-foreground">Nenhum item encontrado</p>
-                <p className="text-xs text-muted-foreground/70 mt-1">Tente ajustar os filtros ou a busca</p>
-              </div>
-            )}
-            {filtered.map((item) => (
-              <MenuItemCard
-                key={item.id}
-                item={item}
-                isSelected={selectedItem?.id === item.id}
-                onSelect={() => setSelectedItem(item)}
-                onToggleAvailable={() => toggleAvailable(item.id)}
-                onTogglePopular={() => togglePopular(item.id)}
-                onEdit={() => setEditItem(item)}
-                onDelete={() => setDeleteTarget(item.id)}
-              />
-            ))}
-          </div>
-        </ScrollArea>
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">Dias da semana</span>
+        <button
+          type="button"
+          onClick={() => onChange(allSelected ? [] : [...ALL_WEEKDAYS])}
+          className="text-xs text-primary hover:underline"
+        >
+          {allSelected ? "Desmarcar todos" : "Todos os dias"}
+        </button>
       </div>
-
-      {/* ── Right: detail sheet (inline panel) ───────────────────────────────── */}
-      {selectedItem && (
-        <aside className="w-80 shrink-0 border-l border-border bg-card flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-            <h2 className="text-sm font-bold text-foreground">Detalhes</h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-muted-foreground"
-              onClick={() => setSelectedItem(null)}
-            >
-              ×
-            </Button>
-          </div>
-          <ScrollArea className="flex-1">
-            <div className="p-5 flex flex-col gap-4">
-              {/* Category + popular */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span
-                  className={cn(
-                    "text-xs font-semibold px-2.5 py-1 rounded-full",
-                    categoryColors[selectedItem.category]
-                  )}
-                >
-                  {categoryLabels[selectedItem.category]}
-                </span>
-                {selectedItem.popular && (
-                  <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
-                    <Star className="w-3 h-3" />
-                    Popular
-                  </span>
-                )}
-              </div>
-
-              {/* Name + price */}
-              <div>
-                <h3 className="text-lg font-bold text-foreground leading-tight">
-                  {selectedItem.name}
-                </h3>
-                <p className="text-2xl font-bold text-primary mt-1">
-                  R$ {selectedItem.price.toFixed(2).replace(".", ",")}
-                </p>
-              </div>
-
-              {/* Description */}
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {selectedItem.description}
-              </p>
-
-              <Separator />
-
-              {/* Calories */}
-              {selectedItem.calories && (
-                <div className="flex items-center gap-2">
-                  <Flame className="w-4 h-4 text-orange-400" />
-                  <span className="text-sm text-foreground font-medium">
-                    {selectedItem.calories} kcal
-                  </span>
-                </div>
-              )}
-
-              {/* Availability */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Disponível no cardápio</p>
-                  <p className="text-xs text-muted-foreground">Exibido para os clientes</p>
-                </div>
-                <Switch
-                  checked={selectedItem.available}
-                  onCheckedChange={() => {
-                    toggleAvailable(selectedItem.id);
-                    setSelectedItem((prev) =>
-                      prev ? { ...prev, available: !prev.available } : prev
-                    );
-                  }}
-                />
-              </div>
-
-              {/* Extras */}
-              {selectedItem.extras && selectedItem.extras.length > 0 && (
-                <>
-                  <Separator />
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                      Adicionais disponíveis
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {selectedItem.extras.map((extra) => (
-                        <span
-                          key={extra}
-                          className="text-xs bg-secondary text-secondary-foreground px-2.5 py-1 rounded-full"
-                        >
-                          {extra}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <Separator />
-
-              {/* Actions */}
-              <div className="flex flex-col gap-2">
-                <Button
-                  onClick={() => setEditItem(selectedItem)}
-                  variant="outline"
-                  className="w-full gap-2 border-border"
-                >
-                  <Pencil className="w-4 h-4" />
-                  Editar item
-                </Button>
-                <Button
-                  onClick={() => setDeleteTarget(selectedItem.id)}
-                  variant="outline"
-                  className="w-full gap-2 border-destructive/30 text-destructive hover:bg-destructive/5"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Remover item
-                </Button>
-              </div>
-            </div>
-          </ScrollArea>
-        </aside>
-      )}
-
-      {/* ── Edit dialog ───────────────────────────────────────────────────────── */}
-      {(editItem || isNewOpen) && (
-        <MenuItemFormDialog
-          item={editItem ?? undefined}
-          open={editItem !== null || isNewOpen}
-          onClose={() => {
-            setEditItem(null);
-            setIsNewOpen(false);
-          }}
-          onSave={(item) => {
-            if (editItem) {
-              handleSaveEdit(item);
-            } else {
-              handleAddNew(item);
-            }
-          }}
-        />
-      )}
-
-      {/* ── Delete confirm ────────────────────────────────────────────────────── */}
-      <Dialog open={deleteTarget !== null} onOpenChange={() => setDeleteTarget(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Remover item</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Tem certeza que deseja remover este item do cardápio? Esta ação não pode ser desfeita.
-          </p>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deleteTarget && handleDelete(deleteTarget)}
-            >
-              Remover
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <div className="flex gap-1.5 flex-wrap">
+        {ALL_WEEKDAYS.map((day) => (
+          <button
+            key={day}
+            type="button"
+            onClick={() => toggle(day)}
+            className={cn(
+              "h-7 w-9 rounded-md text-xs font-semibold border transition-colors",
+              selected.includes(day)
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-muted-foreground border-border hover:border-primary/50"
+            )}
+          >
+            {weekdayLabels[day]}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
 
-// ── MenuItemCard ──────────────────────────────────────────────────────────────
+// ─── SubItem editor ───────────────────────────────────────────────────────────
 
-interface MenuItemCardProps {
-  item: MenuItem;
-  isSelected: boolean;
-  onSelect: () => void;
-  onToggleAvailable: () => void;
-  onTogglePopular: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+function SubItemEditor({
+  subItems,
+  onChange,
+}: {
+  subItems: SubItem[];
+  onChange: (items: SubItem[]) => void;
+}) {
+  const [newName, setNewName] = useState("");
+  const [newPrice, setNewPrice] = useState("0");
+  const [newRequired, setNewRequired] = useState(false);
+
+  const add = () => {
+    const name = newName.trim();
+    if (!name) return;
+    onChange([
+      ...subItems,
+      {
+        id: `si-${Date.now()}`,
+        name,
+        price: parseFloat(newPrice) || 0,
+        required: newRequired,
+      },
+    ]);
+    setNewName("");
+    setNewPrice("0");
+    setNewRequired(false);
+  };
+
+  const remove = (id: string) => onChange(subItems.filter((s) => s.id !== id));
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Existing sub-items */}
+      {subItems.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {subItems.map((s) => (
+            <div
+              key={s.id}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border border-border text-sm"
+            >
+              <span className="flex-1 text-foreground">{s.name}</span>
+              {s.price > 0 && (
+                <span className="text-xs text-primary font-medium shrink-0">
+                  +R$ {s.price.toFixed(2).replace(".", ",")}
+                </span>
+              )}
+              {s.price === 0 && (
+                <span className="text-xs text-muted-foreground shrink-0">Incluso</span>
+              )}
+              {s.required && (
+                <Badge variant="secondary" className="text-[10px] shrink-0">Obrig.</Badge>
+              )}
+              <button
+                type="button"
+                onClick={() => remove(s.id)}
+                className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add new */}
+      <div className="flex flex-col gap-2 p-3 rounded-lg border border-dashed border-border bg-muted/20">
+        <p className="text-xs font-medium text-muted-foreground">Adicionar sub-item</p>
+        <div className="flex gap-2">
+          <Input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Nome (ex: Arroz integral)"
+            className="h-8 text-xs flex-1"
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
+          />
+          <Input
+            type="number"
+            min="0"
+            step="0.5"
+            value={newPrice}
+            onChange={(e) => setNewPrice(e.target.value)}
+            placeholder="Preço"
+            className="h-8 text-xs w-20"
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Switch
+              id="required-toggle"
+              checked={newRequired}
+              onCheckedChange={setNewRequired}
+              className="scale-75"
+            />
+            <Label htmlFor="required-toggle" className="text-xs text-muted-foreground cursor-pointer">
+              Obrigatório
+            </Label>
+          </div>
+          <Button type="button" size="sm" variant="outline" onClick={add} className="h-7 text-xs gap-1">
+            <Plus className="w-3 h-3" />
+            Adicionar
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
+
+// ─── Menu Item Card ───────────────────────────────────────────────────────────
 
 function MenuItemCard({
   item,
@@ -388,7 +234,15 @@ function MenuItemCard({
   onTogglePopular,
   onEdit,
   onDelete,
-}: MenuItemCardProps) {
+}: {
+  item: MenuItem;
+  isSelected: boolean;
+  onSelect: () => void;
+  onToggleAvailable: () => void;
+  onTogglePopular: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   return (
     <div
       onClick={onSelect}
@@ -399,7 +253,6 @@ function MenuItemCard({
           : "border-border hover:border-primary/40 hover:shadow-sm"
       )}
     >
-      {/* Unavailable overlay */}
       {!item.available && (
         <div className="absolute inset-0 rounded-xl bg-background/60 z-10 flex items-center justify-center">
           <span className="text-xs font-semibold text-muted-foreground bg-background/90 px-3 py-1.5 rounded-full border border-border">
@@ -407,22 +260,14 @@ function MenuItemCard({
           </span>
         </div>
       )}
-
-      {/* Top row */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span
-            className={cn(
-              "text-[10px] font-semibold px-2 py-0.5 rounded-full",
-              categoryColors[item.category]
-            )}
-          >
+          <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", categoryColors[item.category])}>
             {categoryLabels[item.category]}
           </span>
           {item.popular && (
             <span className="flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-              <Star className="w-2.5 h-2.5" />
-              Popular
+              <Star className="w-2.5 h-2.5" /> Popular
             </span>
           )}
         </div>
@@ -430,64 +275,66 @@ function MenuItemCard({
           R$ {item.price.toFixed(2).replace(".", ",")}
         </p>
       </div>
-
-      {/* Name */}
       <h3 className="text-sm font-semibold text-foreground leading-snug mb-1">{item.name}</h3>
-
-      {/* Description */}
       <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 flex-1">
         {item.description}
       </p>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-        {item.calories && (
-          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Flame className="w-3 h-3 text-orange-400" />
-            {item.calories} kcal
-          </span>
-        )}
-        {!item.calories && <span />}
+      {/* Days row */}
+      {item.availableDays && item.availableDays.length > 0 && item.availableDays.length < 7 && (
+        <div className="flex gap-1 mt-2 flex-wrap">
+          {ALL_WEEKDAYS.map((d) => (
+            <span
+              key={d}
+              className={cn(
+                "text-[10px] px-1.5 py-0.5 rounded font-medium",
+                item.availableDays!.includes(d)
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground/30"
+              )}
+            >
+              {weekdayLabels[d]}
+            </span>
+          ))}
+        </div>
+      )}
+      {item.availableDays?.length === 7 && (
+        <p className="text-[10px] text-muted-foreground mt-2">Todos os dias</p>
+      )}
 
-        {/* Action buttons — visible on hover or selected */}
-        <div
-          className={cn(
-            "flex items-center gap-1 transition-opacity",
-            isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+        <div className="flex items-center gap-2">
+          {item.calories && (
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Flame className="w-3 h-3 text-orange-400" />
+              {item.calories} kcal
+            </span>
           )}
+          {item.subItems && item.subItems.length > 0 && (
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <ListPlus className="w-3 h-3" />
+              {item.subItems.length} sub-itens
+            </span>
+          )}
+        </div>
+        <div
+          className={cn("flex items-center gap-1 transition-opacity", isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100")}
           onClick={(e) => e.stopPropagation()}
         >
-          <button
-            onClick={onTogglePopular}
-            title={item.popular ? "Remover destaque" : "Marcar como popular"}
-            className={cn(
-              "w-6 h-6 flex items-center justify-center rounded-md transition-colors",
-              item.popular
-                ? "text-amber-500 hover:bg-amber-50"
-                : "text-muted-foreground hover:bg-muted"
-            )}
-          >
+          <button onClick={onTogglePopular} title={item.popular ? "Remover destaque" : "Popular"}
+            className={cn("w-6 h-6 flex items-center justify-center rounded-md transition-colors", item.popular ? "text-amber-500 hover:bg-amber-50" : "text-muted-foreground hover:bg-muted")}>
             <Star className="w-3.5 h-3.5" />
           </button>
-          <button
-            onClick={onToggleAvailable}
-            title={item.available ? "Marcar como indisponível" : "Tornar disponível"}
-            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors"
-          >
+          <button onClick={onToggleAvailable} title={item.available ? "Desativar" : "Ativar"}
+            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors">
             {item.available ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
           </button>
-          <button
-            onClick={onEdit}
-            title="Editar"
-            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors"
-          >
+          <button onClick={onEdit} title="Editar"
+            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors">
             <Pencil className="w-3.5 h-3.5" />
           </button>
-          <button
-            onClick={onDelete}
-            title="Remover"
-            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-destructive transition-colors"
-          >
+          <button onClick={onDelete} title="Remover"
+            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-destructive transition-colors">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -496,173 +343,815 @@ function MenuItemCard({
   );
 }
 
-// ── MenuItemFormDialog ────────────────────────────────────────────────────────
+// ─── Drink Item Card ──────────────────────────────────────────────────────────
 
-interface MenuItemFormDialogProps {
+function DrinkItemCard({
+  item,
+  isSelected,
+  onSelect,
+  onToggleAvailable,
+  onTogglePopular,
+  onEdit,
+  onDelete,
+}: {
+  item: DrinkItem;
+  isSelected: boolean;
+  onSelect: () => void;
+  onToggleAvailable: () => void;
+  onTogglePopular: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      onClick={onSelect}
+      className={cn(
+        "group relative flex flex-col rounded-xl border bg-card p-4 cursor-pointer transition-all duration-150",
+        isSelected ? "border-primary ring-2 ring-primary/20 shadow-md" : "border-border hover:border-primary/40 hover:shadow-sm"
+      )}
+    >
+      {!item.available && (
+        <div className="absolute inset-0 rounded-xl bg-background/60 z-10 flex items-center justify-center">
+          <span className="text-xs font-semibold text-muted-foreground bg-background/90 px-3 py-1.5 rounded-full border border-border">
+            Indisponível
+          </span>
+        </div>
+      )}
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", drinkCategoryColors[item.category])}>
+            {drinkCategoryLabels[item.category]}
+          </span>
+          {item.popular && (
+            <span className="flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+              <Star className="w-2.5 h-2.5" /> Popular
+            </span>
+          )}
+        </div>
+        <p className="text-base font-bold text-primary shrink-0">
+          R$ {item.price.toFixed(2).replace(".", ",")}
+        </p>
+      </div>
+      <h3 className="text-sm font-semibold text-foreground leading-snug mb-1">{item.name}</h3>
+      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 flex-1">{item.description}</p>
+
+      {item.availableDays && item.availableDays.length > 0 && item.availableDays.length < 7 && (
+        <div className="flex gap-1 mt-2 flex-wrap">
+          {ALL_WEEKDAYS.map((d) => (
+            <span key={d} className={cn("text-[10px] px-1.5 py-0.5 rounded font-medium",
+              item.availableDays!.includes(d) ? "bg-primary/10 text-primary" : "text-muted-foreground/30")}>
+              {weekdayLabels[d]}
+            </span>
+          ))}
+        </div>
+      )}
+      {item.availableDays?.length === 7 && (
+        <p className="text-[10px] text-muted-foreground mt-2">Todos os dias</p>
+      )}
+
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+        <span className="text-[11px] text-muted-foreground">{item.volume ?? ""}</span>
+        <div
+          className={cn("flex items-center gap-1 transition-opacity", isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100")}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button onClick={onTogglePopular} title={item.popular ? "Remover destaque" : "Popular"}
+            className={cn("w-6 h-6 flex items-center justify-center rounded-md transition-colors", item.popular ? "text-amber-500 hover:bg-amber-50" : "text-muted-foreground hover:bg-muted")}>
+            <Star className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={onToggleAvailable}
+            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors">
+            {item.available ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+          </button>
+          <button onClick={onEdit}
+            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={onDelete}
+            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-destructive transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Menu item detail panel ───────────────────────────────────────────────────
+
+function MenuDetailPanel({
+  item,
+  onClose,
+  onEdit,
+  onDelete,
+  onToggleAvailable,
+}: {
+  item: MenuItem;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onToggleAvailable: (id: string) => void;
+}) {
+  return (
+    <aside className="w-80 shrink-0 border-l border-border bg-card flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+        <h2 className="text-sm font-bold text-foreground">Detalhes</h2>
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={onClose}>
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+      <ScrollArea className="flex-1">
+        <div className="p-5 flex flex-col gap-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", categoryColors[item.category])}>
+              {categoryLabels[item.category]}
+            </span>
+            {item.popular && (
+              <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
+                <Star className="w-3 h-3" /> Popular
+              </span>
+            )}
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-foreground leading-tight">{item.name}</h3>
+            <p className="text-2xl font-bold text-primary mt-1">
+              R$ {item.price.toFixed(2).replace(".", ",")}
+            </p>
+          </div>
+          <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+
+          <Separator />
+
+          {/* Dias da semana */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5" /> Disponível
+            </p>
+            {item.availableDays && item.availableDays.length > 0 ? (
+              <div className="flex gap-1.5 flex-wrap">
+                {ALL_WEEKDAYS.map((d) => (
+                  <span
+                    key={d}
+                    className={cn(
+                      "text-xs px-2 py-1 rounded-md font-medium border",
+                      item.availableDays!.includes(d)
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted text-muted-foreground/40 border-transparent"
+                    )}
+                  >
+                    {weekdayLabels[d]}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Nenhum dia configurado</p>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* Sub-itens */}
+          {item.subItems && item.subItems.length > 0 && (
+            <>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <ListPlus className="w-3.5 h-3.5" /> Sub-itens / Opções
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  {item.subItems.map((s) => (
+                    <div key={s.id} className="flex items-center gap-2 text-xs">
+                      <CheckCircle2 className={cn("w-3.5 h-3.5 shrink-0", s.required ? "text-primary" : "text-muted-foreground/50")} />
+                      <span className="flex-1 text-foreground">{s.name}</span>
+                      {s.price > 0 ? (
+                        <span className="text-primary font-medium">+R$ {s.price.toFixed(2).replace(".", ",")}</span>
+                      ) : (
+                        <span className="text-muted-foreground">Incluso</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <Separator />
+            </>
+          )}
+
+          {item.calories && (
+            <div className="flex items-center gap-2">
+              <Flame className="w-4 h-4 text-orange-400" />
+              <span className="text-sm text-foreground font-medium">{item.calories} kcal</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Disponível no cardápio</p>
+              <p className="text-xs text-muted-foreground">Exibido para os clientes</p>
+            </div>
+            <Switch checked={item.available} onCheckedChange={() => onToggleAvailable(item.id)} />
+          </div>
+
+          <Separator />
+          <div className="flex flex-col gap-2">
+            <Button onClick={onEdit} variant="outline" className="w-full gap-2 border-border">
+              <Pencil className="w-4 h-4" /> Editar item
+            </Button>
+            <Button onClick={onDelete} variant="outline" className="w-full gap-2 border-destructive/30 text-destructive hover:bg-destructive/5">
+              <Trash2 className="w-4 h-4" /> Remover item
+            </Button>
+          </div>
+        </div>
+      </ScrollArea>
+    </aside>
+  );
+}
+
+// ─── Drink detail panel ───────────────────────────────────────────────────────
+
+function DrinkDetailPanel({
+  item,
+  onClose,
+  onEdit,
+  onDelete,
+  onToggleAvailable,
+}: {
+  item: DrinkItem;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onToggleAvailable: (id: string) => void;
+}) {
+  return (
+    <aside className="w-80 shrink-0 border-l border-border bg-card flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+        <h2 className="text-sm font-bold text-foreground">Detalhes da Bebida</h2>
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={onClose}>
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+      <ScrollArea className="flex-1">
+        <div className="p-5 flex flex-col gap-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", drinkCategoryColors[item.category])}>
+              {drinkCategoryLabels[item.category]}
+            </span>
+            {item.popular && (
+              <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
+                <Star className="w-3 h-3" /> Popular
+              </span>
+            )}
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-foreground leading-tight">{item.name}</h3>
+            <p className="text-2xl font-bold text-primary mt-1">
+              R$ {item.price.toFixed(2).replace(".", ",")}
+            </p>
+            {item.volume && <p className="text-xs text-muted-foreground mt-0.5">{item.volume}</p>}
+          </div>
+          <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+          <Separator />
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5" /> Disponível
+            </p>
+            {item.availableDays && item.availableDays.length > 0 ? (
+              <div className="flex gap-1.5 flex-wrap">
+                {ALL_WEEKDAYS.map((d) => (
+                  <span key={d} className={cn("text-xs px-2 py-1 rounded-md font-medium border",
+                    item.availableDays!.includes(d)
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted text-muted-foreground/40 border-transparent")}>
+                    {weekdayLabels[d]}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Nenhum dia configurado</p>
+            )}
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Disponível no cardápio</p>
+              <p className="text-xs text-muted-foreground">Exibido para os clientes</p>
+            </div>
+            <Switch checked={item.available} onCheckedChange={() => onToggleAvailable(item.id)} />
+          </div>
+          <Separator />
+          <div className="flex flex-col gap-2">
+            <Button onClick={onEdit} variant="outline" className="w-full gap-2 border-border">
+              <Pencil className="w-4 h-4" /> Editar bebida
+            </Button>
+            <Button onClick={onDelete} variant="outline" className="w-full gap-2 border-destructive/30 text-destructive hover:bg-destructive/5">
+              <Trash2 className="w-4 h-4" /> Remover bebida
+            </Button>
+          </div>
+        </div>
+      </ScrollArea>
+    </aside>
+  );
+}
+
+// ─── Menu Item Form ───────────────────────────────────────────────────────────
+
+function MenuItemFormDialog({
+  item,
+  open,
+  onClose,
+  onSave,
+}: {
   item?: MenuItem;
   open: boolean;
   onClose: () => void;
   onSave: (item: MenuItem) => void;
-}
-
-function MenuItemFormDialog({ item, open, onClose, onSave }: MenuItemFormDialogProps) {
+}) {
   const isNew = !item;
-  const [form, setForm] = useState<Omit<MenuItem, "id">>({
+  const [form, setForm] = useState({
     name: item?.name ?? "",
     description: item?.description ?? "",
     price: item?.price ?? 0,
-    category: item?.category ?? "proteinas",
+    category: (item?.category ?? "proteinas") as MenuCategory,
     available: item?.available ?? true,
     popular: item?.popular ?? false,
-    calories: item?.calories,
-    extras: item?.extras ?? [],
+    calories: item?.calories ?? undefined as number | undefined,
+    availableDays: item?.availableDays ?? [...ALL_WEEKDAYS] as Weekday[],
+    subItems: item?.subItems ?? [] as SubItem[],
+    extras: item?.extras ?? [] as string[],
   });
   const [extrasInput, setExtrasInput] = useState(item?.extras?.join(", ") ?? "");
 
   const handleSubmit = () => {
     if (!form.name.trim() || form.price <= 0) return;
-    const extras = extrasInput
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    onSave({
-      id: item?.id ?? `MI-${Date.now()}`,
-      ...form,
-      extras,
-    });
+    const extras = extrasInput.split(",").map((s) => s.trim()).filter(Boolean);
+    onSave({ id: item?.id ?? `MI-${Date.now()}`, ...form, extras });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{isNew ? "Nova marmita no cardápio" : "Editar marmita"}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-5 py-2">
+          {/* Row 1: name + price */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-sm">Nome *</Label>
+              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Ex: Frango Grelhado" className="h-9 text-sm" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-sm">Preço (R$) *</Label>
+              <Input type="number" min="0" step="0.5" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: parseFloat(e.target.value) || 0 }))} className="h-9 text-sm" />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-sm">Descrição</Label>
+            <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Descreva os ingredientes e acompanhamentos..." rows={2} className="text-sm resize-none" />
+          </div>
+
+          {/* Row 2: category + calories */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-sm">Categoria</Label>
+              <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v as MenuCategory }))}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(categoryLabels) as MenuCategory[]).map((cat) => (
+                    <SelectItem key={cat} value={cat}>{categoryLabels[cat]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-sm">Calorias (kcal)</Label>
+              <Input type="number" min="0" value={form.calories ?? ""} onChange={(e) => setForm((f) => ({ ...f, calories: e.target.value ? parseInt(e.target.value) : undefined }))} placeholder="Ex: 520" className="h-9 text-sm" />
+            </div>
+          </div>
+
+          {/* Weekdays */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-sm flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Dias disponíveis</Label>
+            <WeekdayPills selected={form.availableDays} onChange={(days) => setForm((f) => ({ ...f, availableDays: days }))} />
+          </div>
+
+          <Separator />
+
+          {/* Sub-items */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-sm flex items-center gap-1.5"><ListPlus className="w-3.5 h-3.5" /> Sub-itens / Opções de montagem</Label>
+            <SubItemEditor subItems={form.subItems} onChange={(items) => setForm((f) => ({ ...f, subItems: items }))} />
+          </div>
+
+          <Separator />
+
+          {/* Extras */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-sm">Adicionais (separados por vírgula)</Label>
+            <Input value={extrasInput} onChange={(e) => setExtrasInput(e.target.value)} placeholder="Ex: Arroz integral, Feijão preto, Farofa extra" className="h-9 text-sm" />
+          </div>
+
+          {/* Switches */}
+          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-2">
+              <Switch id="available" checked={form.available} onCheckedChange={(v) => setForm((f) => ({ ...f, available: v }))} />
+              <Label htmlFor="available" className="text-sm cursor-pointer">Disponível</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch id="popular" checked={form.popular} onCheckedChange={(v) => setForm((f) => ({ ...f, popular: v }))} />
+              <Label htmlFor="popular" className="text-sm cursor-pointer">Popular</Label>
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleSubmit} className="bg-primary text-primary-foreground hover:bg-primary/90">
+            {isNew ? "Adicionar ao cardápio" : "Salvar alterações"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Drink Form ───────────────────────────────────────────────────────────────
+
+function DrinkFormDialog({
+  item,
+  open,
+  onClose,
+  onSave,
+}: {
+  item?: DrinkItem;
+  open: boolean;
+  onClose: () => void;
+  onSave: (item: DrinkItem) => void;
+}) {
+  const isNew = !item;
+  const [form, setForm] = useState({
+    name: item?.name ?? "",
+    description: item?.description ?? "",
+    price: item?.price ?? 0,
+    category: (item?.category ?? "refrigerantes") as DrinkCategory,
+    available: item?.available ?? true,
+    popular: item?.popular ?? false,
+    volume: item?.volume ?? "",
+    availableDays: item?.availableDays ?? [...ALL_WEEKDAYS] as Weekday[],
+  });
+
+  const handleSubmit = () => {
+    if (!form.name.trim() || form.price <= 0) return;
+    onSave({ id: item?.id ?? `DR-${Date.now()}`, ...form });
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isNew ? "Novo item no cardápio" : "Editar item"}</DialogTitle>
+          <DialogTitle>{isNew ? "Nova bebida no cardápio" : "Editar bebida"}</DialogTitle>
         </DialogHeader>
-
         <div className="flex flex-col gap-4 py-2">
-          {/* Name */}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name" className="text-sm">Nome *</Label>
-            <Input
-              id="name"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Ex: Frango Grelhado"
-              className="h-9 text-sm"
-            />
-          </div>
-
-          {/* Description */}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="desc" className="text-sm">Descrição</Label>
-            <Textarea
-              id="desc"
-              value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="Descreva os acompanhamentos e o preparo..."
-              rows={3}
-              className="text-sm resize-none"
-            />
-          </div>
-
-          {/* Price + Category */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="price" className="text-sm">Preço (R$) *</Label>
-              <Input
-                id="price"
-                type="number"
-                min={0}
-                step={0.5}
-                value={form.price}
-                onChange={(e) => setForm((f) => ({ ...f, price: parseFloat(e.target.value) || 0 }))}
-                className="h-9 text-sm"
-              />
+              <Label className="text-sm">Nome *</Label>
+              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Ex: Suco de Laranja" className="h-9 text-sm" />
             </div>
             <div className="flex flex-col gap-1.5">
+              <Label className="text-sm">Preço (R$) *</Label>
+              <Input type="number" min="0" step="0.5" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: parseFloat(e.target.value) || 0 }))} className="h-9 text-sm" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-sm">Descrição</Label>
+            <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={2} className="text-sm resize-none" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
               <Label className="text-sm">Categoria</Label>
-              <Select
-                value={form.category}
-                onValueChange={(v) => setForm((f) => ({ ...f, category: v as MenuCategory }))}
-              >
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v as DrinkCategory }))}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(categoryLabels) as MenuCategory[]).map((cat) => (
-                    <SelectItem key={cat} value={cat} className="text-sm">
-                      {categoryLabels[cat]}
-                    </SelectItem>
+                  {(Object.keys(drinkCategoryLabels) as DrinkCategory[]).map((cat) => (
+                    <SelectItem key={cat} value={cat}>{drinkCategoryLabels[cat]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-sm">Volume</Label>
+              <Input value={form.volume} onChange={(e) => setForm((f) => ({ ...f, volume: e.target.value }))} placeholder="Ex: 350ml" className="h-9 text-sm" />
+            </div>
           </div>
-
-          {/* Calories */}
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cal" className="text-sm">Calorias (kcal)</Label>
-            <Input
-              id="cal"
-              type="number"
-              min={0}
-              value={form.calories ?? ""}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, calories: e.target.value ? parseInt(e.target.value) : undefined }))
-              }
-              placeholder="Ex: 520"
-              className="h-9 text-sm"
-            />
+            <Label className="text-sm flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Dias disponíveis</Label>
+            <WeekdayPills selected={form.availableDays} onChange={(days) => setForm((f) => ({ ...f, availableDays: days }))} />
           </div>
-
-          {/* Extras */}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="extras" className="text-sm">Adicionais (separados por vírgula)</Label>
-            <Input
-              id="extras"
-              value={extrasInput}
-              onChange={(e) => setExtrasInput(e.target.value)}
-              placeholder="Ex: Arroz integral, Ovo frito, Farofa extra"
-              className="h-9 text-sm"
-            />
-          </div>
-
-          {/* Switches */}
-          <div className="flex items-center justify-between">
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <Switch
-                  id="avail"
-                  checked={form.available}
-                  onCheckedChange={(v) => setForm((f) => ({ ...f, available: v }))}
-                />
-                <Label htmlFor="avail" className="text-sm cursor-pointer">Disponível</Label>
-              </div>
-              <div className="flex items-center gap-3">
-                <Switch
-                  id="popular"
-                  checked={form.popular}
-                  onCheckedChange={(v) => setForm((f) => ({ ...f, popular: v }))}
-                />
-                <Label htmlFor="popular" className="text-sm cursor-pointer">Marcar como popular</Label>
-              </div>
+          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-2">
+              <Switch id="drink-available" checked={form.available} onCheckedChange={(v) => setForm((f) => ({ ...f, available: v }))} />
+              <Label htmlFor="drink-available" className="text-sm cursor-pointer">Disponível</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch id="drink-popular" checked={form.popular} onCheckedChange={(v) => setForm((f) => ({ ...f, popular: v }))} />
+              <Label htmlFor="drink-popular" className="text-sm cursor-pointer">Popular</Label>
             </div>
           </div>
         </div>
-
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!form.name.trim() || form.price <= 0}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            {isNew ? "Adicionar ao cardápio" : "Salvar alterações"}
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleSubmit} className="bg-primary text-primary-foreground hover:bg-primary/90">
+            {isNew ? "Adicionar bebida" : "Salvar alterações"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export function CardapioPage() {
+  const [activeTab, setActiveTab] = useState<Tab>("marmitas");
+
+  // Marmitas state
+  const [menuList, setMenuList] = useState<MenuItem[]>(initialMenuItems);
+  const [menuSearch, setMenuSearch] = useState("");
+  const [menuCategory, setMenuCategory] = useState<FilterMenuCat>(ALL);
+  const [selectedMenu, setSelectedMenu] = useState<MenuItem | null>(null);
+  const [editMenu, setEditMenu] = useState<MenuItem | null>(null);
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [deleteMenuId, setDeleteMenuId] = useState<string | null>(null);
+
+  // Drinks state
+  const [drinkList, setDrinkList] = useState<DrinkItem[]>(initialDrinkItems);
+  const [drinkSearch, setDrinkSearch] = useState("");
+  const [drinkCategory, setDrinkCategory] = useState<FilterDrinkCat>(ALL);
+  const [selectedDrink, setSelectedDrink] = useState<DrinkItem | null>(null);
+  const [editDrink, setEditDrink] = useState<DrinkItem | null>(null);
+  const [newDrinkOpen, setNewDrinkOpen] = useState(false);
+  const [deleteDrinkId, setDeleteDrinkId] = useState<string | null>(null);
+
+  // ── Marmita handlers ──────────────────────────────────────────────────────
+  const filteredMenu = menuList.filter((i) => {
+    const matchCat = menuCategory === ALL || i.category === menuCategory;
+    const q = menuSearch.toLowerCase();
+    return matchCat && (q === "" || i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
+  });
+
+  const toggleMenuAvailable = (id: string) => {
+    setMenuList((p) => p.map((i) => i.id === id ? { ...i, available: !i.available } : i));
+    setSelectedMenu((p) => p?.id === id ? { ...p, available: !p.available } : p);
+  };
+  const toggleMenuPopular = (id: string) => setMenuList((p) => p.map((i) => i.id === id ? { ...i, popular: !i.popular } : i));
+  const handleDeleteMenu = (id: string) => {
+    setMenuList((p) => p.filter((i) => i.id !== id));
+    setDeleteMenuId(null);
+    if (selectedMenu?.id === id) setSelectedMenu(null);
+  };
+  const handleSaveMenu = (updated: MenuItem) => {
+    if (editMenu) {
+      setMenuList((p) => p.map((i) => i.id === updated.id ? updated : i));
+      setSelectedMenu(updated);
+      setEditMenu(null);
+    } else {
+      setMenuList((p) => [updated, ...p]);
+      setNewMenuOpen(false);
+    }
+  };
+
+  // ── Drink handlers ────────────────────────────────────────────────────────
+  const filteredDrinks = drinkList.filter((i) => {
+    const matchCat = drinkCategory === ALL || i.category === drinkCategory;
+    const q = drinkSearch.toLowerCase();
+    return matchCat && (q === "" || i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
+  });
+
+  const toggleDrinkAvailable = (id: string) => {
+    setDrinkList((p) => p.map((i) => i.id === id ? { ...i, available: !i.available } : i));
+    setSelectedDrink((p) => p?.id === id ? { ...p, available: !p.available } : p);
+  };
+  const toggleDrinkPopular = (id: string) => setDrinkList((p) => p.map((i) => i.id === id ? { ...i, popular: !i.popular } : i));
+  const handleDeleteDrink = (id: string) => {
+    setDrinkList((p) => p.filter((i) => i.id !== id));
+    setDeleteDrinkId(null);
+    if (selectedDrink?.id === id) setSelectedDrink(null);
+  };
+  const handleSaveDrink = (updated: DrinkItem) => {
+    if (editDrink) {
+      setDrinkList((p) => p.map((i) => i.id === updated.id ? updated : i));
+      setSelectedDrink(updated);
+      setEditDrink(null);
+    } else {
+      setDrinkList((p) => [updated, ...p]);
+      setNewDrinkOpen(false);
+    }
+  };
+
+  const totalMenuAvailable = menuList.filter((i) => i.available).length;
+  const totalDrinkAvailable = drinkList.filter((i) => i.available).length;
+
+  return (
+    <div className="flex h-full overflow-hidden bg-background">
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        {/* Header */}
+        <header className="flex items-center justify-between gap-4 px-6 py-4 bg-card border-b border-border shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/10">
+              <ChefHat className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-base font-bold text-foreground">Cardápio</h1>
+              <p className="text-xs text-muted-foreground">
+                {activeTab === "marmitas"
+                  ? `${menuList.length} marmitas · ${totalMenuAvailable} disponíveis`
+                  : `${drinkList.length} bebidas · ${totalDrinkAvailable} disponíveis`}
+              </p>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+            <button
+              onClick={() => { setActiveTab("marmitas"); setSelectedDrink(null); }}
+              className={cn("flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-medium transition-colors",
+                activeTab === "marmitas" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+            >
+              <UtensilsCrossed className="w-4 h-4" /> Marmitas
+            </button>
+            <button
+              onClick={() => { setActiveTab("bebidas"); setSelectedMenu(null); }}
+              className={cn("flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-medium transition-colors",
+                activeTab === "bebidas" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+            >
+              <GlassWater className="w-4 h-4" /> Bebidas
+            </button>
+          </div>
+
+          <Button
+            onClick={() => activeTab === "marmitas" ? setNewMenuOpen(true) : setNewDrinkOpen(true)}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-9 text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            {activeTab === "marmitas" ? "Nova marmita" : "Nova bebida"}
+          </Button>
+        </header>
+
+        {/* Filters */}
+        <div className="flex flex-col gap-3 px-6 py-3 bg-card border-b border-border shrink-0">
+          {activeTab === "marmitas" ? (
+            <>
+              <div className="relative max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input placeholder="Buscar marmita..." value={menuSearch} onChange={(e) => setMenuSearch(e.target.value)} className="pl-9 h-9 text-sm bg-background border-border" />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <FilterPill active={menuCategory === ALL} onClick={() => setMenuCategory(ALL)}>Todos ({menuList.length})</FilterPill>
+                {(Object.keys(categoryLabels) as MenuCategory[]).map((cat) => (
+                  <FilterPill key={cat} active={menuCategory === cat} onClick={() => setMenuCategory(cat)}>
+                    {categoryLabels[cat]} ({menuList.filter((i) => i.category === cat).length})
+                  </FilterPill>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="relative max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input placeholder="Buscar bebida..." value={drinkSearch} onChange={(e) => setDrinkSearch(e.target.value)} className="pl-9 h-9 text-sm bg-background border-border" />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <FilterPill active={drinkCategory === ALL} onClick={() => setDrinkCategory(ALL)}>Todos ({drinkList.length})</FilterPill>
+                {(Object.keys(drinkCategoryLabels) as DrinkCategory[]).map((cat) => (
+                  <FilterPill key={cat} active={drinkCategory === cat} onClick={() => setDrinkCategory(cat)}>
+                    {drinkCategoryLabels[cat]} ({drinkList.filter((i) => i.category === cat).length})
+                  </FilterPill>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Grid */}
+        <ScrollArea className="flex-1">
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {activeTab === "marmitas" ? (
+              filteredMenu.length === 0 ? (
+                <div className="col-span-full flex flex-col items-center justify-center py-24 text-center">
+                  <ChefHat className="w-12 h-12 text-muted-foreground/40 mb-3" />
+                  <p className="text-sm font-medium text-muted-foreground">Nenhuma marmita encontrada</p>
+                </div>
+              ) : filteredMenu.map((item) => (
+                <MenuItemCard
+                  key={item.id}
+                  item={item}
+                  isSelected={selectedMenu?.id === item.id}
+                  onSelect={() => { setSelectedMenu(item); setSelectedDrink(null); }}
+                  onToggleAvailable={() => toggleMenuAvailable(item.id)}
+                  onTogglePopular={() => toggleMenuPopular(item.id)}
+                  onEdit={() => setEditMenu(item)}
+                  onDelete={() => setDeleteMenuId(item.id)}
+                />
+              ))
+            ) : (
+              filteredDrinks.length === 0 ? (
+                <div className="col-span-full flex flex-col items-center justify-center py-24 text-center">
+                  <GlassWater className="w-12 h-12 text-muted-foreground/40 mb-3" />
+                  <p className="text-sm font-medium text-muted-foreground">Nenhuma bebida encontrada</p>
+                </div>
+              ) : filteredDrinks.map((item) => (
+                <DrinkItemCard
+                  key={item.id}
+                  item={item}
+                  isSelected={selectedDrink?.id === item.id}
+                  onSelect={() => { setSelectedDrink(item); setSelectedMenu(null); }}
+                  onToggleAvailable={() => toggleDrinkAvailable(item.id)}
+                  onTogglePopular={() => toggleDrinkPopular(item.id)}
+                  onEdit={() => setEditDrink(item)}
+                  onDelete={() => setDeleteDrinkId(item.id)}
+                />
+              ))
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* Detail panels */}
+      {selectedMenu && activeTab === "marmitas" && (
+        <MenuDetailPanel
+          item={selectedMenu}
+          onClose={() => setSelectedMenu(null)}
+          onEdit={() => setEditMenu(selectedMenu)}
+          onDelete={() => setDeleteMenuId(selectedMenu.id)}
+          onToggleAvailable={toggleMenuAvailable}
+        />
+      )}
+      {selectedDrink && activeTab === "bebidas" && (
+        <DrinkDetailPanel
+          item={selectedDrink}
+          onClose={() => setSelectedDrink(null)}
+          onEdit={() => setEditDrink(selectedDrink)}
+          onDelete={() => setDeleteDrinkId(selectedDrink.id)}
+          onToggleAvailable={toggleDrinkAvailable}
+        />
+      )}
+
+      {/* Marmita form dialogs */}
+      {(editMenu || newMenuOpen) && (
+        <MenuItemFormDialog
+          item={editMenu ?? undefined}
+          open={editMenu !== null || newMenuOpen}
+          onClose={() => { setEditMenu(null); setNewMenuOpen(false); }}
+          onSave={handleSaveMenu}
+        />
+      )}
+      {(editDrink || newDrinkOpen) && (
+        <DrinkFormDialog
+          item={editDrink ?? undefined}
+          open={editDrink !== null || newDrinkOpen}
+          onClose={() => { setEditDrink(null); setNewDrinkOpen(false); }}
+          onSave={handleSaveDrink}
+        />
+      )}
+
+      {/* Delete confirms */}
+      <Dialog open={deleteMenuId !== null} onOpenChange={() => setDeleteMenuId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Remover marmita</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Tem certeza que deseja remover este item do cardápio?</p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteMenuId(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={() => deleteMenuId && handleDeleteMenu(deleteMenuId)}>Remover</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={deleteDrinkId !== null} onOpenChange={() => setDeleteDrinkId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Remover bebida</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Tem certeza que deseja remover esta bebida do cardápio?</p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteDrinkId(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={() => deleteDrinkId && handleDeleteDrink(deleteDrinkId)}>Remover</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── Filter pill helper ───────────────────────────────────────────────────────
+
+function FilterPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "h-7 px-3 rounded-full text-xs font-medium transition-colors border",
+        active
+          ? "bg-primary text-primary-foreground border-primary"
+          : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+      )}
+    >
+      {children}
+    </button>
   );
 }
