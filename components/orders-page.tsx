@@ -241,7 +241,7 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex flex-col rounded-xl border min-w-[240px] flex-1 transition-colors duration-150",
+        "flex flex-col rounded-xl border min-w-0 flex-1 transition-colors duration-150",
         isOver ? col.dropClass : col.colClass
       )}
     >
@@ -283,7 +283,7 @@ export function OrdersPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 1 } })
   );
 
   const filtered = useMemo(() => {
@@ -389,7 +389,7 @@ export function OrdersPage() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex gap-3 flex-1 overflow-x-auto pb-2">
+          <div className="flex gap-3 flex-1 overflow-hidden">
             {COLUMNS.map((col) => (
               <KanbanColumn
                 key={col.status}
