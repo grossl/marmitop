@@ -10,22 +10,27 @@ export type Weekday = "seg" | "ter" | "qua" | "qui" | "sex" | "sab" | "dom";
 export interface SubItem {
   id: string;
   name: string;
-  price: number;    // 0 = incluso, >0 = adicional
-  required: boolean; // grupo de escolha obrigatória (ex: acompanhamento)
+  price: number;
+  required: boolean;
+}
+
+export interface SizeOption {
+  id: string;
+  name: string; // ex: "P", "M", "G", "Individual", "Família"
+  price: number;
 }
 
 export interface MenuItem {
   id: string;
   name: string;
   description: string;
-  price: number;
+  price: number;           // preço base (quando não há tamanhos)
   category: MenuCategory;
   available: boolean;
   popular: boolean;
   calories?: number;
   image?: string;
-  extras?: string[];
-  subItems?: SubItem[];
+  sizes?: SizeOption[];    // tamanhos e preços por tamanho
   availableDays?: Weekday[];
 }
 
@@ -534,14 +539,10 @@ export const menuItems: MenuItem[] = [
     popular: true,
     calories: 520,
     availableDays: ["seg", "ter", "qua", "qui", "sex"],
-    extras: ["Arroz integral", "Feijão preto", "Farofa extra"],
-    subItems: [
-      { id: "si-001-1", name: "Arroz branco", price: 0, required: true },
-      { id: "si-001-2", name: "Arroz integral", price: 0, required: true },
-      { id: "si-001-3", name: "Feijão carioca", price: 0, required: false },
-      { id: "si-001-4", name: "Farofa", price: 0, required: false },
-      { id: "si-001-5", name: "Salada mista", price: 0, required: false },
-      { id: "si-001-6", name: "Farofa extra", price: 2.0, required: false },
+    sizes: [
+      { id: "s-001-p", name: "P", price: 14.9 },
+      { id: "s-001-m", name: "M", price: 18.9 },
+      { id: "s-001-g", name: "G", price: 23.9 },
     ],
   },
   {
@@ -554,13 +555,10 @@ export const menuItems: MenuItem[] = [
     popular: true,
     calories: 780,
     availableDays: ["sex", "sab", "dom"],
-    extras: ["Queijo coalho grelhado", "Molho chimichurri"],
-    subItems: [
-      { id: "si-002-1", name: "Arroz branco", price: 0, required: true },
-      { id: "si-002-2", name: "Batata frita", price: 0, required: true },
-      { id: "si-002-3", name: "Vinagrete", price: 0, required: false },
-      { id: "si-002-4", name: "Queijo coalho grelhado", price: 3.5, required: false },
-      { id: "si-002-5", name: "Molho chimichurri", price: 2.0, required: false },
+    sizes: [
+      { id: "s-002-m", name: "M", price: 25.9 },
+      { id: "s-002-g", name: "G", price: 29.9 },
+      { id: "s-002-f", name: "Família", price: 54.9 },
     ],
   },
   {
@@ -573,13 +571,6 @@ export const menuItems: MenuItem[] = [
     popular: false,
     calories: 610,
     availableDays: ["seg", "qua", "sex"],
-    extras: ["Ovo frito", "Batata frita"],
-    subItems: [
-      { id: "si-003-1", name: "Arroz branco", price: 0, required: true },
-      { id: "si-003-2", name: "Feijão carioca", price: 0, required: false },
-      { id: "si-003-3", name: "Purê de mandioca", price: 0, required: false },
-      { id: "si-003-4", name: "Ovo frito", price: 2.0, required: false },
-    ],
   },
   {
     id: "MI-004",
@@ -591,12 +582,6 @@ export const menuItems: MenuItem[] = [
     popular: true,
     calories: 690,
     availableDays: ["ter", "qui", "sab"],
-    extras: ["Espaguete ao sugo", "Arroz extra"],
-    subItems: [
-      { id: "si-004-1", name: "Arroz branco", price: 0, required: true },
-      { id: "si-004-2", name: "Espaguete ao sugo", price: 0, required: true },
-      { id: "si-004-3", name: "Arroz extra (porção dobrada)", price: 2.5, required: false },
-    ],
   },
   {
     id: "MI-005",
@@ -608,13 +593,6 @@ export const menuItems: MenuItem[] = [
     popular: false,
     calories: 600,
     availableDays: ["seg", "ter", "qua", "qui", "sex"],
-    extras: ["Arroz integral", "Macarrão"],
-    subItems: [
-      { id: "si-005-1", name: "Arroz branco", price: 0, required: true },
-      { id: "si-005-2", name: "Arroz integral", price: 0, required: true },
-      { id: "si-005-3", name: "Batata palha", price: 0, required: false },
-      { id: "si-005-4", name: "Macarrão no lugar do arroz", price: 0, required: false },
-    ],
   },
   {
     id: "MI-006",
@@ -626,15 +604,6 @@ export const menuItems: MenuItem[] = [
     popular: true,
     calories: 850,
     availableDays: ["sab"],
-    extras: ["Torresmo", "Couve extra"],
-    subItems: [
-      { id: "si-006-1", name: "Arroz branco", price: 0, required: true },
-      { id: "si-006-2", name: "Farofa", price: 0, required: false },
-      { id: "si-006-3", name: "Couve refogada", price: 0, required: false },
-      { id: "si-006-4", name: "Laranja", price: 0, required: false },
-      { id: "si-006-5", name: "Torresmo", price: 4.0, required: false },
-      { id: "si-006-6", name: "Couve extra", price: 2.5, required: false },
-    ],
   },
   {
     id: "MI-007",
@@ -646,12 +615,6 @@ export const menuItems: MenuItem[] = [
     popular: false,
     calories: 460,
     availableDays: ["ter", "qui"],
-    extras: ["Parmesão extra", "Salada verde"],
-    subItems: [
-      { id: "si-007-1", name: "Parmesão ralado", price: 0, required: false },
-      { id: "si-007-2", name: "Salada verde", price: 0, required: false },
-      { id: "si-007-3", name: "Parmesão extra", price: 2.0, required: false },
-    ],
   },
   {
     id: "MI-008",
@@ -663,14 +626,6 @@ export const menuItems: MenuItem[] = [
     popular: false,
     calories: 390,
     availableDays: ["seg", "ter", "qua", "qui", "sex"],
-    extras: ["Hummus", "Pão sírio"],
-    subItems: [
-      { id: "si-008-1", name: "Arroz integral", price: 0, required: true },
-      { id: "si-008-2", name: "Grão-de-bico", price: 0, required: false },
-      { id: "si-008-3", name: "Legumes grelhados", price: 0, required: false },
-      { id: "si-008-4", name: "Hummus", price: 3.0, required: false },
-      { id: "si-008-5", name: "Pão sírio", price: 2.0, required: false },
-    ],
   },
   {
     id: "MI-009",
@@ -682,14 +637,6 @@ export const menuItems: MenuItem[] = [
     popular: true,
     calories: 420,
     availableDays: ["seg", "ter", "qua", "qui", "sex"],
-    extras: ["Ovo mexido", "Batata doce"],
-    subItems: [
-      { id: "si-009-1", name: "Arroz integral", price: 0, required: true },
-      { id: "si-009-2", name: "Batata doce", price: 0, required: true },
-      { id: "si-009-3", name: "Brócolis no vapor", price: 0, required: false },
-      { id: "si-009-4", name: "Cenoura", price: 0, required: false },
-      { id: "si-009-5", name: "Ovo mexido", price: 2.5, required: false },
-    ],
   },
   {
     id: "MI-010",
@@ -701,15 +648,6 @@ export const menuItems: MenuItem[] = [
     popular: false,
     calories: 480,
     availableDays: ["seg", "qua", "sex"],
-    extras: ["Abacate", "Ovos cozidos"],
-    subItems: [
-      { id: "si-010-1", name: "Quinoa", price: 0, required: true },
-      { id: "si-010-2", name: "Frango desfiado", price: 0, required: false },
-      { id: "si-010-3", name: "Grão-de-bico", price: 0, required: false },
-      { id: "si-010-4", name: "Molho de iogurte", price: 0, required: false },
-      { id: "si-010-5", name: "Abacate", price: 3.5, required: false },
-      { id: "si-010-6", name: "Ovos cozidos (2un)", price: 3.0, required: false },
-    ],
   },
   {
     id: "MI-011",
@@ -721,16 +659,6 @@ export const menuItems: MenuItem[] = [
     popular: true,
     calories: 650,
     availableDays: ["seg", "ter", "qua", "qui", "sex"],
-    extras: ["Suco natural", "Sobremesa extra"],
-    subItems: [
-      { id: "si-011-1", name: "Carne do dia", price: 0, required: true },
-      { id: "si-011-2", name: "Frango grelhado", price: 0, required: true },
-      { id: "si-011-3", name: "Peixe grelhado", price: 0, required: true },
-      { id: "si-011-4", name: "Acompanhamento 1 (à escolha)", price: 0, required: false },
-      { id: "si-011-5", name: "Acompanhamento 2 (à escolha)", price: 0, required: false },
-      { id: "si-011-6", name: "Sobremesa", price: 0, required: false },
-      { id: "si-011-7", name: "Suco natural", price: 4.0, required: false },
-    ],
   },
   {
     id: "MI-012",
@@ -742,17 +670,6 @@ export const menuItems: MenuItem[] = [
     popular: false,
     calories: 720,
     availableDays: ["sex", "sab"],
-    extras: ["Vinho da casa (mini)", "Sobremesa especial"],
-    subItems: [
-      { id: "si-012-1", name: "Alcatra", price: 0, required: true },
-      { id: "si-012-2", name: "Fraldinha", price: 0, required: true },
-      { id: "si-012-3", name: "Filé mignon", price: 0, required: true },
-      { id: "si-012-4", name: "Acompanhamento 1", price: 0, required: false },
-      { id: "si-012-5", name: "Acompanhamento 2", price: 0, required: false },
-      { id: "si-012-6", name: "Acompanhamento 3", price: 0, required: false },
-      { id: "si-012-7", name: "Suco natural (incluso)", price: 0, required: false },
-      { id: "si-012-8", name: "Vinho da casa (mini)", price: 8.0, required: false },
-    ],
   },
 ];
 
