@@ -189,14 +189,21 @@ function OrderCard({
       </div>
 
       {/* Items */}
-      <ul className="space-y-1">
+      <ul className="space-y-1.5">
         {order.items.map((item, i) => (
           <li key={i} className="flex items-start gap-1.5">
-            <span className="text-xs font-bold text-primary shrink-0 mt-0.5">{item.qty}x</span>
-            <div className="min-w-0">
-              <span className="text-xs font-medium text-foreground leading-tight">{item.name}</span>
+            <span className="text-xs font-bold text-primary shrink-0 mt-0.5 min-w-[18px]">{item.qty}x</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-medium text-foreground leading-tight">{item.name}</span>
+                {item.size && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary leading-none shrink-0">
+                    {item.size}
+                  </span>
+                )}
+              </div>
               {item.obs && (
-                <p className="text-xs text-muted-foreground italic leading-tight">{item.obs}</p>
+                <p className="text-xs text-muted-foreground italic leading-tight mt-0.5">{item.obs}</p>
               )}
             </div>
           </li>
