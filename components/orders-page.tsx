@@ -2,10 +2,21 @@
 
 import { useState, useMemo } from "react";
 import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  useDraggable,
+  type DragStartEvent,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
+import {
   ClipboardList,
   Search,
   Clock,
-  CheckCircle2,
   DollarSign,
   MapPin,
   CreditCard,
@@ -14,6 +25,9 @@ import {
   Bike,
   UtensilsCrossed,
   AlertCircle,
+  CheckCircle2,
+  CheckCheck,
+  GripVertical,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +36,6 @@ import { cn } from "@/lib/utils";
 import {
   orders as allOrders,
   contacts,
-  statusLabels,
   paymentLabels,
   type Order,
   type OrderStatus,
@@ -38,15 +51,17 @@ const COLUMNS: {
   badgeClass: string;
   headerClass: string;
   colClass: string;
+  dropClass: string;
 }[] = [
   {
     status: "aguardando",
-    label: "Aguardando Confirmação",
+    label: "Aguardando",
     icon: AlertCircle,
     accent: "text-yellow-600",
     badgeClass: "bg-yellow-50 text-yellow-700 border-yellow-200",
     headerClass: "border-yellow-300 bg-yellow-50",
     colClass: "border-yellow-200 bg-yellow-50/30",
+    dropClass: "bg-yellow-100/60 border-yellow-300",
   },
   {
     status: "confirmado",
@@ -56,6 +71,7 @@ const COLUMNS: {
     badgeClass: "bg-blue-50 text-blue-700 border-blue-200",
     headerClass: "border-blue-300 bg-blue-50",
     colClass: "border-blue-200 bg-blue-50/30",
+    dropClass: "bg-blue-100/60 border-blue-300",
   },
   {
     status: "preparando",
@@ -65,6 +81,7 @@ const COLUMNS: {
     badgeClass: "bg-orange-50 text-orange-700 border-orange-200",
     headerClass: "border-orange-300 bg-orange-50",
     colClass: "border-orange-200 bg-orange-50/30",
+    dropClass: "bg-orange-100/60 border-orange-300",
   },
   {
     status: "pronto",
@@ -74,6 +91,7 @@ const COLUMNS: {
     badgeClass: "bg-green-50 text-green-700 border-green-200",
     headerClass: "border-green-300 bg-green-50",
     colClass: "border-green-200 bg-green-50/30",
+    dropClass: "bg-green-100/60 border-green-300",
   },
   {
     status: "saiu",
@@ -83,10 +101,25 @@ const COLUMNS: {
     badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
     headerClass: "border-purple-300 bg-purple-50",
     colClass: "border-purple-200 bg-purple-50/30",
+    dropClass: "bg-purple-100/60 border-purple-300",
+  },
+  {
+    status: "entregue",
+    label: "Entregue",
+    icon: CheckCheck,
+    accent: "text-slate-500",
+    badgeClass: "bg-slate-100 text-slate-600 border-slate-200",
+    headerClass: "border-slate-200 bg-slate-50",
+    colClass: "border-slate-200 bg-slate-50/30",
+    dropClass: "bg-slate-100/60 border-slate-300",
   },
 ];
 
-// ─── KPI card ─────────────────────────────────────────────────────────────────
+const STATUS_FLOW: OrderStatus[] = [
+  "aguardando", "confirmado", "preparando", "pronto", "saiu", "entregue",
+];
+
+// ─── KPI card ──────────────────────────────────────────────────────────────────
 
 function KpiCard({
   label,
@@ -115,26 +148,51 @@ function KpiCard({
   );
 }
 
-// ─── Order card ───────────────────────────────────────────────────────────────
+// ─── Order card (draggable) ────────────────────────────────────────────────────
 
 function OrderCard({
   order,
   badgeClass,
   onAdvance,
   isLast,
+  isDragging = false,
 }: {
   order: Order;
   badgeClass: string;
   onAdvance?: () => void;
   isLast: boolean;
+  isDragging?: boolean;
 }) {
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+    id: order.id,
+  });
+
+  const style = transform
+    ? { transform: CSS.Translate.toString(transform) }
+    : undefined;
+
   const contact = contacts.find((c) => c.id === order.contactId);
 
   return (
-    <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "bg-card border border-border rounded-xl p-4 flex flex-col gap-3 shadow-sm transition-all select-none",
+        isDragging ? "opacity-40" : "hover:shadow-md cursor-grab active:cursor-grabbing"
+      )}
+    >
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
+          {/* Drag handle */}
+          <div
+            {...listeners}
+            {...attributes}
+            className="text-muted-foreground/40 hover:text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing"
+          >
+            <GripVertical className="w-4 h-4" aria-hidden="true" />
+          </div>
           <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">
             {contact?.avatar ?? "?"}
           </div>
@@ -196,37 +254,80 @@ function OrderCard({
   );
 }
 
-// ─── Kanban column ────────────────────────────────────────────────────────────
+// ─── Static card (for DragOverlay) ────────────────────────────────────────────
+
+function OrderCardStatic({ order }: { order: Order }) {
+  const contact = contacts.find((c) => c.id === order.contactId);
+  return (
+    <div className="bg-card border-2 border-primary rounded-xl p-4 flex flex-col gap-3 shadow-2xl rotate-2 w-[260px]">
+      <div className="flex items-center gap-2 min-w-0">
+        <GripVertical className="w-4 h-4 text-muted-foreground/40 shrink-0" aria-hidden="true" />
+        <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">
+          {contact?.avatar ?? "?"}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground truncate">{contact?.name ?? "—"}</p>
+          <p className="text-xs text-muted-foreground font-mono">{order.id}</p>
+        </div>
+      </div>
+      <ul className="space-y-1">
+        {order.items.map((item, i) => (
+          <li key={i} className="flex items-start gap-1.5">
+            <span className="text-xs font-bold text-primary shrink-0 mt-0.5">{item.qty}x</span>
+            <span className="text-xs font-medium text-foreground">{item.name}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex items-center justify-between pt-1 border-t border-border">
+        <span className="text-xs text-muted-foreground">{paymentLabels[order.payment]}</span>
+        <span className="text-sm font-bold text-foreground">
+          R$ {order.total.toFixed(2).replace(".", ",")}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Kanban column (droppable) ─────────────────────────────────────────────────
 
 function KanbanColumn({
   col,
   orders,
   onAdvance,
+  activeId,
 }: {
   col: (typeof COLUMNS)[number];
   orders: Order[];
   onAdvance: (orderId: string) => void;
+  activeId: string | null;
 }) {
+  const { setNodeRef, isOver } = useDroppable({ id: col.status });
   const Icon = col.icon;
-  const isLast = col.status === "saiu";
+  const isLast = col.status === "entregue";
 
   return (
-    <div className={cn("flex flex-col rounded-xl border min-w-[260px] flex-1", col.colClass)}>
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex flex-col rounded-xl border min-w-[240px] flex-1 transition-colors duration-150",
+        isOver ? col.dropClass : col.colClass
+      )}
+    >
       {/* Column header */}
-      <div className={cn("flex items-center gap-2 px-4 py-3 rounded-t-xl border-b", col.headerClass)}>
+      <div className={cn("flex items-center gap-2 px-3 py-3 rounded-t-xl border-b", col.headerClass)}>
         <Icon className={cn("w-4 h-4 shrink-0", col.accent)} aria-hidden="true" />
-        <span className="text-sm font-semibold text-foreground flex-1 leading-tight">{col.label}</span>
-        <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full border", col.badgeClass)}>
+        <span className="text-sm font-semibold text-foreground flex-1 leading-tight truncate">{col.label}</span>
+        <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full border shrink-0", col.badgeClass)}>
           {orders.length}
         </span>
       </div>
 
       {/* Cards */}
-      <div className="flex flex-col gap-3 p-3 overflow-y-auto flex-1">
-        {orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <Icon className="w-7 h-7 text-muted-foreground/40 mb-2" aria-hidden="true" />
-            <p className="text-xs text-muted-foreground">Nenhum pedido aqui</p>
+      <div className="flex flex-col gap-3 p-3 overflow-y-auto flex-1 min-h-[80px]">
+        {orders.length === 0 && !isOver ? (
+          <div className="flex flex-col items-center justify-center py-6 text-center">
+            <Icon className="w-6 h-6 text-muted-foreground/30 mb-1" aria-hidden="true" />
+            <p className="text-xs text-muted-foreground/60">Nenhum pedido</p>
           </div>
         ) : (
           orders.map((order) => (
@@ -235,6 +336,7 @@ function KanbanColumn({
               order={order}
               badgeClass={col.badgeClass}
               isLast={isLast}
+              isDragging={activeId === order.id}
               onAdvance={() => onAdvance(order.id)}
             />
           ))
@@ -246,11 +348,19 @@ function KanbanColumn({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-const STATUS_FLOW: OrderStatus[] = ["aguardando", "confirmado", "preparando", "pronto", "saiu"];
-
 export function OrdersPage() {
   const [search, setSearch] = useState("");
   const [orderList, setOrderList] = useState<Order[]>(allOrders);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
+
+  const activeOrder = useMemo(
+    () => orderList.find((o) => o.id === activeId) ?? null,
+    [activeId, orderList]
+  );
 
   const filtered = useMemo(() => {
     const term = search.toLowerCase();
@@ -264,6 +374,22 @@ export function OrdersPage() {
       );
     });
   }, [search, orderList]);
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(String(event.active.id));
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setActiveId(null);
+    if (!over) return;
+    const orderId = String(active.id);
+    const newStatus = String(over.id) as OrderStatus;
+    if (!STATUS_FLOW.includes(newStatus)) return;
+    setOrderList((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+    );
+  }
 
   function advanceOrder(orderId: string) {
     setOrderList((prev) =>
@@ -281,8 +407,11 @@ export function OrdersPage() {
     ["aguardando", "confirmado", "preparando"].includes(o.status)
   ).length;
   const readyCount = orderList.filter((o) => o.status === "pronto").length;
-  const outCount = orderList.filter((o) => o.status === "saiu").length;
-  const todayRevenue = orderList.reduce((s, o) => s + o.total, 0);
+  const outCount   = orderList.filter((o) => o.status === "saiu").length;
+  const delivered  = orderList.filter((o) => o.status === "entregue").length;
+  const todayRevenue = orderList
+    .filter((o) => o.status === "entregue")
+    .reduce((s, o) => s + o.total, 0);
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
@@ -299,9 +428,9 @@ export function OrdersPage() {
         {/* KPIs */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 shrink-0">
           <KpiCard
-            label="Faturamento"
+            label="Faturamento entregue"
             value={`R$ ${todayRevenue.toFixed(2).replace(".", ",")}`}
-            sub="todos os pedidos"
+            sub={`${delivered} pedido(s) entregue(s)`}
             icon={DollarSign}
             color="bg-primary/10 text-primary"
           />
@@ -315,7 +444,7 @@ export function OrdersPage() {
           <KpiCard
             label="Prontos"
             value={String(readyCount)}
-            sub="aguardando retirada"
+            sub="aguardando retirada/entrega"
             icon={Package}
             color="bg-green-100 text-green-600"
           />
@@ -340,16 +469,27 @@ export function OrdersPage() {
         </div>
 
         {/* Kanban board */}
-        <div className="flex gap-4 flex-1 overflow-x-auto pb-2">
-          {COLUMNS.map((col) => (
-            <KanbanColumn
-              key={col.status}
-              col={col}
-              orders={filtered.filter((o) => o.status === col.status)}
-              onAdvance={advanceOrder}
-            />
-          ))}
-        </div>
+        <DndContext
+          sensors={sensors}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="flex gap-3 flex-1 overflow-x-auto pb-2">
+            {COLUMNS.map((col) => (
+              <KanbanColumn
+                key={col.status}
+                col={col}
+                orders={filtered.filter((o) => o.status === col.status)}
+                onAdvance={advanceOrder}
+                activeId={activeId}
+              />
+            ))}
+          </div>
+
+          <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
+            {activeOrder ? <OrderCardStatic order={activeOrder} /> : null}
+          </DragOverlay>
+        </DndContext>
       </div>
     </div>
   );

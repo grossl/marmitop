@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, MapPin, CheckCircle, Package, Bike, AlertCircle, UtensilsCrossed } from "lucide-react";
+import { Clock, MapPin, CheckCircle, Package, Bike, AlertCircle, UtensilsCrossed, CheckCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -17,6 +17,7 @@ const statusConfig: Record<
   preparando: { icon: UtensilsCrossed,  className: "bg-orange-100 text-orange-700" },
   pronto:     { icon: Package,          className: "bg-green-100 text-green-700" },
   saiu:       { icon: Bike,             className: "bg-purple-100 text-purple-700" },
+  entregue:   { icon: CheckCheck,       className: "bg-slate-100 text-slate-600" },
 };
 
 const nextStatus: Partial<Record<OrderStatus, OrderStatus>> = {
@@ -24,6 +25,7 @@ const nextStatus: Partial<Record<OrderStatus, OrderStatus>> = {
   confirmado:  "preparando",
   preparando:  "pronto",
   pronto:      "saiu",
+  saiu:        "entregue",
 };
 
 const nextLabel: Partial<Record<OrderStatus, string>> = {
@@ -31,6 +33,7 @@ const nextLabel: Partial<Record<OrderStatus, string>> = {
   confirmado:  "Iniciar preparo",
   preparando:  "Marcar como pronto",
   pronto:      "Saiu para entrega",
+  saiu:        "Marcar como entregue",
 };
 
 interface OrderCardProps {
@@ -118,8 +121,8 @@ function OrderCard({ order, isHighlighted, onStatusChange, onCardRef }: OrderCar
             {nextLbl}
           </Button>
         )}
-        {order.status === "saiu" && (
-          <span className="text-xs text-muted-foreground italic">A caminho</span>
+        {order.status === "entregue" && (
+          <span className="text-xs text-muted-foreground italic">Finalizado</span>
         )}
       </div>
     </div>
@@ -148,7 +151,8 @@ export function OrdersPanel({
     { key: "confirmado",  label: "Confirmados" },
     { key: "preparando",  label: "Em preparo" },
     { key: "pronto",      label: "Prontos para entrega" },
-    { key: "saiu",        label: "Saiu para entrega" },
+        { key: "saiu",        label: "Saiu para entrega" },
+        { key: "entregue",    label: "Entregues" },
   ];
 
   return (

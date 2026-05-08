@@ -1,6 +1,6 @@
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type OrderStatus = "aguardando" | "confirmado" | "preparando" | "pronto" | "saiu";
+export type OrderStatus = "aguardando" | "confirmado" | "preparando" | "pronto" | "saiu" | "entregue";
 export type PaymentMethod = "pix" | "dinheiro" | "cartao_credito" | "cartao_debito";
 export type Section = "mensagens" | "pedidos" | "contatos" | "relatorios" | "cardapio";
 export type MenuCategory = "proteinas" | "vegetariano" | "fit" | "executiva" | "especial";
@@ -666,4 +666,5 @@ export const statusLabels: Record<OrderStatus, string> = {
   preparando:  "Em Preparo",
   pronto:      "Pronto",
   saiu:        "Saiu para Entrega",
+  entregue:    "Entregue",
 };
