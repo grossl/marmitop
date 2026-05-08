@@ -1,6 +1,6 @@
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type OrderStatus = "novo" | "preparando" | "pronto" | "entregue" | "cancelado";
+export type OrderStatus = "aguardando" | "confirmado" | "preparando" | "pronto" | "saiu";
 export type PaymentMethod = "pix" | "dinheiro" | "cartao_credito" | "cartao_debito";
 export type Section = "mensagens" | "pedidos" | "contatos" | "relatorios" | "cardapio";
 export type MenuCategory = "proteinas" | "vegetariano" | "fit" | "executiva" | "especial";
@@ -265,7 +265,7 @@ export const messages: Record<string, Message[]> = {
   ],
 };
 
-// ─── Orders (today) ───────────────────────────────────────────────────────────
+// ─── Orders ───────────────────────────────────────────────────────────────────
 
 export const orders: Order[] = [
   {
@@ -284,7 +284,7 @@ export const orders: Order[] = [
   {
     id: "ORD-002",
     contactId: "2",
-    status: "preparando",
+    status: "confirmado",
     items: [{ name: "Picanha com Arroz e Batata Frita", qty: 1, price: 29.9 }],
     total: 29.9,
     address: "Av. Paulista, 900, sala 12",
@@ -309,7 +309,7 @@ export const orders: Order[] = [
   {
     id: "ORD-004",
     contactId: "5",
-    status: "novo",
+    status: "aguardando",
     items: [{ name: "Feijoada Completa", qty: 3, price: 25.0, obs: "Sem cebola" }],
     total: 75.0,
     address: "Rua Oscar Freire, 55",
@@ -322,7 +322,7 @@ export const orders: Order[] = [
   {
     id: "ORD-005",
     contactId: "6",
-    status: "entregue",
+    status: "saiu",
     items: [{ name: "Bife Acebolado", qty: 1, price: 21.0 }],
     total: 21.0,
     address: "Alameda Santos, 1200",
@@ -334,7 +334,7 @@ export const orders: Order[] = [
   {
     id: "ORD-006",
     contactId: "7",
-    status: "novo",
+    status: "aguardando",
     items: [{ name: "Marmita Executiva", qty: 2, price: 24.5 }],
     total: 49.0,
     address: "Av. Ibirapuera, 3100",
@@ -357,101 +357,100 @@ export const orders: Order[] = [
     deliveryTime: "40 min",
     payment: "pix",
   },
-  // Past orders for the table
   {
     id: "ORD-008",
     contactId: "1",
-    status: "entregue",
+    status: "saiu",
     items: [{ name: "Frango Grelhado", qty: 1, price: 18.9 }],
     total: 18.9,
     address: "Rua das Flores, 342, apto 52",
     neighborhood: "Vila Madalena",
     createdAt: "12:00",
-    date: "2025-05-06",
+    date: "2025-05-07",
     payment: "pix",
   },
   {
     id: "ORD-009",
     contactId: "2",
-    status: "entregue",
+    status: "pronto",
     items: [{ name: "Strogonoff de Frango", qty: 2, price: 19.9 }],
     total: 39.8,
     address: "Av. Paulista, 900, sala 12",
     neighborhood: "Bela Vista",
     createdAt: "11:30",
-    date: "2025-05-06",
+    date: "2025-05-07",
     payment: "cartao_credito",
   },
   {
     id: "ORD-010",
     contactId: "5",
-    status: "entregue",
+    status: "confirmado",
     items: [{ name: "Feijoada Completa", qty: 2, price: 25.0 }],
     total: 50.0,
     address: "Rua Oscar Freire, 55",
     neighborhood: "Jardins",
     createdAt: "11:00",
-    date: "2025-05-05",
+    date: "2025-05-07",
     payment: "dinheiro",
   },
   {
     id: "ORD-011",
     contactId: "3",
-    status: "cancelado",
+    status: "aguardando",
     items: [{ name: "Marmita Vegetariana", qty: 1, price: 22.5 }],
     total: 22.5,
     address: "Rua Augusta, 200, apto 10",
     neighborhood: "Consolação",
     createdAt: "10:20",
-    date: "2025-05-05",
+    date: "2025-05-07",
     payment: "pix",
   },
   {
     id: "ORD-012",
     contactId: "7",
-    status: "entregue",
+    status: "saiu",
     items: [{ name: "Marmita Executiva", qty: 3, price: 24.5 }],
     total: 73.5,
     address: "Av. Ibirapuera, 3100",
     neighborhood: "Moema",
     createdAt: "13:15",
-    date: "2025-05-04",
+    date: "2025-05-07",
     payment: "cartao_credito",
   },
   {
     id: "ORD-013",
     contactId: "6",
-    status: "entregue",
+    status: "confirmado",
     items: [{ name: "Bife Acebolado", qty: 2, price: 21.0 }],
     total: 42.0,
     address: "Alameda Santos, 1200",
     neighborhood: "Cerqueira César",
     createdAt: "12:40",
-    date: "2025-05-03",
+    date: "2025-05-07",
     payment: "pix",
   },
   {
     id: "ORD-014",
     contactId: "4",
-    status: "entregue",
+    status: "pronto",
     items: [{ name: "Marmita Fit", qty: 2, price: 26.0 }],
     total: 52.0,
     address: "Rua Teodoro Sampaio, 880",
     neighborhood: "Pinheiros",
     createdAt: "12:15",
-    date: "2025-05-02",
+    date: "2025-05-07",
     payment: "cartao_debito",
   },
   {
     id: "ORD-015",
     contactId: "8",
-    status: "entregue",
+    status: "preparando",
     items: [{ name: "Frango à Parmegiana", qty: 1, price: 23.9 }],
     total: 23.9,
     address: "Rua Joaquim Floriano, 820",
     neighborhood: "Itaim Bibi",
     createdAt: "11:50",
-    date: "2025-05-01",
+    date: "2025-05-07",
     payment: "pix",
   },
 ];
@@ -486,7 +485,7 @@ export const dailyData: DailyData[] = [
   { day: "07/05", orders: 7 },
 ];
 
-// ─── Top items ────────────────────────────────────────────────────────────────
+// ─── Top items ────────────��───────────────────────────────────────────────────
 
 export const topItems: TopItem[] = [
   { name: "Frango Grelhado",       qty: 312, revenue: 5896.8  },
@@ -662,9 +661,9 @@ export const paymentLabels: Record<PaymentMethod, string> = {
 };
 
 export const statusLabels: Record<OrderStatus, string> = {
-  novo: "Novo",
-  preparando: "Preparando",
-  pronto: "Pronto",
-  entregue: "Entregue",
-  cancelado: "Cancelado",
+  aguardando: "Aguardando Confirmação",
+  confirmado:  "Confirmado",
+  preparando:  "Em Preparo",
+  pronto:      "Pronto",
+  saiu:        "Saiu para Entrega",
 };

@@ -33,11 +33,11 @@ import {
 // ─── Status style map ─────────────────────────────────────────────────────────
 
 const statusStyles: Record<OrderStatus, string> = {
-  novo:       "bg-blue-100 text-blue-700 border-blue-200",
-  preparando: "bg-amber-100 text-amber-700 border-amber-200",
-  pronto:     "bg-green-100 text-green-700 border-green-200",
-  entregue:   "bg-muted text-muted-foreground border-border",
-  cancelado:  "bg-red-100 text-red-700 border-red-200",
+  aguardando: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  confirmado:  "bg-blue-100 text-blue-700 border-blue-200",
+  preparando:  "bg-amber-100 text-amber-700 border-amber-200",
+  pronto:      "bg-green-100 text-green-700 border-green-200",
+  saiu:        "bg-purple-100 text-purple-700 border-purple-200",
 };
 
 // ─── Contact detail sheet ─────────────────────────────────────────────────────
@@ -59,7 +59,6 @@ function ContactSheet({
   if (!contact) return null;
 
   const totalSpent = contactOrders
-    .filter((o) => o.status !== "cancelado")
     .reduce((s, o) => s + o.total, 0);
 
   return (

@@ -1,51 +1,36 @@
 "use client";
 
-import { Clock, MapPin, ChefHat, CheckCircle, Package, Bike } from "lucide-react";
+import { Clock, MapPin, CheckCircle, Package, Bike, AlertCircle, UtensilsCrossed } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { type Order, type OrderStatus, contacts } from "@/lib/marmita-data";
+import { type Order, type OrderStatus, contacts, statusLabels } from "@/lib/marmita-data";
 
 const statusConfig: Record<
   OrderStatus,
-  { label: string; icon: React.ElementType; className: string }
+  { icon: React.ElementType; className: string }
 > = {
-  novo: {
-    label: "Novo",
-    icon: Package,
-    className: "bg-[--order-new] text-[--order-new-foreground]",
-  },
-  preparando: {
-    label: "Preparando",
-    icon: ChefHat,
-    className: "bg-[--order-preparing] text-[--order-preparing-foreground]",
-  },
-  pronto: {
-    label: "Pronto",
-    icon: Bike,
-    className: "bg-[--order-ready] text-[--order-ready-foreground]",
-  },
-  entregue: {
-    label: "Entregue",
-    icon: CheckCircle,
-    className: "bg-[--order-delivered] text-[--order-delivered-foreground]",
-  },
+  aguardando: { icon: AlertCircle,      className: "bg-yellow-100 text-yellow-700" },
+  confirmado: { icon: CheckCircle,      className: "bg-blue-100 text-blue-700" },
+  preparando: { icon: UtensilsCrossed,  className: "bg-orange-100 text-orange-700" },
+  pronto:     { icon: Package,          className: "bg-green-100 text-green-700" },
+  saiu:       { icon: Bike,             className: "bg-purple-100 text-purple-700" },
 };
 
-const nextStatus: Record<OrderStatus, OrderStatus | null> = {
-  novo: "preparando",
-  preparando: "pronto",
-  pronto: "entregue",
-  entregue: null,
+const nextStatus: Partial<Record<OrderStatus, OrderStatus>> = {
+  aguardando: "confirmado",
+  confirmado:  "preparando",
+  preparando:  "pronto",
+  pronto:      "saiu",
 };
 
-const nextLabel: Record<OrderStatus, string | null> = {
-  novo: "Iniciar preparo",
-  preparando: "Marcar como pronto",
-  pronto: "Confirmar entrega",
-  entregue: null,
+const nextLabel: Partial<Record<OrderStatus, string>> = {
+  aguardando: "Confirmar pedido",
+  confirmado:  "Iniciar preparo",
+  preparando:  "Marcar como pronto",
+  pronto:      "Saiu para entrega",
 };
 
 interface OrderCardProps {
@@ -72,7 +57,6 @@ function OrderCard({ order, isHighlighted, onStatusChange, onCardRef }: OrderCar
           : "border-border shadow-sm"
       )}
     >
-      {/* Top row */}
       <div className="flex items-start justify-between gap-2 mb-3">
         <div>
           <div className="flex items-center gap-1.5 mb-0.5">
@@ -87,21 +71,14 @@ function OrderCard({ order, isHighlighted, onStatusChange, onCardRef }: OrderCar
           <p className="text-sm font-semibold text-foreground">{contact?.name}</p>
           <p className="text-xs text-muted-foreground">{contact?.phone}</p>
         </div>
-
-        <span
-          className={cn(
-            "flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full shrink-0",
-            cfg.className
-          )}
-        >
+        <span className={cn("flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full shrink-0", cfg.className)}>
           <StatusIcon className="w-3 h-3" />
-          {cfg.label}
+          {statusLabels[order.status]}
         </span>
       </div>
 
       <Separator className="mb-3" />
 
-      {/* Items */}
       <div className="flex flex-col gap-1.5 mb-3">
         {order.items.map((item, i) => (
           <div key={i} className="flex items-start justify-between gap-2">
@@ -120,13 +97,11 @@ function OrderCard({ order, isHighlighted, onStatusChange, onCardRef }: OrderCar
         ))}
       </div>
 
-      {/* Address */}
       <div className="flex items-start gap-1.5 mb-3">
         <MapPin className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
         <p className="text-xs text-muted-foreground leading-relaxed">{order.address}</p>
       </div>
 
-      {/* Total + action */}
       <div className="flex items-center justify-between gap-2">
         <div>
           <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Total</span>
@@ -138,18 +113,13 @@ function OrderCard({ order, isHighlighted, onStatusChange, onCardRef }: OrderCar
           <Button
             size="sm"
             onClick={() => onStatusChange(order.id, next)}
-            className={cn(
-              "text-xs h-8 rounded-lg",
-              next === "preparando" && "bg-primary hover:bg-primary/90 text-primary-foreground",
-              next === "pronto" && "bg-amber-500 hover:bg-amber-600 text-white",
-              next === "entregue" && "bg-green-600 hover:bg-green-700 text-white"
-            )}
+            className="text-xs h-8 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             {nextLbl}
           </Button>
         )}
-        {order.status === "entregue" && (
-          <span className="text-xs text-muted-foreground italic">Concluído</span>
+        {order.status === "saiu" && (
+          <span className="text-xs text-muted-foreground italic">A caminho</span>
         )}
       </div>
     </div>
@@ -169,53 +139,34 @@ export function OrdersPanel({
   onStatusChange,
   cardRefs,
 }: OrdersPanelProps) {
-  const counts = {
-    novo: orders.filter((o) => o.status === "novo").length,
-    preparando: orders.filter((o) => o.status === "preparando").length,
-    pronto: orders.filter((o) => o.status === "pronto").length,
-    entregue: orders.filter((o) => o.status === "entregue").length,
-  };
-
   const handleCardRef = (el: HTMLDivElement | null, id: string) => {
     cardRefs.current[id] = el;
   };
 
+  const sections: { key: OrderStatus; label: string }[] = [
+    { key: "aguardando", label: "Aguardando confirmação" },
+    { key: "confirmado",  label: "Confirmados" },
+    { key: "preparando",  label: "Em preparo" },
+    { key: "pronto",      label: "Prontos para entrega" },
+    { key: "saiu",        label: "Saiu para entrega" },
+  ];
+
   return (
     <aside className="flex flex-col w-80 shrink-0 border-l border-border bg-muted/30">
-      {/* Header */}
       <div className="px-4 py-4 border-b border-border bg-card shrink-0">
-        <h2 className="text-sm font-bold text-foreground mb-3">Pedidos de Marmita</h2>
-        <div className="grid grid-cols-4 gap-1.5">
-          {(["novo", "preparando", "pronto", "entregue"] as OrderStatus[]).map((s) => {
-            const cfg = statusConfig[s];
-            return (
-              <div
-                key={s}
-                className={cn(
-                  "flex flex-col items-center rounded-lg py-1.5 px-1",
-                  cfg.className
-                )}
-              >
-                <span className="text-base font-bold leading-tight">{counts[s]}</span>
-                <span className="text-[9px] font-medium text-center leading-tight">{cfg.label}</span>
-              </div>
-            );
-          })}
-        </div>
+        <h2 className="text-sm font-bold text-foreground">Pedidos de Marmita</h2>
       </div>
-
-      {/* Orders scroll */}
       <ScrollArea className="flex-1">
         <div className="p-3 flex flex-col gap-3">
-          {/* Novos */}
-          {orders.filter((o) => o.status === "novo").length > 0 && (
-            <section>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2 px-1">
-                Novos pedidos
-              </p>
-              {orders
-                .filter((o) => o.status === "novo")
-                .map((o) => (
+          {sections.map(({ key, label }) => {
+            const sectionOrders = orders.filter((o) => o.status === key);
+            if (sectionOrders.length === 0) return null;
+            return (
+              <section key={key}>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2 px-1">
+                  {label}
+                </p>
+                {sectionOrders.map((o) => (
                   <div key={o.id} className="mb-2">
                     <OrderCard
                       order={o}
@@ -225,71 +176,9 @@ export function OrdersPanel({
                     />
                   </div>
                 ))}
-            </section>
-          )}
-
-          {/* Em preparo */}
-          {orders.filter((o) => o.status === "preparando").length > 0 && (
-            <section>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2 px-1">
-                Em preparo
-              </p>
-              {orders
-                .filter((o) => o.status === "preparando")
-                .map((o) => (
-                  <div key={o.id} className="mb-2">
-                    <OrderCard
-                      order={o}
-                      isHighlighted={highlightedOrderId === o.id}
-                      onStatusChange={onStatusChange}
-                      onCardRef={handleCardRef}
-                    />
-                  </div>
-                ))}
-            </section>
-          )}
-
-          {/* Prontos */}
-          {orders.filter((o) => o.status === "pronto").length > 0 && (
-            <section>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2 px-1">
-                Prontos para entrega
-              </p>
-              {orders
-                .filter((o) => o.status === "pronto")
-                .map((o) => (
-                  <div key={o.id} className="mb-2">
-                    <OrderCard
-                      order={o}
-                      isHighlighted={highlightedOrderId === o.id}
-                      onStatusChange={onStatusChange}
-                      onCardRef={handleCardRef}
-                    />
-                  </div>
-                ))}
-            </section>
-          )}
-
-          {/* Entregues */}
-          {orders.filter((o) => o.status === "entregue").length > 0 && (
-            <section>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2 px-1">
-                Entregues hoje
-              </p>
-              {orders
-                .filter((o) => o.status === "entregue")
-                .map((o) => (
-                  <div key={o.id} className="mb-2">
-                    <OrderCard
-                      order={o}
-                      isHighlighted={highlightedOrderId === o.id}
-                      onStatusChange={onStatusChange}
-                      onCardRef={handleCardRef}
-                    />
-                  </div>
-                ))}
-            </section>
-          )}
+              </section>
+            );
+          })}
         </div>
       </ScrollArea>
     </aside>
