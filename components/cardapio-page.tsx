@@ -7,9 +7,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Eye,
-  EyeOff,
-  Star,
   Flame,
   ChefHat,
   GlassWater,
@@ -33,7 +30,6 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
   menuItems as initialMenuItems,
@@ -303,14 +299,6 @@ function MenuItemCard({
           className={cn("flex items-center gap-1 transition-opacity", isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100")}
           onClick={(e) => e.stopPropagation()}
         >
-          <button onClick={onTogglePopular} title={item.popular ? "Remover destaque" : "Popular"}
-            className={cn("w-6 h-6 flex items-center justify-center rounded-md transition-colors", item.popular ? "text-amber-500 hover:bg-amber-50" : "text-muted-foreground hover:bg-muted")}>
-            <Star className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={onToggleAvailable} title={item.available ? "Desativar" : "Ativar"}
-            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors">
-            {item.available ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-          </button>
           <button onClick={onEdit} title="Editar"
             className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors">
             <Pencil className="w-3.5 h-3.5" />
@@ -394,14 +382,6 @@ function DrinkItemCard({
           className={cn("flex items-center gap-1 transition-opacity", isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100")}
           onClick={(e) => e.stopPropagation()}
         >
-          <button onClick={onTogglePopular} title={item.popular ? "Remover destaque" : "Popular"}
-            className={cn("w-6 h-6 flex items-center justify-center rounded-md transition-colors", item.popular ? "text-amber-500 hover:bg-amber-50" : "text-muted-foreground hover:bg-muted")}>
-            <Star className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={onToggleAvailable}
-            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors">
-            {item.available ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-          </button>
           <button onClick={onEdit}
             className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors">
             <Pencil className="w-3.5 h-3.5" />
@@ -416,7 +396,7 @@ function DrinkItemCard({
   );
 }
 
-// ─── Menu item detail panel ───────────────────────────────────────────────────
+// ─── Menu item detail panel ───────────────────���───────────────────────────────
 
 function MenuDetailPanel({
   item,
@@ -518,15 +498,6 @@ function MenuDetailPanel({
             </div>
           )}
 
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-foreground">Disponível no cardápio</p>
-              <p className="text-xs text-muted-foreground">Exibido para os clientes</p>
-            </div>
-            <Switch checked={item.available} onCheckedChange={() => onToggleAvailable(item.id)} />
-          </div>
-
-          <Separator />
           <div className="flex flex-col gap-2">
             <Button onClick={onEdit} variant="outline" className="w-full gap-2 border-border">
               <Pencil className="w-4 h-4" /> Editar item
@@ -600,14 +571,6 @@ function DrinkDetailPanel({
             ) : (
               <p className="text-xs text-muted-foreground">Nenhum dia configurado</p>
             )}
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-foreground">Disponível no cardápio</p>
-              <p className="text-xs text-muted-foreground">Exibido para os clientes</p>
-            </div>
-            <Switch checked={item.available} onCheckedChange={() => onToggleAvailable(item.id)} />
           </div>
           <Separator />
           <div className="flex flex-col gap-2">
@@ -711,17 +674,6 @@ function MenuItemFormDialog({
             <Input value={extrasInput} onChange={(e) => setExtrasInput(e.target.value)} placeholder="Ex: Arroz integral, Feijão preto, Farofa extra" className="h-9 text-sm" />
           </div>
 
-          {/* Switches */}
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-2">
-              <Switch id="available" checked={form.available} onCheckedChange={(v) => setForm((f) => ({ ...f, available: v }))} />
-              <Label htmlFor="available" className="text-sm cursor-pointer">Disponível</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch id="popular" checked={form.popular} onCheckedChange={(v) => setForm((f) => ({ ...f, popular: v }))} />
-              <Label htmlFor="popular" className="text-sm cursor-pointer">Popular</Label>
-            </div>
-          </div>
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
@@ -792,16 +744,6 @@ function DrinkFormDialog({
           <div className="flex flex-col gap-1.5">
             <Label className="text-sm flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Dias disponíveis</Label>
             <WeekdayPills selected={form.availableDays} onChange={(days) => setForm((f) => ({ ...f, availableDays: days }))} />
-          </div>
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-2">
-              <Switch id="drink-available" checked={form.available} onCheckedChange={(v) => setForm((f) => ({ ...f, available: v }))} />
-              <Label htmlFor="drink-available" className="text-sm cursor-pointer">Disponível</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch id="drink-popular" checked={form.popular} onCheckedChange={(v) => setForm((f) => ({ ...f, popular: v }))} />
-              <Label htmlFor="drink-popular" className="text-sm cursor-pointer">Popular</Label>
-            </div>
           </div>
         </div>
         <DialogFooter className="gap-2">
