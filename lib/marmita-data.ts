@@ -2,7 +2,21 @@
 
 export type OrderStatus = "novo" | "preparando" | "pronto" | "entregue" | "cancelado";
 export type PaymentMethod = "pix" | "dinheiro" | "cartao_credito" | "cartao_debito";
-export type Section = "mensagens" | "pedidos" | "contatos" | "relatorios";
+export type Section = "mensagens" | "pedidos" | "contatos" | "relatorios" | "cardapio";
+export type MenuCategory = "proteinas" | "vegetariano" | "fit" | "executiva" | "especial";
+
+export interface MenuItem {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  category: MenuCategory;
+  available: boolean;
+  popular: boolean;
+  calories?: number;
+  image?: string;
+  extras?: string[];
+}
 
 export interface OrderItem {
   name: string;
@@ -484,6 +498,159 @@ export const topItems: TopItem[] = [
   { name: "Strogonoff de Frango",  qty: 87,  revenue: 1731.3  },
   { name: "Marmita Fit",           qty: 74,  revenue: 1924.0  },
 ];
+
+// ─── Menu items (cardápio) ────────────────────────────────────────────────────
+
+export const menuItems: MenuItem[] = [
+  {
+    id: "MI-001",
+    name: "Frango Grelhado",
+    description: "Frango grelhado temperado na hora, acompanhado de arroz branco, feijão carioca, farofa e salada mista.",
+    price: 18.9,
+    category: "proteinas",
+    available: true,
+    popular: true,
+    calories: 520,
+    extras: ["Arroz integral", "Feijão preto", "Farofa extra"],
+  },
+  {
+    id: "MI-002",
+    name: "Picanha com Arroz e Batata Frita",
+    description: "Fatias de picanha grelhada ao ponto, arroz branco, batata frita crocante e vinagrete.",
+    price: 29.9,
+    category: "proteinas",
+    available: true,
+    popular: true,
+    calories: 780,
+    extras: ["Queijo coalho grelhado", "Molho chimichurri"],
+  },
+  {
+    id: "MI-003",
+    name: "Bife Acebolado",
+    description: "Bife de contra-filé com cebolas caramelizadas, arroz, feijão e purê de mandioca.",
+    price: 21.0,
+    category: "proteinas",
+    available: true,
+    popular: false,
+    calories: 610,
+    extras: ["Ovo frito", "Batata frita"],
+  },
+  {
+    id: "MI-004",
+    name: "Frango à Parmegiana",
+    description: "Filé de frango empanado coberto com molho de tomate caseiro e queijo muçarela gratinado.",
+    price: 23.9,
+    category: "proteinas",
+    available: true,
+    popular: true,
+    calories: 690,
+    extras: ["Espaguete ao sugo", "Arroz extra"],
+  },
+  {
+    id: "MI-005",
+    name: "Strogonoff de Frango",
+    description: "Strogonoff cremoso de frango com creme de leite, arroz branco e batata palha.",
+    price: 19.9,
+    category: "proteinas",
+    available: true,
+    popular: false,
+    calories: 600,
+    extras: ["Arroz integral", "Macarrão"],
+  },
+  {
+    id: "MI-006",
+    name: "Feijoada Completa",
+    description: "Feijoada tradicional com costelinha, linguiça, toucinho e couve refogada. Acompanha arroz, farofa e laranja.",
+    price: 25.0,
+    category: "especial",
+    available: true,
+    popular: true,
+    calories: 850,
+    extras: ["Torresmo", "Couve extra"],
+  },
+  {
+    id: "MI-007",
+    name: "Lasanha de Berinjela",
+    description: "Lasanha vegetariana com berinjela grelhada, ricota temperada, molho de tomate fresco e queijo.",
+    price: 22.5,
+    category: "vegetariano",
+    available: true,
+    popular: false,
+    calories: 460,
+    extras: ["Parmesão extra", "Salada verde"],
+  },
+  {
+    id: "MI-008",
+    name: "Marmita Vegetariana",
+    description: "Legumes grelhados variados, grão-de-bico ao molho, arroz integral e salada de folhas.",
+    price: 22.5,
+    category: "vegetariano",
+    available: true,
+    popular: false,
+    calories: 390,
+    extras: ["Hummus", "Pão sírio"],
+  },
+  {
+    id: "MI-009",
+    name: "Marmita Fit",
+    description: "Frango grelhado sem tempero industrializado, arroz integral, brócolis no vapor e cenoura.",
+    price: 26.0,
+    category: "fit",
+    available: true,
+    popular: true,
+    calories: 420,
+    extras: ["Ovo mexido", "Batata doce"],
+  },
+  {
+    id: "MI-010",
+    name: "Bowl Proteico",
+    description: "Base de quinoa, frango desfiado temperado, grão-de-bico, cenoura ralada e molho de iogurte.",
+    price: 28.5,
+    category: "fit",
+    available: true,
+    popular: false,
+    calories: 480,
+    extras: ["Abacate", "Ovos cozidos"],
+  },
+  {
+    id: "MI-011",
+    name: "Marmita Executiva",
+    description: "Prato do dia com opções rotativas de carne, frango ou peixe, dois acompanhamentos e sobremesa.",
+    price: 24.5,
+    category: "executiva",
+    available: true,
+    popular: true,
+    calories: 650,
+    extras: ["Suco natural", "Sobremesa extra"],
+  },
+  {
+    id: "MI-012",
+    name: "Executiva Premium",
+    description: "Carne nobre do dia (alcatra, fraldinha ou filé), três acompanhamentos à escolha e suco incluído.",
+    price: 34.9,
+    category: "executiva",
+    available: false,
+    popular: false,
+    calories: 720,
+    extras: ["Vinho da casa (mini)", "Sobremesa especial"],
+  },
+];
+
+export const categoryLabels: Record<MenuCategory, string> = {
+  proteinas: "Proteínas",
+  vegetariano: "Vegetariano",
+  fit: "Fit & Saudável",
+  executiva: "Executiva",
+  especial: "Especiais",
+};
+
+export const categoryColors: Record<MenuCategory, string> = {
+  proteinas: "bg-orange-100 text-orange-700",
+  vegetariano: "bg-green-100 text-green-700",
+  fit: "bg-teal-100 text-teal-700",
+  executiva: "bg-blue-100 text-blue-700",
+  especial: "bg-amber-100 text-amber-800",
+};
 
 // ─── Payment label helpers ────────────────────────────────────────────────────
 
