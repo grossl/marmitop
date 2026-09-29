@@ -2,7 +2,7 @@
 
 export type OrderStatus = "aguardando" | "confirmado" | "preparando" | "pronto" | "saiu" | "entregue";
 export type PaymentMethod = "pix" | "dinheiro" | "cartao_credito" | "cartao_debito";
-export type Section = "mensagens" | "pedidos" | "contatos" | "relatorios" | "cardapio" | "estoque" | "novo-pedido";
+export type Section = "novo-pedido" | "mensagens" | "pedidos" | "contatos" | "cardapio" | "estoque" | "relatorios" | "configuracoes";
 
 export interface StockItem {
   id: string;
@@ -494,7 +494,7 @@ export const orders: Order[] = [
   },
 ];
 
-// ─── Monthly report data (last 6 months) ──��───────────────────────────────────
+// ─── Monthly report data (last 6 months) ──��──────────────────────────────────��
 
 export const monthlyData: MonthlyData[] = [
   { month: "Dez", revenue: 3240.0, orders: 148, avgTicket: 21.9 },

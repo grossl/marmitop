@@ -10,6 +10,7 @@ import { ReportsPage } from "@/components/reports-page";
 import { CardapioPage } from "@/components/cardapio-page";
 import { StockPage } from "@/components/stock-page";
 import { ManualOrderPage } from "@/components/manual-order-page";
+import { SettingsPage } from "@/components/settings-page";
 import {
   contacts,
   messages as initialMessages,
@@ -103,6 +104,12 @@ export default function MarmitaChatPage() {
       {section === "relatorios" && (
         <div className="flex-1 overflow-hidden">
           <ReportsPage />
+        </div>
+      )}
+
+      {section === "configuracoes" && (
+        <div className="flex-1 overflow-hidden">
+          <SettingsPage />
         </div>
       )}
     </main>
