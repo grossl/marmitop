@@ -14,6 +14,7 @@ interface ChatPanelProps {
   messages: Message[];
   onSendMessage: (text: string) => void;
   onOrderClick: (orderId: string) => void;
+  onCreateOrder?: () => void;
   highlightedOrderId?: string;
 }
 
@@ -22,6 +23,7 @@ export function ChatPanel({
   messages,
   onSendMessage,
   onOrderClick,
+  onCreateOrder,
   highlightedOrderId,
 }: ChatPanelProps) {
   const [text, setText] = useState("");
@@ -66,6 +68,11 @@ export function ChatPanel({
           </div>
         </div>
         <div className="flex items-center gap-1">
+          {onCreateOrder && (
+            <Button variant="outline" size="sm" className="mr-1 h-8 gap-1.5 text-xs" onClick={onCreateOrder}>
+              <ShoppingBag className="h-3.5 w-3.5" /> Novo pedido
+            </Button>
+          )}
           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
             <Phone className="w-4 h-4" />
           </Button>

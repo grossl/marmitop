@@ -65,6 +65,7 @@ export default function MarmitaChatPage() {
             messages={currentMessages}
             onSendMessage={handleSendMessage}
             onOrderClick={() => {}}
+            onCreateOrder={() => setSection("novo-pedido")}
           />
         </>
       )}
