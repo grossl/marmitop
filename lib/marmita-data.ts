@@ -2,7 +2,17 @@
 
 export type OrderStatus = "aguardando" | "confirmado" | "preparando" | "pronto" | "saiu" | "entregue";
 export type PaymentMethod = "pix" | "dinheiro" | "cartao_credito" | "cartao_debito";
-export type Section = "mensagens" | "pedidos" | "contatos" | "relatorios" | "cardapio";
+export type Section = "mensagens" | "pedidos" | "contatos" | "relatorios" | "cardapio" | "estoque" | "novo-pedido";
+
+export interface StockItem {
+  id: string;
+  name: string;
+  unit: string;
+  current: number;
+  minimum: number;
+  cost: number;
+  category: "insumos" | "embalagens" | "bebidas";
+}
 export type MenuCategory = "proteinas" | "vegetariano" | "fit" | "executiva" | "especial";
 export type DrinkCategory = "refrigerantes" | "sucos" | "agua" | "alcoolicas" | "quentes";
 export type Weekday = "seg" | "ter" | "qua" | "qui" | "sex" | "sab" | "dom";
@@ -484,7 +494,7 @@ export const orders: Order[] = [
   },
 ];
 
-// ─── Monthly report data (last 6 months) ──────────────────────────────────────
+// ─── Monthly report data (last 6 months) ──��───────────────────────────────────
 
 export const monthlyData: MonthlyData[] = [
   { month: "Dez", revenue: 3240.0, orders: 148, avgTicket: 21.9 },

@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageCircle, ClipboardList, Users, BarChart3, UtensilsCrossed, BookOpen } from "lucide-react";
+import { MessageCircle, ClipboardList, Users, BarChart3, UtensilsCrossed, BookOpen, Boxes, PlusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Section } from "@/lib/marmita-data";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -17,6 +17,8 @@ const navItems: NavItem[] = [
   { id: "pedidos",    label: "Pedidos",    icon: ClipboardList },
   { id: "contatos",   label: "Contatos",   icon: Users },
   { id: "cardapio",   label: "Cardápio",   icon: BookOpen },
+  { id: "estoque",    label: "Estoque",    icon: Boxes },
+  { id: "novo-pedido", label: "Novo pedido", icon: PlusCircle },
   { id: "relatorios", label: "Relatórios", icon: BarChart3 },
 ];
 

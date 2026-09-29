@@ -8,6 +8,8 @@ import { OrdersPage } from "@/components/orders-page";
 import { ContactsPage } from "@/components/contacts-page";
 import { ReportsPage } from "@/components/reports-page";
 import { CardapioPage } from "@/components/cardapio-page";
+import { StockPage } from "@/components/stock-page";
+import { ManualOrderPage } from "@/components/manual-order-page";
 import {
   contacts,
   messages as initialMessages,
@@ -82,6 +84,18 @@ export default function MarmitaChatPage() {
       {section === "cardapio" && (
         <div className="flex-1 overflow-hidden">
           <CardapioPage />
+        </div>
+      )}
+
+      {section === "estoque" && (
+        <div className="flex-1 overflow-hidden">
+          <StockPage />
+        </div>
+      )}
+
+      {section === "novo-pedido" && (
+        <div className="flex-1 overflow-hidden">
+          <ManualOrderPage />
         </div>
       )}
 
