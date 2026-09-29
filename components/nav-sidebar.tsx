@@ -13,13 +13,13 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { id: "mensagens",  label: "Mensagens",  icon: MessageCircle },
-  { id: "pedidos",    label: "Pedidos",    icon: ClipboardList },
-  { id: "contatos",   label: "Contatos",   icon: Users },
-  { id: "cardapio",   label: "Cardápio",   icon: BookOpen },
-  { id: "estoque",    label: "Estoque",    icon: Boxes },
   { id: "novo-pedido", label: "Novo pedido", icon: PlusCircle },
-  { id: "relatorios", label: "Relatórios", icon: BarChart3 },
+  { id: "mensagens",   label: "Mensagens",   icon: MessageCircle },
+  { id: "pedidos",     label: "Pedidos",     icon: ClipboardList },
+  { id: "contatos",    label: "Contatos",    icon: Users },
+  { id: "cardapio",    label: "Cardápio",    icon: BookOpen },
+  { id: "estoque",     label: "Estoque",     icon: Boxes },
+  { id: "relatorios",  label: "Relatórios",  icon: BarChart3 },
 ];
 
 interface NavSidebarProps {
