@@ -24,9 +24,25 @@ export class GatewayError extends Error {
   static connection(): GatewayError {
     return new GatewayError({ kind: "connection_error" });
   }
+  static network(): GatewayError {
+    return new GatewayError({ kind: "network_error" });
+  }
+  static refused(code: string, message?: string): GatewayError {
+    return new GatewayError({ kind: "refused", code }, message);
+  }
 }
 
 function describe(f: CallFailure): string {
-  if (f.kind === "http") return `Remote returned HTTP ${f.status}${f.code ? ` (${f.code})` : ""}`;
-  return f.kind === "timeout" ? "Remote call timed out" : "Could not connect to the remote";
+  switch (f.kind) {
+    case "http":
+      return `Remote returned HTTP ${f.status}${f.code ? ` (${f.code})` : ""}`;
+    case "timeout":
+      return "Remote call timed out";
+    case "network_error":
+      return "The connection broke after the request was sent";
+    case "refused":
+      return `The request was refused before it left (${f.code})`;
+    default:
+      return "Could not connect to the remote";
+  }
 }

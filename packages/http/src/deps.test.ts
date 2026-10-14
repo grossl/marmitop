@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { EnvelopeSecretBox, FakeGateway, FakeInvoiceGateway, FixedClock, systemClock } from "@mt/core";
 
 import type { ServerConfig } from "./config";
+import { UatisGateway } from "./adapters/uatis-gateway";
 import { createServiceDeps } from "./deps";
 
 const config = (over: Partial<ServerConfig> = {}): ServerConfig => ({
@@ -13,6 +14,7 @@ const config = (over: Partial<ServerConfig> = {}): ServerConfig => ({
   uatisFake: true,
   webnfFake: true,
   env: "test",
+  allowPrivateHosts: true,
   ...over,
 });
 
@@ -31,10 +33,11 @@ describe("createServiceDeps", () => {
     }
   });
 
-  test("without the fake flags the real adapters are not available yet", async () => {
+  test("without MT_UATIS_FAKE the WhatsApp gateway is UatisGateway (P5); WebNfGateway is P6", async () => {
     const deps = createServiceDeps(config({ uatisFake: false, webnfFake: false }));
     try {
-      expect(() => deps.gateways.whatsapp(conn)).toThrow(/UatisGateway/);
+      expect(deps.gateways.whatsapp(conn)).toBeInstanceOf(UatisGateway);
+      expect(deps.allowPrivateHosts).toBe(true);
       expect(() => deps.gateways.invoices(conn)).toThrow(/WebNfGateway/);
     } finally {
       await deps.db.end();

@@ -17,6 +17,7 @@ import {
 import { createOrderActionSchema } from "@mt/schemas";
 
 import { defineService } from "../../service";
+import { enqueueOrderReceived } from "../whatsapp/automatic";
 import { loadOrderSettings } from "./order-settings";
 
 export interface CreatedOrder {
@@ -93,7 +94,8 @@ export const createOrder = defineService({
       const missing: ErrorDetail[] = [];
       if (!address.logradouro) missing.push({ path: "logradouro", code: "required", message: "Informe a rua." });
       if (!address.bairro) missing.push({ path: "bairro", code: "required", message: "Informe o bairro." });
-      if (missing.length > 0) throw new AppError("validation_failed", "Delivery address is incomplete.", { details: missing });
+      if (missing.length > 0)
+        throw new AppError("validation_failed", "Delivery address is incomplete.", { details: missing });
     }
 
     // ADR-006: prices come from the database, never from the client. An archived item is not orderable.
@@ -133,7 +135,12 @@ export const createOrder = defineService({
     }));
 
     const total = computeOrderTotal({
-      lines: input.items.map((i) => ({ menuItemId: i.menuItemId, sizeId: i.sizeId ?? null, qty: i.qty, notes: i.notes })),
+      lines: input.items.map((i) => ({
+        menuItemId: i.menuItemId,
+        sizeId: i.sizeId ?? null,
+        qty: i.qty,
+        notes: i.notes,
+      })),
       menu,
       fulfillment: input.fulfillment,
       deliveryFeeCents: settings.deliveryFeeCents,
@@ -141,7 +148,11 @@ export const createOrder = defineService({
     });
 
     // FR-035: the change amount must cover the total (the database checks it too).
-    if (input.changeForCents !== null && input.changeForCents !== undefined && input.changeForCents < total.totalCents) {
+    if (
+      input.changeForCents !== null &&
+      input.changeForCents !== undefined &&
+      input.changeForCents < total.totalCents
+    ) {
       throw new AppError("validation_failed", "Change amount is below the total.", {
         details: [
           { path: "changeForCents", code: "too_small", message: "O valor para troco deve cobrir o total do pedido." },
@@ -183,7 +194,17 @@ export const createOrder = defineService({
       `;
     }
 
-    // P5: enqueue order_received
+    // FR-039, FR-112, FR-117: order_received in this transaction, as text inside the
+    // 24-hour window, as the approved template outside it, or a failed row without one.
+    const [named] = await tx<{ name: string }[]>`
+      select name from public.customers where restaurant_id = ${ctx.restaurantId} and id = ${input.customerId}
+    `;
+    await enqueueOrderReceived(tx, deps, ctx.restaurantId, {
+      orderId: order.id,
+      orderCode: codeRow.code,
+      customerName: named?.name ?? "",
+      conversationId: input.conversationId ?? null,
+    });
     // P7: order.created outbound webhook event + usage_events row (FR-039)
 
     return { id: order.id, code: codeRow.code, status, totalCents: total.totalCents };

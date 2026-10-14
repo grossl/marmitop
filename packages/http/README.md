@@ -18,10 +18,15 @@ src/
   auth/
     roles.ts       hasRole, requireRole
     membership.ts  listMemberships, loadMembership, resolveUserContext
+  adapters/
+    safe-fetch.ts     the only HTTP client for admin-entered URLs (SSRF guard, 10 s, no redirects)
+    uatis-gateway.ts  UatisGateway, the WhatsAppGateway adapter over backend-uatis
   services/
     index.ts       re-exports one file per domain
     restaurant-profile.ts   the reference service
-  testing/         createTestServiceDeps, userCtx (tests only: @mt/http/testing)
+    whatsapp/      connection, automatic messages, gateway events, inbound webhook (P5)
+  testing/         createTestServiceDeps, userCtx, FakeUatisServer, MemoryUatisInboundStore
+                   (tests only: @mt/http/testing)
 ```
 
 ## The service pattern

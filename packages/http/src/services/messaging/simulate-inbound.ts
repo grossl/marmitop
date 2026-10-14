@@ -5,6 +5,7 @@ import { AppError } from "@mt/core";
 import { simulateInboundActionSchema } from "@mt/schemas";
 
 import { defineService } from "../../service";
+import { runInboundAutomation } from "../whatsapp/automatic";
 import { ingestInboundMessage } from "./ingest-inbound";
 
 export const simulateInboundMessage = defineService({
@@ -20,7 +21,23 @@ export const simulateInboundMessage = defineService({
       name: input.name,
       receivedAt: deps.clock.now(),
     });
-    // P5: automatic messages (welcome, closed) run here once the worker exists.
-    return { conversationId: result.conversationId, customerId: result.customerId, messageId: result.messageId };
+    // FR-110, FR-111: the same automatic messages as the webhook and the poll.
+    const [customer] = await tx<{ name: string }[]>`
+      select name from public.customers where id = ${result.customerId} and restaurant_id = ${ctx.restaurantId}
+    `;
+    const automatic =
+      result.messageId === null
+        ? null
+        : await runInboundAutomation(tx, deps, ctx.restaurantId, {
+            conversationId: result.conversationId,
+            conversationCreated: result.conversationCreated,
+            customerName: customer?.name ?? input.phone,
+          });
+    return {
+      conversationId: result.conversationId,
+      customerId: result.customerId,
+      messageId: result.messageId,
+      automaticKind: automatic?.kind ?? null,
+    };
   },
 });

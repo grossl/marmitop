@@ -57,4 +57,27 @@ describe("readServerConfig", () => {
     const result = readServerConfig({ DATABASE_URL: "postgres://user:secret@h/db", MT_KEK: "bad" });
     expect(JSON.stringify(result)).not.toContain("secret");
   });
+
+  test("MT_ALLOW_PRIVATE_HOSTS=1 turns the SSRF private-host check off outside production", () => {
+    const result = readServerConfig({
+      DATABASE_URL: "postgres://x",
+      MT_KEK: KEK,
+      MT_ENV: "development",
+      MT_ALLOW_PRIVATE_HOSTS: "1",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.config.allowPrivateHosts).toBe(true);
+  });
+
+  test("the SSRF guard is on by default", () => {
+    const result = readServerConfig({ DATABASE_URL: "postgres://x", MT_KEK: KEK, MT_ENV: "development" });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.config.allowPrivateHosts).toBe(false);
+  });
+
+  test("MT_ALLOW_PRIVATE_HOSTS in production is refused (ADR-017 #5)", () => {
+    const result = readServerConfig({ DATABASE_URL: "postgres://x", MT_KEK: KEK, MT_ALLOW_PRIVATE_HOSTS: "1" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.missing).toEqual(["MT_ALLOW_PRIVATE_HOSTS"]);
+  });
 });

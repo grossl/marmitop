@@ -2,10 +2,12 @@
 //
 // The one place an inbound customer message becomes rows (FR-012, FR-048,
 // 06.api-spec.md "Webhook handling"). The dev "simulate customer message"
-// control (ADR-002) calls it today; the P5 webhook and poll call it later.
+// control (ADR-002), the uatis webhook, and the reconciliation poll call it
+// (through services/whatsapp/gateway-events.ts for the last two).
 //
 // It runs inside the caller's transaction, after `mt.set_context`. It does
-// NOT send automatic messages (welcome, closed): P5 owns that.
+// not send automatic messages: the caller runs `runInboundAutomation`
+// (services/whatsapp/automatic.ts) when `duplicate` is false.
 
 import type { Tx } from "@mt/db";
 
@@ -84,12 +86,16 @@ export async function ingestInboundMessage(
     return { customerId, conversationId, messageId: null, customerCreated, conversationCreated, duplicate: true };
   }
 
+  // The poll can deliver an older message after a newer one: the times only move forward,
+  // and the preview follows the newest message (every SET reads the old row).
   await tx`
     update public.conversations set
-      last_message_at = ${input.receivedAt},
-      last_message_preview = ${previewOf(input.body)},
+      last_message_preview = case
+        when last_message_at is null or ${input.receivedAt}::timestamptz >= last_message_at then ${previewOf(input.body)}
+        else last_message_preview end,
+      last_message_at = greatest(coalesce(last_message_at, ${input.receivedAt}::timestamptz), ${input.receivedAt}::timestamptz),
       unread_count = unread_count + 1,
-      last_inbound_at = ${input.receivedAt}
+      last_inbound_at = greatest(coalesce(last_inbound_at, ${input.receivedAt}::timestamptz), ${input.receivedAt}::timestamptz)
     where id = ${conversationId} and restaurant_id = ${restaurantId}
   `;
 

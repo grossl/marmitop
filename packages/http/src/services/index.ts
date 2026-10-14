@@ -7,3 +7,4 @@ export * from "./orders";
 export * from "./messaging";
 export * from "./catalog";
 export * from "./admin";
+export * from "./whatsapp";

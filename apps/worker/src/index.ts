@@ -1,13 +1,55 @@
-import { healthResponse } from './health'
+// apps/worker entry: pgmq consumer (ADR-007) plus GET /health on WORKER_HEALTH_PORT (8181).
+// SIGTERM and SIGINT stop reading, wait for running jobs, then close the pool.
 
-const port = Number(process.env.HEALTH_PORT ?? 8181)
+import { createServiceDeps, readServerConfig } from "@mt/http";
 
-Bun.serve({
+import { createLogger } from "./framework/logger";
+import { PgmqQueueClient } from "./framework/pgmq-client";
+import { QueueWorker } from "./framework/worker";
+import { healthResponse } from "./health";
+import { buildRegistry } from "./registry";
+
+const log = createLogger(process.env.MT_LOG_LEVEL);
+const result = readServerConfig();
+if (!result.ok) {
+  log.error("worker cannot start: missing or invalid configuration", { variables: result.missing });
+  process.exit(1);
+}
+const config = result.config;
+if (config.allowPrivateHosts)
+  log.warn("MT_ALLOW_PRIVATE_HOSTS=1: the SSRF guard allows private hosts (development only)");
+if (config.uatisFake) {
+  log.warn("MT_UATIS_FAKE=1: sends go to an in-process FakeGateway, not backend-uatis");
+}
+
+const deps = createServiceDeps(config);
+const worker = new QueueWorker({
+  client: new PgmqQueueClient(deps.db, deps.contextOptions),
+  registry: buildRegistry(deps, log),
+  log,
+  concurrency: Number(process.env.MT_WORKER_CONCURRENCY ?? 4),
+});
+
+const port = Number(process.env.WORKER_HEALTH_PORT ?? 8181);
+const server = Bun.serve({
   port,
-  fetch: () => healthResponse(),
-})
+  fetch: (req) =>
+    new URL(req.url).pathname === "/health"
+      ? healthResponse(worker.health())
+      : new Response("not found", { status: 404 }),
+});
+worker.start();
+log.info("worker health listening", { port: server.port });
 
-// Placeholder: the pgmq consumer loop arrives with the queue milestone.
-setInterval(() => {}, 60_000)
-
-console.log(`worker health on :${port}`)
+let stopping = false;
+async function shutdown(signal: string) {
+  if (stopping) return;
+  stopping = true;
+  log.info("worker stopping", { signal });
+  await worker.stop();
+  await server.stop();
+  await deps.db.end({ timeout: 5 });
+  process.exit(0);
+}
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));

@@ -128,5 +128,5 @@ export function shortError(error: string): string {
 
 /** URL rules: private hosts and http only outside production (ADR-017). */
 export function urlRules(deps: ServiceDeps) {
-  return { allowPrivateHosts: deps.env !== "production" };
+  return { allowPrivateHosts: deps.allowPrivateHosts };
 }

@@ -17,6 +17,8 @@ import {
 } from "@mt/core";
 import { type ContextOptions, createDb, type Db } from "@mt/db";
 
+import { createSafeFetch } from "./adapters/safe-fetch";
+import { UatisGateway } from "./adapters/uatis-gateway";
 import type { ServerConfig } from "./config";
 
 /** What a per-restaurant adapter needs. Read from `integrations_*` and `secrets` by the caller. */
@@ -43,19 +45,23 @@ export interface ServiceDeps {
    */
   readonly contextOptions: ContextOptions;
   readonly env: ServerConfig["env"];
+  /** `MT_ALLOW_PRIVATE_HOSTS=1` (ADR-017 #5). URL checks and `safeFetch` read it. */
+  readonly allowPrivateHosts: boolean;
 }
 
-export type ServiceDepsOverrides = Partial<Omit<ServiceDeps, "env" | "contextOptions">>;
+export type ServiceDepsOverrides = Partial<Omit<ServiceDeps, "env" | "contextOptions" | "allowPrivateHosts">>;
 
 function gatewaysFor(config: ServerConfig): GatewayFactory {
   // One fake per process, so a dev "simulate inbound" and the worker's sends
   // see the same recorded state.
   const fakeWhatsApp = config.uatisFake ? new FakeGateway() : undefined;
   const fakeInvoices = config.webnfFake ? new FakeInvoiceGateway() : undefined;
+  // One guarded client per process: 10 s timeout, no redirects, SSRF guard (07.security.md).
+  const safeFetch = createSafeFetch({ allowPrivateHosts: config.allowPrivateHosts });
   return {
-    whatsapp(_conn) {
+    whatsapp(conn) {
       if (fakeWhatsApp) return fakeWhatsApp;
-      throw new Error("UatisGateway is not implemented yet (P5). Set MT_UATIS_FAKE=1.");
+      return new UatisGateway({ baseUrl: conn.baseUrl, apiKey: conn.apiKey, fetch: safeFetch });
     },
     invoices(_conn) {
       if (fakeInvoices) return fakeInvoices;
@@ -78,5 +84,6 @@ export function createServiceDeps(config: ServerConfig, overrides: ServiceDepsOv
     gateways: overrides.gateways ?? gatewaysFor(config),
     contextOptions: { role: "app_service" },
     env: config.env,
+    allowPrivateHosts: config.allowPrivateHosts,
   };
 }

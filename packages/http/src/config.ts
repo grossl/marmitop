@@ -21,6 +21,11 @@ export interface ServerConfig {
   /** `MT_WEBNF_FAKE=1` selects `FakeInvoiceGateway` (ADR-017). */
   readonly webnfFake: boolean;
   readonly env: MtEnv;
+  /**
+   * `MT_ALLOW_PRIVATE_HOSTS=1`: the SSRF guard allows `http:` and private hosts
+   * (local development only, ADR-017 #5). Refused when `MT_ENV` is production.
+   */
+  readonly allowPrivateHosts: boolean;
 }
 
 export type ConfigResult =
@@ -42,17 +47,20 @@ function readEnvName(value: string | undefined): MtEnv {
   return value === "development" || value === "test" ? value : "production";
 }
 
-export function readServerConfig(env: Env = process.env): ConfigResult {
+export function readServerConfig(env_: Env = process.env): ConfigResult {
   const missing: string[] = [];
-  const databaseUrl = env.DATABASE_URL;
+  const databaseUrl = env_.DATABASE_URL;
   if (!databaseUrl) missing.push("DATABASE_URL");
-  const kek = tryKek(env.MT_KEK);
+  const kek = tryKek(env_.MT_KEK);
   if (!kek) missing.push("MT_KEK");
-  const kekPrevious = tryKek(env.MT_KEK_PREVIOUS);
-  if (env.MT_KEK_PREVIOUS && !kekPrevious) missing.push("MT_KEK_PREVIOUS");
-  const kekVersion = env.MT_KEK_VERSION === undefined || env.MT_KEK_VERSION === "" ? 1 : Number(env.MT_KEK_VERSION);
+  const kekPrevious = tryKek(env_.MT_KEK_PREVIOUS);
+  if (env_.MT_KEK_PREVIOUS && !kekPrevious) missing.push("MT_KEK_PREVIOUS");
+  const kekVersion = env_.MT_KEK_VERSION === undefined || env_.MT_KEK_VERSION === "" ? 1 : Number(env_.MT_KEK_VERSION);
   if (!Number.isInteger(kekVersion) || kekVersion < 1 || kekVersion > 32767) missing.push("MT_KEK_VERSION");
   if (kekPrevious && kekVersion < 2) missing.push("MT_KEK_VERSION");
+  const env = readEnvName(env_.MT_ENV);
+  const allowPrivateHosts = env_.MT_ALLOW_PRIVATE_HOSTS === "1";
+  if (allowPrivateHosts && env === "production") missing.push("MT_ALLOW_PRIVATE_HOSTS");
   if (missing.length > 0 || !databaseUrl || !kek) return { ok: false, missing };
 
   return {
@@ -62,9 +70,10 @@ export function readServerConfig(env: Env = process.env): ConfigResult {
       kek,
       kekVersion,
       kekPrevious,
-      uatisFake: env.MT_UATIS_FAKE === "1",
-      webnfFake: env.MT_WEBNF_FAKE === "1",
-      env: readEnvName(env.MT_ENV),
+      uatisFake: env_.MT_UATIS_FAKE === "1",
+      webnfFake: env_.MT_WEBNF_FAKE === "1",
+      env,
+      allowPrivateHosts,
     },
   };
 }

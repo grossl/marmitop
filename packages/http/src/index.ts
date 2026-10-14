@@ -3,7 +3,13 @@
 
 export const packageName = "@mt/http";
 
-export { listMemberships, loadMembership, type Membership, type MembershipWithName, resolveUserContext } from "./auth/membership";
+export {
+  listMemberships,
+  loadMembership,
+  type Membership,
+  type MembershipWithName,
+  resolveUserContext,
+} from "./auth/membership";
 export { hasRole, requireRole } from "./auth/roles";
 export { type ConfigResult, type MtEnv, readServerConfig, type ServerConfig } from "./config";
 export {
@@ -24,3 +30,11 @@ export {
 export { type ActionError, ERROR_MESSAGES_PT, type MappedError, mapError, toActionError } from "./errors";
 export { defineService, type Service, type ServiceArgs, type ServiceDefinition } from "./service";
 export * from "./services";
+export {
+  createSafeFetch,
+  type SafeFetch,
+  type SafeFetchOptions,
+  type SafeRequest,
+  type SafeResponse,
+} from "./adapters/safe-fetch";
+export { UatisGateway, type UatisGatewayOptions } from "./adapters/uatis-gateway";

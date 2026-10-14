@@ -270,6 +270,9 @@ export interface MessageRow {
   sent_by: string | null;
   automatic_kind: AutomaticMessageKind | null;
   template_name: string | null;
+  template_language: string | null;
+  /** Set by the send consumer right before the call; at-most-once (ADR-017 #4, migration 0015). */
+  send_claimed_at: Date | null;
   error_code: string | null;
   error_message: string | null;
   created_at: Date;

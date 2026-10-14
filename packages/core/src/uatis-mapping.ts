@@ -71,6 +71,22 @@ function mapStatus(status: unknown): MessageStatus | null {
   return typeof state === "string" ? (STATES[state] ?? null) : null;
 }
 
+/** `messages.body` holds 1-4096 characters (05.data-model.md). */
+export const MESSAGE_BODY_MAX = 4096;
+
+/**
+ * The text of a `type: "text"` content envelope. backend-uatis stores `text` as a plain
+ * string (its `outgoingContent` and the Meta ingest); its 06.api-spec.md documents
+ * `text: { body }`. Both are read (ADR-002 Amendment 2). Empty text counts as no text.
+ */
+function textOf(content: unknown): string | null {
+  if (!isRecord(content) || content.type !== "text") return null;
+  const text = content.text;
+  const body = typeof text === "string" ? text : isRecord(text) && typeof text.body === "string" ? text.body : null;
+  if (body === null || body.trim() === "") return null;
+  return body.length > MESSAGE_BODY_MAX ? body.slice(0, MESSAGE_BODY_MAX) : body;
+}
+
 /** Map one backend-uatis message (webhook `data.message` or a poll item). */
 export function mapUatisMessage(raw: unknown): GatewayMessage {
   if (!isRecord(raw)) throw invalid("message", "Expected an object.");
@@ -78,11 +94,7 @@ export function mapUatisMessage(raw: unknown): GatewayMessage {
   if (!externalId) throw invalid("message.id", "Missing message id.");
   const direction = raw.direction;
   if (direction !== "in" && direction !== "out") throw invalid("message.direction", 'Expected "in" or "out".');
-  const content = raw.content;
-  const textBody =
-    isRecord(content) && content.type === "text" && isRecord(content.text) && typeof content.text.body === "string"
-      ? content.text.body
-      : null;
+  const textBody = textOf(raw.content);
   const address = str(raw.contact_address);
   return {
     externalId,
@@ -94,6 +106,15 @@ export function mapUatisMessage(raw: unknown): GatewayMessage {
     contactAddress: address ? (normalizePhoneE164(address) ?? address) : null,
     createdAt: date(raw.created_at, "message.created_at"),
   };
+}
+
+/**
+ * Like `mapUatisMessage`, but returns null for the `internal` direction: backend-uatis keeps
+ * agent tool traffic there, and it never reaches a customer. Malformed rows still throw.
+ */
+export function tryMapUatisMessage(raw: unknown): GatewayMessage | null {
+  if (isRecord(raw) && raw.direction === "internal") return null;
+  return mapUatisMessage(raw);
 }
 
 /** Parse a verified `POST /v1/webhooks/uatis/{restaurant_id}` body. Call it after the signature check. */

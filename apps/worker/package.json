@@ -13,5 +13,12 @@
     "@mt/config": "workspace:*",
     "@types/bun": "^1.3.14",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@mt/core": "workspace:*",
+    "@mt/db": "workspace:*",
+    "@mt/http": "workspace:*",
+    "@mt/schemas": "workspace:*",
+    "zod": "^3.24.1"
   }
 }

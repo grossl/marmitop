@@ -48,3 +48,12 @@ Option 3.
 * **Status mapping.** `backend-uatis` returns `status: {state}`. Marmitop maps `pending|sent|delivered|read|failed` one to one and stores inbound `received` as `delivered`.
 * **Payload.** The inbound text is at `data.message.content.text.body`. v1 stores text only. Other content types get the body `[mídia não suportada]`. Outbound calls send `from_address = phone_number_id`.
 * **24-hour window.** See ADR-014.
+
+## Amendment 2 — 2026-10-14 (facts found while building UatisGateway, P5)
+
+* **Text shape.** backend-uatis stores and returns text as `content: { version: "1", type: "text", kind: "text", text: "<string>" }` (`packages/http/src/services/send.ts` `outgoingContent`, the Meta ingest). Its 06.api-spec.md shows `text: { body }`. `mapUatisMessage` reads both. Empty text counts as unsupported media.
+* **Internal rows.** `GET /v1/messages` can return `direction: "internal"` (agent tool traffic). The gateway skips them (`tryMapUatisMessage`).
+* **Order and cursor.** The list is newest first with a keyset cursor. The poll walks every page (cap 20 pages of 100), then applies oldest first.
+* **Connection test.** `testConnection` is `GET /v1/messages?limit=1`: one authenticated read. `GET /v1/health` needs no key, so it proves nothing.
+* **Outbound echoes.** A `message.created` with `direction: "out"` and an unknown id is ignored. The id of a Marmitop send is stored only after `POST /v1/messages` returns, so the echo can arrive first.
+* **Webhook for an unknown restaurant.** It answers the same `401` as a bad signature (FR-118 updated), so the route is not an oracle for restaurant ids.

@@ -136,7 +136,7 @@ describe("connectWhatsApp", () => {
 
     const e3 = await connectWhatsApp(deps, admin(), { ...input, baseUrl: "ftp://x" }).catch((e) => e);
     expect(code(e3)).toBe("validation_failed");
-    const prod = { ...deps, env: "production" as const };
+    const prod = { ...deps, env: "production" as const, allowPrivateHosts: false };
     const e4 = await connectWhatsApp(prod, admin(), { ...input, baseUrl: "http://169.254.169.254" }).catch((e) => e);
     expect(code(e4)).toBe("validation_failed");
   });
@@ -236,7 +236,7 @@ describe("outbound webhook", () => {
   });
 
   test("an unsafe URL, an unknown event, and an attendant are refused", async () => {
-    const prod = { ...deps, env: "production" as const };
+    const prod = { ...deps, env: "production" as const, allowPrivateHosts: false };
     expect(code(await saveWebhookEndpoint(prod, admin(), { ...hook, url: "http://localhost/x" }).catch((e) => e))).toBe(
       "validation_failed",
     );

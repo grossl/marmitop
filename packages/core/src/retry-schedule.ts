@@ -37,9 +37,18 @@ export function decideAfterFailure(input: {
   return { action: "retry", delayMs: Math.max(base, input.retryAfterMs ?? 0) };
 }
 
+/**
+ * - connection_error: the request never left (refused, DNS failure, no route)
+ * - network_error: the connection broke after the request may have left
+ * - timeout: no answer in time; the request may have been processed
+ * - refused: the adapter refused to send (SSRF guard, bad URL); nothing left
+ * - http: the remote answered with a non-2xx status
+ */
 export type CallFailure =
   | { readonly kind: "connection_error" }
+  | { readonly kind: "network_error" }
   | { readonly kind: "timeout" }
+  | { readonly kind: "refused"; readonly code: string }
   | { readonly kind: "http"; readonly status: number; readonly code?: string };
 
 export interface Classified {
@@ -75,7 +84,9 @@ function codeForStatus(status: number, code: string | undefined): string {
  */
 export function classifyOutboundSend(failure: CallFailure): Classified {
   if (failure.kind === "connection_error") return { failure: "transient", errorCode: "connection_error" };
-  if (failure.kind === "timeout") return { failure: "ambiguous", errorCode: "ambiguous" };
+  if (failure.kind === "refused") return { failure: "permanent", errorCode: failure.code };
+  if (failure.kind === "timeout" || failure.kind === "network_error")
+    return { failure: "ambiguous", errorCode: "ambiguous" };
   if (failure.status >= 500) return { failure: "ambiguous", errorCode: "ambiguous" };
   if (failure.status === 429) return { failure: "transient", errorCode: "rate_limited" };
   return { failure: "permanent", errorCode: codeForStatus(failure.status, failure.code) };
@@ -84,6 +95,8 @@ export function classifyOutboundSend(failure: CallFailure): Classified {
 /** Idempotent upstream calls (polls, invoices, webhook deliveries): transient errors retry. */
 export function classifyUpstreamFailure(failure: CallFailure): Classified {
   if (failure.kind === "connection_error") return { failure: "transient", errorCode: "connection_error" };
+  if (failure.kind === "network_error") return { failure: "transient", errorCode: "network_error" };
+  if (failure.kind === "refused") return { failure: "permanent", errorCode: failure.code };
   if (failure.kind === "timeout") return { failure: "transient", errorCode: "timeout" };
   if (failure.status >= 500) return { failure: "transient", errorCode: "upstream_error" };
   if (failure.status === 429) return { failure: "transient", errorCode: "rate_limited" };

@@ -53,3 +53,16 @@ describe("outbound webhook envelope (06.api-spec.md)", () => {
     expect(webhookEnvelopeSchema.safeParse({ ...env, data: "x" }).success).toBe(false);
   });
 });
+
+describe("retry attempt counter (ADR-007, FR-108)", () => {
+  test("every job shape accepts an optional attempt number from 1 to 6", () => {
+    expect(outboundMessageJobSchema.parse({ v: 1, restaurantId: U, messageId: V, attempt: 3 }).attempt).toBe(3);
+    expect(syncJobSchema.parse({ v: 1, restaurantId: U, op: "whatsapp_reconcile", attempt: 6 }).attempt).toBe(6);
+    expect(webhookDeliveryJobSchema.parse({ v: 1, restaurantId: U, deliveryId: V, attempt: 2 }).attempt).toBe(2);
+    expect(invoiceJobSchema.parse({ v: 1, restaurantId: U, orderInvoiceId: V, op: "poll", attempt: 2 }).attempt).toBe(
+      2,
+    );
+    expect(outboundMessageJobSchema.safeParse({ v: 1, restaurantId: U, messageId: V, attempt: 0 }).success).toBe(false);
+    expect(outboundMessageJobSchema.safeParse({ v: 1, restaurantId: U, messageId: V, attempt: 7 }).success).toBe(false);
+  });
+});

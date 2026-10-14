@@ -258,8 +258,10 @@ export const retryMessage = defineService({
   minRole: "attendant",
   input: retryMessageActionSchema,
   run: async ({ tx, ctx, deps, input }) => {
-    const [message] = await tx<{ id: string; conversation_id: string; status: string; direction: string }[]>`
-      select id, conversation_id, status, direction from public.messages
+    const [message] = await tx<
+      { id: string; conversation_id: string; status: string; direction: string; template_name: string | null }[]
+    >`
+      select id, conversation_id, status, direction, template_name from public.messages
       where id = ${input.messageId} and restaurant_id = ${ctx.restaurantId}
     `;
     if (message === undefined) throw new AppError("not_found", "Message not found.");
@@ -267,10 +269,11 @@ export const retryMessage = defineService({
       throw new AppError("conflict", "Only a failed outbound message can be retried.");
     }
     const conversation = await loadConversation(tx, ctx.restaurantId, message.conversation_id);
-    assertFreeTextAllowed(conversation.last_inbound_at, deps.clock.now());
+    // An approved template may go out after the 24-hour window (ADR-014); free text may not.
+    if (message.template_name === null) assertFreeTextAllowed(conversation.last_inbound_at, deps.clock.now());
 
     const rows = await tx<{ id: string }[]>`
-      update public.messages set status = 'pending', error_code = null, error_message = null
+      update public.messages set status = 'pending', error_code = null, error_message = null, send_claimed_at = null
       where id = ${message.id} and restaurant_id = ${ctx.restaurantId} and status = 'failed'
       returning id
     `;
