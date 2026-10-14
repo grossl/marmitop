@@ -16,6 +16,7 @@
 import { createHash } from "node:crypto";
 
 import { createDb, withoutContext, withRestaurantContext } from "../../packages/db/src/client";
+import { REALTIME_TABLES } from "../../packages/db/src/types";
 import {
   API_KEYS,
   DEV_ADMIN_DB_URL,
@@ -77,8 +78,8 @@ async function main(): Promise<void> {
     const published = await owner<{ tablename: string }[]>`
       select tablename from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' order by 1`;
     check(
-      published.map((r) => r.tablename).join(",") === "conversations,messages,orders",
-      "supabase_realtime publishes conversations, messages, orders",
+      published.map((r) => r.tablename).join(",") === [...REALTIME_TABLES].sort().join(","),
+      `supabase_realtime publishes ${[...REALTIME_TABLES].sort().join(", ")}`,
     );
     const bucket = await owner<{ public: boolean }[]>`select public from storage.buckets where id = 'menu-images'`;
     check(bucket[0]?.public === true, "bucket menu-images exists and is public");

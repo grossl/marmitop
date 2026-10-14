@@ -6,6 +6,20 @@
       "runtimeExecutable": "bun",
       "runtimeArgs": ["run", "--cwd", "apps/dashboard", "dev"],
       "port": 3100
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "--cwd", "apps/api", "dev"],
+      "port": 3101,
+      "url": "http://localhost:3101"
+    },
+    {
+      "name": "worker",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "--cwd", "apps/worker", "dev"],
+      "port": 8181,
+      "url": "http://localhost:8181"
     }
   ]
 }
