@@ -8,6 +8,7 @@ import {
   addressShapeSnake,
   optionalOf,
   paginationQuerySchema,
+  phoneSchema,
   searchTermSchema,
   uuidSchema,
 } from "./common";
@@ -129,3 +130,27 @@ export const listOrdersQuerySchema = z
   .merge(paginationQuerySchema);
 
 export const getOrderKpisSchema = z.object({ day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
+
+const dayString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Dia inválido.");
+
+/** `listOrders` Server Action (Appendix A): board data. `day` is the restaurant-local calendar day. */
+export const listOrdersActionSchema = z.object({
+  q: searchTermSchema.optional(),
+  status: z.enum(ORDER_STATUSES).optional(),
+  day: dayString.optional(),
+});
+
+/** `getOrder` Server Action. */
+export const getOrderActionSchema = z.object({ orderId: uuidSchema });
+
+/** Customer picker search for the new-order screen (FR-030). `ids` pins customers that must be in the result. */
+export const lookupCustomersActionSchema = z.object({
+  q: searchTermSchema.optional(),
+  ids: z.array(uuidSchema).max(5).optional(),
+});
+
+/** FR-030: create a customer inline with a name and a phone. Full customer CRUD lives in the customers services. */
+export const quickCreateCustomerActionSchema = z.object({
+  name: z.string().trim().min(1, "Informe o nome.").max(120),
+  phone: phoneSchema,
+});

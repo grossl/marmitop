@@ -1,45 +1,57 @@
 "use client";
 
+import type { ConversationDetail, ConversationSummary } from "@mt/http";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { ChatPanel } from "@/components/chat-panel";
 import { ContactsSidebar } from "@/components/contacts-sidebar";
-import { contacts, messages as initialMessages, type Message } from "@/lib/marmita-data";
+import { useRealtimeTable } from "@/lib/realtime";
 
-// The messages screen as it was in app/page.tsx, moved to its own route
-// (ADR-004). Still mock data; T4.12 wires stored conversations.
-export function MessagesScreen() {
+interface MessagesScreenProps {
+  restaurantId: string;
+  restaurantName: string;
+  conversations: ConversationSummary[];
+  detail: ConversationDetail | null;
+  /** Dev-only "Simular mensagem do cliente" control (ADR-002). */
+  canSimulate: boolean;
+}
+
+// The messages screen (ADR-004). The route's Server Component loads the
+// conversations and the open one; Realtime events trigger router.refresh()
+// (FR-015), never a payload merge.
+export function MessagesScreen({ restaurantId, restaurantName, conversations, detail, canSimulate }: MessagesScreenProps) {
   const router = useRouter();
-  const [selectedContactId, setSelectedContactId] = useState("1");
-  const [messages, setMessages] = useState(initialMessages);
 
-  const selectedContact = contacts.find((c) => c.id === selectedContactId)!;
-  const currentMessages = messages[selectedContactId] ?? [];
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refresh = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => router.refresh(), 250);
+  }, [router]);
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
 
-  const handleSendMessage = (text: string) => {
-    const newMsg: Message = {
-      id: `m${Date.now()}`,
-      from: "restaurant",
-      text,
-      time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-    };
-    setMessages((prev) => ({
-      ...prev,
-      [selectedContactId]: [...(prev[selectedContactId] ?? []), newMsg],
-    }));
-  };
+  useRealtimeTable("messages", restaurantId, refresh);
+  useRealtimeTable("conversations", restaurantId, refresh);
 
   return (
     <>
-      <ContactsSidebar contacts={contacts} selectedId={selectedContactId} onSelect={setSelectedContactId} />
-      <ChatPanel
-        contact={selectedContact}
-        messages={currentMessages}
-        onSendMessage={handleSendMessage}
-        onOrderClick={() => {}}
-        onCreateOrder={() => router.push("/novo-pedido")}
+      <ContactsSidebar
+        restaurantName={restaurantName}
+        conversations={conversations}
+        selectedId={detail?.conversation.id ?? null}
+        onSelect={(id) => router.push(`/mensagens?c=${id}`)}
+        canSimulate={canSimulate}
+        onSimulated={(conversationId) => router.push(`/mensagens?c=${conversationId}`)}
       />
+      {detail ? (
+        <ChatPanel key={detail.conversation.id} detail={detail} onChanged={() => router.refresh()} />
+      ) : (
+        <div className="flex flex-1 items-center justify-center bg-background text-sm text-muted-foreground">
+          Nenhuma conversa selecionada.
+        </div>
+      )}
     </>
   );
 }

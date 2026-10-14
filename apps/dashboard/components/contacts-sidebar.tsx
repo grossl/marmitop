@@ -1,27 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import type { ConversationSummary } from "@mt/http";
+import { useMemo, useState } from "react";
 import { Search, Store } from "lucide-react";
 import { Input } from "@mt/ui/components/input";
 import { Badge } from "@mt/ui/components/badge";
 import { ScrollArea } from "@mt/ui/components/scroll-area";
 import { cn } from "@mt/ui/lib/utils";
-import { type Contact } from "@/lib/marmita-data";
+
+import { formatListTime, initials } from "@/components/messaging-format";
+import { SimulateInboundForm } from "@/components/simulate-inbound-form";
 
 interface ContactsSidebarProps {
-  contacts: Contact[];
-  selectedId: string;
+  restaurantName: string;
+  conversations: ConversationSummary[];
+  selectedId: string | null;
   onSelect: (id: string) => void;
+  canSimulate?: boolean;
+  onSimulated?: (conversationId: string) => void;
 }
 
-export function ContactsSidebar({ contacts, selectedId, onSelect }: ContactsSidebarProps) {
+// The conversation list (FR-010, FR-011): newest message first (the server
+// orders it), search by name, phone, or preview.
+export function ContactsSidebar({
+  restaurantName,
+  conversations,
+  selectedId,
+  onSelect,
+  canSimulate = false,
+  onSimulated,
+}: ContactsSidebarProps) {
   const [search, setSearch] = useState("");
 
-  const filtered = contacts.filter(
-    (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.phone.includes(search)
-  );
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return conversations;
+    return conversations.filter(
+      (c) =>
+        c.customerName.toLowerCase().includes(term) ||
+        c.customerPhone.includes(term) ||
+        (c.lastMessagePreview ?? "").toLowerCase().includes(term),
+    );
+  }, [conversations, search]);
 
   return (
     <aside className="flex flex-col w-72 shrink-0 bg-sidebar border-r border-sidebar-border">
@@ -33,7 +53,7 @@ export function ContactsSidebar({ contacts, selectedId, onSelect }: ContactsSide
           </div>
           <div>
             <p className="text-sm font-semibold text-sidebar-foreground leading-tight">Marmitop</p>
-            <p className="text-xs text-sidebar-foreground/50 leading-tight">Restaurante da Vó Maria</p>
+            <p className="text-xs text-sidebar-foreground/50 leading-tight">{restaurantName}</p>
           </div>
         </div>
 
@@ -49,21 +69,19 @@ export function ContactsSidebar({ contacts, selectedId, onSelect }: ContactsSide
         </div>
       </div>
 
-      {/* Contact list */}
+      {/* Conversation list */}
       <ScrollArea className="flex-1">
         <div className="py-2">
           <p className="px-4 py-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
             Conversas
           </p>
-          {filtered.map((contact) => (
+          {filtered.map((conversation) => (
             <button
-              key={contact.id}
-              onClick={() => onSelect(contact.id)}
+              key={conversation.id}
+              onClick={() => onSelect(conversation.id)}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
-                selectedId === contact.id
-                  ? "bg-sidebar-accent"
-                  : "hover:bg-sidebar-accent/60"
+                selectedId === conversation.id ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60",
               )}
             >
               {/* Avatar */}
@@ -71,35 +89,32 @@ export function ContactsSidebar({ contacts, selectedId, onSelect }: ContactsSide
                 <div
                   className={cn(
                     "w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold",
-                    selectedId === contact.id
+                    selectedId === conversation.id
                       ? "bg-primary text-primary-foreground"
-                      : "bg-sidebar-border text-sidebar-foreground/80"
+                      : "bg-sidebar-border text-sidebar-foreground/80",
                   )}
                 >
-                  {contact.avatar}
+                  {initials(conversation.customerName)}
                 </div>
-                {contact.online && (
-                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-sidebar" />
-                )}
               </div>
 
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-sidebar-foreground truncate">
-                    {contact.name}
+                    {conversation.customerName}
                   </span>
                   <span className="text-[10px] text-sidebar-foreground/40 shrink-0 ml-1">
-                    {contact.lastTime}
+                    {formatListTime(conversation.lastMessageAt)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-1">
                   <p className="text-xs text-sidebar-foreground/50 truncate leading-relaxed">
-                    {contact.lastMessage}
+                    {conversation.lastMessagePreview ?? "Sem mensagens"}
                   </p>
-                  {contact.unread > 0 && (
+                  {conversation.unreadCount > 0 && (
                     <Badge className="shrink-0 h-4 min-w-4 px-1 text-[10px] bg-primary text-primary-foreground rounded-full">
-                      {contact.unread}
+                      {conversation.unreadCount}
                     </Badge>
                   )}
                 </div>
@@ -109,11 +124,15 @@ export function ContactsSidebar({ contacts, selectedId, onSelect }: ContactsSide
 
           {filtered.length === 0 && (
             <p className="px-4 py-8 text-center text-xs text-sidebar-foreground/40">
-              Nenhum contato encontrado
+              {conversations.length === 0 ? "Nenhuma conversa ainda" : "Nenhum contato encontrado"}
             </p>
           )}
         </div>
       </ScrollArea>
+
+      {canSimulate && onSimulated && (
+        <SimulateInboundForm knownPhones={conversations.map((c) => c.customerPhone)} onSimulated={onSimulated} />
+      )}
     </aside>
   );
 }

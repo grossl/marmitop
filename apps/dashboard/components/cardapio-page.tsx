@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   UtensilsCrossed,
   Search,
@@ -11,6 +10,7 @@ import {
   ChefHat,
   GlassWater,
   Calendar,
+  ChevronDown,
   RulerIcon,
   X,
 } from "lucide-react";
@@ -29,22 +29,41 @@ import { Label } from "@mt/ui/components/label";
 import { Textarea } from "@mt/ui/components/textarea";
 
 import { cn } from "@mt/ui/lib/utils";
+import type { MenuItemDto, MenuSizeDto } from "@mt/http";
+import { Switch } from "@mt/ui/components/switch";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@mt/ui/components/collapsible";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
+
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
-  menuItems as initialMenuItems,
-  drinkItems as initialDrinkItems,
-  weekdayLabels,
-  ALL_WEEKDAYS,
-  type MenuItem,
-  type DrinkItem,
-  type Weekday,
-  type SizeOption,
-  type MenuCategory,
-  type DrinkCategory,
-} from "@/lib/marmita-data";
+  deleteMenuItemAction,
+  saveMenuItemAction,
+  setMenuItemAvailabilityAction,
+} from "@/app/(app)/cardapio/actions";
+import {
+  centsToInput,
+  DISPLAY_WEEKDAYS,
+  DRINK_CATEGORY_LABELS,
+  formatBRL,
+  headlinePriceCents,
+  MEAL_CATEGORY_LABELS,
+  menuImagePath,
+  reaisToCents,
+  WEEKDAY_LABELS,
+} from "@/app/(app)/cardapio/menu-helpers";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Tab = "marmitas" | "bebidas";
+type Weekday = number; // 0 = Sunday (05.data-model.md)
+type Item = MenuItemDto;
+type SizeOption = MenuSizeDto;
+
+const ALL_WEEKDAYS: readonly number[] = DISPLAY_WEEKDAYS;
+const weekdayLabels = WEEKDAY_LABELS;
+const money = formatBRL;
 
 // ─── Weekday pill selector ────────────────────────────────────────────────────
 
@@ -110,31 +129,36 @@ function SizeEditor({
 
   const add = () => {
     const name = newName.trim();
-    const price = parseFloat(newPrice);
-    if (!name || isNaN(price) || price < 0) return;
-    onChange([...sizes, { id: `sz-${Date.now()}`, name, price }]);
+    const priceCents = reaisToCents(newPrice);
+    if (!name || priceCents === null) return;
+    if (sizes.some((s) => s.name.toLowerCase() === name.toLowerCase())) {
+      toast.error("Tamanho repetido.");
+      return;
+    }
+    // No id yet: the service assigns one when it saves.
+    onChange([...sizes, { id: "", name, priceCents }]);
     setNewName("");
     setNewPrice("");
   };
 
-  const remove = (id: string) => onChange(sizes.filter((s) => s.id !== id));
+  const remove = (index: number) => onChange(sizes.filter((_, i) => i !== index));
 
   return (
     <div className="flex flex-col gap-3">
       {sizes.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          {sizes.map((s) => (
+          {sizes.map((s, index) => (
             <div
-              key={s.id}
+              key={`${s.name}-${index}`}
               className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/50 border border-border"
             >
               <span className="text-sm font-semibold text-foreground w-12 shrink-0">{s.name}</span>
               <span className="flex-1 text-sm text-primary font-medium">
-                R$ {s.price.toFixed(2).replace(".", ",")}
+                {money(s.priceCents)}
               </span>
               <button
                 type="button"
-                onClick={() => remove(s.id)}
+                onClick={() => remove(index)}
                 className="text-muted-foreground hover:text-destructive transition-colors"
               >
                 <X className="w-3.5 h-3.5" />
@@ -182,7 +206,7 @@ function MenuItemCard({
   onEdit,
   onDelete,
 }: {
-  item: MenuItem;
+  item: Item;
   isSelected: boolean;
   onSelect: () => void;
   onEdit: () => void;
@@ -198,13 +222,13 @@ function MenuItemCard({
           : "border-border hover:border-primary/40 hover:shadow-sm"
       )}
     >
-      <h3 className="text-sm font-semibold text-foreground leading-snug mb-1">{item.name}</h3>
+      <h3 className="text-sm font-semibold text-foreground leading-snug mb-1">{item.name}{!item.available && <span className="ml-2 text-[10px] font-medium text-muted-foreground">(indisponível)</span>}</h3>
       <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 flex-1 mb-3">
         {item.description}
       </p>
 
       {/* Sizes */}
-      {item.sizes && item.sizes.length > 0 ? (
+      {item.sizes.length > 0 ? (
         <div className="flex flex-wrap gap-1.5 mb-1">
           {item.sizes.map((s) => (
             <span
@@ -212,25 +236,25 @@ function MenuItemCard({
               className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-primary/8 border border-primary/20 text-foreground"
             >
               <span className="text-primary">{s.name}</span>
-              <span className="text-muted-foreground font-normal">R$ {s.price.toFixed(2).replace(".", ",")}</span>
+              <span className="text-muted-foreground font-normal">{money(s.priceCents)}</span>
             </span>
           ))}
         </div>
       ) : (
         <p className="text-sm font-bold text-primary mb-1">
-          R$ {item.price.toFixed(2).replace(".", ",")}
+          {money(item.priceCents)}
         </p>
       )}
 
       {/* Days */}
-      {item.availableDays && item.availableDays.length > 0 && item.availableDays.length < 7 && (
+      {item.availableWeekdays && item.availableWeekdays.length > 0 && item.availableWeekdays.length < 7 && (
         <div className="flex gap-1 mt-2 flex-wrap">
           {ALL_WEEKDAYS.map((d) => (
             <span
               key={d}
               className={cn(
                 "text-[10px] px-1.5 py-0.5 rounded font-medium",
-                item.availableDays!.includes(d)
+                item.availableWeekdays.includes(d)
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground/30"
               )}
@@ -240,7 +264,7 @@ function MenuItemCard({
           ))}
         </div>
       )}
-      {item.availableDays?.length === 7 && (
+      {item.availableWeekdays.length === 7 && (
         <p className="text-[10px] text-muted-foreground mt-2">Todos os dias</p>
       )}
 
@@ -280,7 +304,7 @@ function DrinkItemCard({
   onEdit,
   onDelete,
 }: {
-  item: DrinkItem;
+  item: Item;
   isSelected: boolean;
   onSelect: () => void;
   onEdit: () => void;
@@ -296,23 +320,23 @@ function DrinkItemCard({
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <p className="text-base font-bold text-primary shrink-0">
-          R$ {item.price.toFixed(2).replace(".", ",")}
+          {money(item.priceCents)}
         </p>
       </div>
-      <h3 className="text-sm font-semibold text-foreground leading-snug mb-1">{item.name}</h3>
+      <h3 className="text-sm font-semibold text-foreground leading-snug mb-1">{item.name}{!item.available && <span className="ml-2 text-[10px] font-medium text-muted-foreground">(indisponível)</span>}</h3>
       <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 flex-1">{item.description}</p>
 
-      {item.availableDays && item.availableDays.length > 0 && item.availableDays.length < 7 && (
+      {item.availableWeekdays && item.availableWeekdays.length > 0 && item.availableWeekdays.length < 7 && (
         <div className="flex gap-1 mt-2 flex-wrap">
           {ALL_WEEKDAYS.map((d) => (
             <span key={d} className={cn("text-[10px] px-1.5 py-0.5 rounded font-medium",
-              item.availableDays!.includes(d) ? "bg-primary/10 text-primary" : "text-muted-foreground/30")}>
+              item.availableWeekdays.includes(d) ? "bg-primary/10 text-primary" : "text-muted-foreground/30")}>
               {weekdayLabels[d]}
             </span>
           ))}
         </div>
       )}
-      {item.availableDays?.length === 7 && (
+      {item.availableWeekdays.length === 7 && (
         <p className="text-[10px] text-muted-foreground mt-2">Todos os dias</p>
       )}
 
@@ -343,11 +367,13 @@ function MenuDetailPanel({
   onClose,
   onEdit,
   onDelete,
+  onToggleAvailable,
 }: {
-  item: MenuItem;
+  item: Item;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onToggleAvailable: (available: boolean) => void;
 }) {
   return (
     <aside className="w-80 shrink-0 border-l border-border bg-card flex flex-col overflow-hidden">
@@ -361,16 +387,16 @@ function MenuDetailPanel({
         <div className="p-5 flex flex-col gap-4">
           <div>
             <h3 className="text-lg font-bold text-foreground leading-tight">{item.name}</h3>
-            {(!item.sizes || item.sizes.length === 0) && (
+            {item.sizes.length === 0 && (
               <p className="text-2xl font-bold text-primary mt-1">
-                R$ {item.price.toFixed(2).replace(".", ",")}
+                {money(item.priceCents)}
               </p>
             )}
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
 
           {/* Sizes */}
-          {item.sizes && item.sizes.length > 0 && (
+          {item.sizes.length > 0 && (
             <>
               <Separator />
               <div>
@@ -381,7 +407,7 @@ function MenuDetailPanel({
                   {item.sizes.map((s) => (
                     <div key={s.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/40 border border-border">
                       <span className="text-sm font-semibold text-foreground">{s.name}</span>
-                      <span className="text-sm font-bold text-primary">R$ {s.price.toFixed(2).replace(".", ",")}</span>
+                      <span className="text-sm font-bold text-primary">{money(s.priceCents)}</span>
                     </div>
                   ))}
                 </div>
@@ -396,14 +422,14 @@ function MenuDetailPanel({
             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5" /> Disponivel
             </p>
-            {item.availableDays && item.availableDays.length > 0 ? (
+            {item.availableWeekdays && item.availableWeekdays.length > 0 ? (
               <div className="flex gap-1.5 flex-wrap">
                 {ALL_WEEKDAYS.map((d) => (
                   <span
                     key={d}
                     className={cn(
                       "text-xs px-2 py-1 rounded-md font-medium border",
-                      item.availableDays!.includes(d)
+                      item.availableWeekdays.includes(d)
                         ? "bg-primary text-primary-foreground border-primary"
                         : "bg-muted text-muted-foreground/40 border-transparent"
                     )}
@@ -428,6 +454,11 @@ function MenuDetailPanel({
           )}
 
           <Separator />
+          <label className="flex items-center justify-between gap-3 text-sm font-medium text-foreground">
+            Disponível para pedidos
+            <Switch checked={item.available} onCheckedChange={onToggleAvailable} />
+          </label>
+          <Separator />
           <div className="flex flex-col gap-2">
             <Button onClick={onEdit} variant="outline" className="w-full gap-2 border-border">
               <Pencil className="w-4 h-4" /> Editar item
@@ -449,11 +480,13 @@ function DrinkDetailPanel({
   onClose,
   onEdit,
   onDelete,
+  onToggleAvailable,
 }: {
-  item: DrinkItem;
+  item: Item;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onToggleAvailable: (available: boolean) => void;
 }) {
   return (
     <aside className="w-80 shrink-0 border-l border-border bg-card flex flex-col overflow-hidden">
@@ -468,7 +501,7 @@ function DrinkDetailPanel({
           <div>
             <h3 className="text-lg font-bold text-foreground leading-tight">{item.name}</h3>
             <p className="text-2xl font-bold text-primary mt-1">
-              R$ {item.price.toFixed(2).replace(".", ",")}
+              {money(item.priceCents)}
             </p>
             {item.volume && <p className="text-xs text-muted-foreground mt-0.5">{item.volume}</p>}
           </div>
@@ -478,11 +511,11 @@ function DrinkDetailPanel({
             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5" /> Disponivel
             </p>
-            {item.availableDays && item.availableDays.length > 0 ? (
+            {item.availableWeekdays && item.availableWeekdays.length > 0 ? (
               <div className="flex gap-1.5 flex-wrap">
                 {ALL_WEEKDAYS.map((d) => (
                   <span key={d} className={cn("text-xs px-2 py-1 rounded-md font-medium border",
-                    item.availableDays!.includes(d)
+                    item.availableWeekdays.includes(d)
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-muted text-muted-foreground/40 border-transparent")}>
                     {weekdayLabels[d]}
@@ -493,6 +526,11 @@ function DrinkDetailPanel({
               <p className="text-xs text-muted-foreground">Nenhum dia configurado</p>
             )}
           </div>
+          <Separator />
+          <label className="flex items-center justify-between gap-3 text-sm font-medium text-foreground">
+            Disponível para pedidos
+            <Switch checked={item.available} onCheckedChange={onToggleAvailable} />
+          </label>
           <Separator />
           <div className="flex flex-col gap-2">
             <Button onClick={onEdit} variant="outline" className="w-full gap-2 border-border">
@@ -508,50 +546,284 @@ function DrinkDetailPanel({
   );
 }
 
+// ─── Shared form pieces ───────────────────────────────────────────────────────
+
+interface ActionErrorLike {
+  message: string;
+  fieldErrors?: Readonly<Record<string, string>>;
+}
+
+/** pt-BR toast for a failed Server Action: the first field error when there is one, else the code's message. */
+function reportError(error: ActionErrorLike) {
+  const firstField = error.fieldErrors ? Object.values(error.fieldErrors)[0] : undefined;
+  toast.error(firstField ?? error.message);
+}
+
+/** Optional image upload with the user's session (ADR-017 exception). Returns the public URL. */
+async function uploadMenuImage(restaurantId: string, folderId: string, file: File): Promise<string> {
+  const path = menuImagePath(restaurantId, folderId, crypto.randomUUID(), file.type);
+  if (!path) throw new Error("Use uma imagem JPEG, PNG ou WebP.");
+  if (file.size > 2 * 1024 * 1024) throw new Error("A imagem deve ter no máximo 2 MB.");
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase.storage.from("menu-images").upload(path, file, { contentType: file.type });
+  if (error) throw new Error("Não foi possível enviar a imagem.");
+  return supabase.storage.from("menu-images").getPublicUrl(path).data.publicUrl;
+}
+
+function ImageField({
+  imageUrl,
+  onFile,
+  onClear,
+}: {
+  imageUrl: string | null;
+  onFile: (file: File | null) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-sm">Imagem (opcional)</Label>
+      <div className="flex items-center gap-3">
+        {imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imageUrl} alt="" className="h-12 w-12 rounded-md border border-border object-cover" />
+        )}
+        <Input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+          className="h-9 text-xs"
+        />
+        {imageUrl && (
+          <Button type="button" variant="ghost" size="sm" onClick={onClear}>
+            Remover
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FlagsRow({
+  available,
+  popular,
+  onChange,
+}: {
+  available: boolean;
+  popular: boolean;
+  onChange: (patch: { available?: boolean; popular?: boolean }) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-6">
+      <label className="flex items-center gap-2 text-sm">
+        <Switch checked={available} onCheckedChange={(v) => onChange({ available: v })} /> Disponível
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <Switch checked={popular} onCheckedChange={(v) => onChange({ popular: v })} /> Popular
+      </label>
+    </div>
+  );
+}
+
+function FiscalSection({
+  ncm,
+  cfop,
+  onChange,
+}: {
+  ncm: string;
+  cfop: string;
+  onChange: (patch: { ncm?: string; cfop?: string }) => void;
+}) {
+  return (
+    <Collapsible>
+      <CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium text-foreground">
+        Fiscal <ChevronDown className="w-4 h-4 text-muted-foreground" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-3 grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-sm">NCM (8 dígitos)</Label>
+          <Input
+            value={ncm}
+            inputMode="numeric"
+            maxLength={8}
+            onChange={(e) => onChange({ ncm: e.target.value.replace(/\D/g, "") })}
+            placeholder="Padrão do restaurante"
+            className="h-9 text-sm"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-sm">CFOP (4 dígitos)</Label>
+          <Input
+            value={cfop}
+            inputMode="numeric"
+            maxLength={4}
+            onChange={(e) => onChange({ cfop: e.target.value.replace(/\D/g, "") })}
+            placeholder="Padrão do restaurante"
+            className="h-9 text-sm"
+          />
+        </div>
+        <p className="col-span-2 text-xs text-muted-foreground">
+          Em branco, vale o padrão da configuração fiscal.
+        </p>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function CategorySelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: Readonly<Record<string, string>>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-sm">Categoria</Label>
+      <select
+        className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {Object.entries(options).map(([key, label]) => (
+          <option key={key} value={key}>
+            {label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+interface FormState {
+  name: string;
+  description: string;
+  price: string;
+  category: string;
+  available: boolean;
+  popular: boolean;
+  calories: string;
+  volume: string;
+  availableWeekdays: Weekday[];
+  sizes: SizeOption[];
+  ncm: string;
+  cfop: string;
+  imageUrl: string | null;
+}
+
+function initialForm(kind: "meal" | "drink", item?: Item): FormState {
+  return {
+    name: item?.name ?? "",
+    description: item?.description ?? "",
+    price: item ? centsToInput(item.priceCents) : "",
+    category: item?.category ?? (kind === "meal" ? "proteinas" : "refrigerantes"),
+    available: item?.available ?? true,
+    popular: item?.popular ?? false,
+    calories: item?.calories != null ? String(item.calories) : "",
+    volume: item?.volume ?? "",
+    availableWeekdays: item ? [...item.availableWeekdays] : [...ALL_WEEKDAYS],
+    sizes: item ? [...item.sizes] : [],
+    ncm: item?.ncm ?? "",
+    cfop: item?.cfop ?? "",
+    imageUrl: item?.imageUrl ?? null,
+  };
+}
+
+/** Validates in the browser for fast feedback; the service validates again (FR-144). Returns a message or the payload. */
+function buildPayload(kind: "meal" | "drink", id: string | undefined, form: FormState) {
+  if (!form.name.trim()) return { error: "Informe o nome." } as const;
+  const sizes = kind === "meal" ? form.sizes : [];
+  const priceCents = sizes.length > 0 ? headlinePriceCents({ priceCents: 0, sizes }) : reaisToCents(form.price);
+  if (priceCents === null) return { error: "Informe um preço válido." } as const;
+  if (sizes.length === 0 && priceCents <= 0) return { error: "Informe um preço maior que zero." } as const;
+  if (form.availableWeekdays.length === 0) return { error: "Escolha ao menos um dia." } as const;
+  const calories = form.calories.trim() === "" ? null : Number.parseInt(form.calories, 10);
+  if (kind === "meal" && calories !== null && (Number.isNaN(calories) || calories < 0)) {
+    return { error: "Calorias inválidas." } as const;
+  }
+  return {
+    payload: {
+      ...(id ? { id } : {}),
+      kind,
+      name: form.name,
+      description: form.description,
+      category: form.category,
+      priceCents,
+      calories: kind === "meal" ? calories : null,
+      volume: kind === "drink" ? form.volume : "",
+      available: form.available,
+      popular: form.popular,
+      availableWeekdays: form.availableWeekdays,
+      imageUrl: form.imageUrl ?? "",
+      ncm: form.ncm,
+      cfop: form.cfop,
+      sizes: sizes.map((s) => ({ ...(s.id ? { id: s.id } : {}), name: s.name, priceCents: s.priceCents })),
+    },
+  } as const;
+}
+
+/** Shared by both dialogs: build, upload the optional image, call the action. True when saved. */
+async function submitForm(
+  kind: "meal" | "drink",
+  item: Item | undefined,
+  form: FormState,
+  file: File | null,
+  folderId: string,
+  restaurantId: string,
+): Promise<boolean> {
+  const built = buildPayload(kind, item?.id, form);
+  if ("error" in built) {
+    toast.error(built.error);
+    return false;
+  }
+  let payload = built.payload;
+  if (file) {
+    try {
+      payload = { ...payload, imageUrl: await uploadMenuImage(restaurantId, folderId, file) };
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível enviar a imagem.");
+      return false;
+    }
+  }
+  const result = await saveMenuItemAction(payload);
+  if (!result.ok) {
+    reportError(result.error);
+    return false;
+  }
+  toast.success(item ? "Alterações salvas." : "Item adicionado ao cardápio.");
+  return true;
+}
+
 // ─── Menu Item Form ───────────────────────────────────────────────────────────
 
 function MenuItemFormDialog({
   item,
   open,
+  restaurantId,
   onClose,
-  onSave,
+  onSaved,
 }: {
-  item?: MenuItem;
+  item?: Item;
   open: boolean;
+  restaurantId: string;
   onClose: () => void;
-  onSave: (item: MenuItem) => void;
+  onSaved: () => void;
 }) {
   const isNew = !item;
-  const [form, setForm] = useState<{
-    name: string;
-    description: string;
-    price: number;
-    category: MenuCategory;
-    available: boolean;
-    popular: boolean;
-    calories: number | undefined;
-    availableDays: Weekday[];
-    sizes: SizeOption[];
-  }>({
-    name: item?.name ?? "",
-    description: item?.description ?? "",
-    price: item?.price ?? 0,
-    category: item?.category ?? "proteinas",
-    available: item?.available ?? true,
-    popular: item?.popular ?? false,
-    calories: item?.calories,
-    availableDays: item?.availableDays ?? [...ALL_WEEKDAYS],
-    sizes: item?.sizes ?? [],
-  });
+  const [form, setForm] = useState<FormState>(() => initialForm("meal", item));
+  const [file, setFile] = useState<File | null>(null);
+  const [folderId] = useState(() => item?.id ?? crypto.randomUUID());
+  const [saving, setSaving] = useState(false);
+  const patch = (p: Partial<FormState>) => setForm((f) => ({ ...f, ...p }));
 
-  const handleSubmit = () => {
-    if (!form.name.trim()) return;
-    // If sizes exist, price = lowest size price; else require price > 0
-    const price = form.sizes.length > 0
-      ? Math.min(...form.sizes.map((s) => s.price))
-      : form.price;
-    if (form.sizes.length === 0 && form.price <= 0) return;
-    onSave({ id: item?.id ?? `MI-${Date.now()}`, ...form, price });
+  const handleSubmit = async () => {
+    setSaving(true);
+    try {
+      if (await submitForm("meal", item, form, file, folderId, restaurantId)) onSaved();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -566,7 +838,7 @@ function MenuItemFormDialog({
             <Label className="text-sm">Nome *</Label>
             <Input
               value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              onChange={(e) => patch({ name: e.target.value })}
               placeholder="Ex: Frango Grelhado"
               className="h-9 text-sm"
             />
@@ -577,12 +849,14 @@ function MenuItemFormDialog({
             <Label className="text-sm">Descricao</Label>
             <Textarea
               value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              onChange={(e) => patch({ description: e.target.value })}
               placeholder="Descreva os ingredientes e acompanhamentos..."
               rows={2}
               className="text-sm resize-none"
             />
           </div>
+
+          <CategorySelect value={form.category} options={MEAL_CATEGORY_LABELS} onChange={(category) => patch({ category })} />
 
           {/* Price (shown only when no sizes) */}
           {form.sizes.length === 0 && (
@@ -593,7 +867,7 @@ function MenuItemFormDialog({
                 min="0"
                 step="0.50"
                 value={form.price}
-                onChange={(e) => setForm((f) => ({ ...f, price: parseFloat(e.target.value) || 0 }))}
+                onChange={(e) => patch({ price: e.target.value })}
                 placeholder="Ex: 18,90"
                 className="h-9 text-sm"
               />
@@ -606,12 +880,15 @@ function MenuItemFormDialog({
             <Input
               type="number"
               min="0"
-              value={form.calories ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, calories: e.target.value ? parseInt(e.target.value) : undefined }))}
+              value={form.calories}
+              onChange={(e) => patch({ calories: e.target.value })}
               placeholder="Ex: 520"
               className="h-9 text-sm"
             />
           </div>
+
+          <FlagsRow available={form.available} popular={form.popular} onChange={patch} />
+          <ImageField imageUrl={form.imageUrl} onFile={setFile} onClear={() => { setFile(null); patch({ imageUrl: null }); }} />
 
           <Separator />
 
@@ -623,10 +900,7 @@ function MenuItemFormDialog({
             <p className="text-xs text-muted-foreground">
               Ao cadastrar tamanhos, o preco base e substituido pelo menor tamanho.
             </p>
-            <SizeEditor
-              sizes={form.sizes}
-              onChange={(sizes) => setForm((f) => ({ ...f, sizes }))}
-            />
+            <SizeEditor sizes={form.sizes} onChange={(sizes) => patch({ sizes })} />
           </div>
 
           <Separator />
@@ -636,15 +910,15 @@ function MenuItemFormDialog({
             <Label className="text-sm flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5" /> Dias disponiveis
             </Label>
-            <WeekdayPills
-              selected={form.availableDays}
-              onChange={(days) => setForm((f) => ({ ...f, availableDays: days }))}
-            />
+            <WeekdayPills selected={form.availableWeekdays} onChange={(days) => patch({ availableWeekdays: days })} />
           </div>
+
+          <Separator />
+          <FiscalSection ncm={form.ncm} cfop={form.cfop} onChange={patch} />
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSubmit} className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Button onClick={handleSubmit} disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90">
             {isNew ? "Adicionar ao cardapio" : "Salvar alteracoes"}
           </Button>
         </DialogFooter>
@@ -658,43 +932,35 @@ function MenuItemFormDialog({
 function DrinkFormDialog({
   item,
   open,
+  restaurantId,
   onClose,
-  onSave,
+  onSaved,
 }: {
-  item?: DrinkItem;
+  item?: Item;
   open: boolean;
+  restaurantId: string;
   onClose: () => void;
-  onSave: (item: DrinkItem) => void;
+  onSaved: () => void;
 }) {
   const isNew = !item;
-  const [form, setForm] = useState<{
-    name: string;
-    description: string;
-    price: number;
-    category: DrinkCategory;
-    available: boolean;
-    popular: boolean;
-    volume: string;
-    availableDays: Weekday[];
-  }>({
-    name: item?.name ?? "",
-    description: item?.description ?? "",
-    price: item?.price ?? 0,
-    category: item?.category ?? "refrigerantes",
-    available: item?.available ?? true,
-    popular: item?.popular ?? false,
-    volume: item?.volume ?? "",
-    availableDays: item?.availableDays ?? [...ALL_WEEKDAYS],
-  });
+  const [form, setForm] = useState<FormState>(() => initialForm("drink", item));
+  const [file, setFile] = useState<File | null>(null);
+  const [folderId] = useState(() => item?.id ?? crypto.randomUUID());
+  const [saving, setSaving] = useState(false);
+  const patch = (p: Partial<FormState>) => setForm((f) => ({ ...f, ...p }));
 
-  const handleSubmit = () => {
-    if (!form.name.trim() || form.price <= 0) return;
-    onSave({ id: item?.id ?? `DR-${Date.now()}`, ...form });
+  const handleSubmit = async () => {
+    setSaving(true);
+    try {
+      if (await submitForm("drink", item, form, file, folderId, restaurantId)) onSaved();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isNew ? "Nova bebida no cardapio" : "Editar bebida"}</DialogTitle>
         </DialogHeader>
@@ -702,29 +968,36 @@ function DrinkFormDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
               <Label className="text-sm">Nome *</Label>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Ex: Suco de Laranja" className="h-9 text-sm" />
+              <Input value={form.name} onChange={(e) => patch({ name: e.target.value })} placeholder="Ex: Suco de Laranja" className="h-9 text-sm" />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label className="text-sm">Preco (R$) *</Label>
-              <Input type="number" min="0" step="0.50" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: parseFloat(e.target.value) || 0 }))} className="h-9 text-sm" />
+              <Input type="number" min="0" step="0.50" value={form.price} onChange={(e) => patch({ price: e.target.value })} className="h-9 text-sm" />
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label className="text-sm">Descricao</Label>
-            <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={2} className="text-sm resize-none" />
+            <Textarea value={form.description} onChange={(e) => patch({ description: e.target.value })} rows={2} className="text-sm resize-none" />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-sm">Volume</Label>
-            <Input value={form.volume} onChange={(e) => setForm((f) => ({ ...f, volume: e.target.value }))} placeholder="Ex: 350ml" className="h-9 text-sm" />
+          <div className="grid grid-cols-2 gap-4">
+            <CategorySelect value={form.category} options={DRINK_CATEGORY_LABELS} onChange={(category) => patch({ category })} />
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-sm">Volume</Label>
+              <Input value={form.volume} onChange={(e) => patch({ volume: e.target.value })} placeholder="Ex: 350ml" className="h-9 text-sm" />
+            </div>
           </div>
+          <FlagsRow available={form.available} popular={form.popular} onChange={patch} />
+          <ImageField imageUrl={form.imageUrl} onFile={setFile} onClear={() => { setFile(null); patch({ imageUrl: null }); }} />
           <div className="flex flex-col gap-1.5">
             <Label className="text-sm flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Dias disponiveis</Label>
-            <WeekdayPills selected={form.availableDays} onChange={(days) => setForm((f) => ({ ...f, availableDays: days }))} />
+            <WeekdayPills selected={form.availableWeekdays} onChange={(days) => patch({ availableWeekdays: days })} />
           </div>
+          <Separator />
+          <FiscalSection ncm={form.ncm} cfop={form.cfop} onChange={patch} />
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSubmit} className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Button onClick={handleSubmit} disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90">
             {isNew ? "Adicionar bebida" : "Salvar alteracoes"}
           </Button>
         </DialogFooter>
@@ -735,69 +1008,75 @@ function DrinkFormDialog({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export function CardapioPage() {
+export function CardapioPage({ items, restaurantId }: { items: Item[]; restaurantId: string }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState<Tab>("marmitas");
 
+  const menuList = items.filter((i) => i.kind === "meal");
+  const drinkList = items.filter((i) => i.kind === "drink");
+
   // Marmitas state
-  const [menuList, setMenuList] = useState<MenuItem[]>(initialMenuItems);
   const [menuSearch, setMenuSearch] = useState("");
-  const [selectedMenu, setSelectedMenu] = useState<MenuItem | null>(null);
-  const [editMenu, setEditMenu] = useState<MenuItem | null>(null);
+  const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
+  const [editMenu, setEditMenu] = useState<Item | null>(null);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [deleteMenuId, setDeleteMenuId] = useState<string | null>(null);
 
   // Drinks state
-  const [drinkList, setDrinkList] = useState<DrinkItem[]>(initialDrinkItems);
   const [drinkSearch, setDrinkSearch] = useState("");
-  const [selectedDrink, setSelectedDrink] = useState<DrinkItem | null>(null);
-  const [editDrink, setEditDrink] = useState<DrinkItem | null>(null);
+  const [selectedDrinkId, setSelectedDrinkId] = useState<string | null>(null);
+  const [editDrink, setEditDrink] = useState<Item | null>(null);
   const [newDrinkOpen, setNewDrinkOpen] = useState(false);
   const [deleteDrinkId, setDeleteDrinkId] = useState<string | null>(null);
+
+  // The selection is an id, so the panel follows the fresh server data after a refresh.
+  const selectedMenu = menuList.find((i) => i.id === selectedMenuId) ?? null;
+  const selectedDrink = drinkList.find((i) => i.id === selectedDrinkId) ?? null;
+
+  const refresh = () => startTransition(() => router.refresh());
+
+  // "Excluir" archives the item (FR-057).
+  const archive = async (id: string, clearSelection: () => void) => {
+    const result = await deleteMenuItemAction({ id });
+    if (!result.ok) {
+      reportError(result.error);
+      return;
+    }
+    toast.success("Item removido do cardápio.");
+    clearSelection();
+    refresh();
+  };
+
+  const toggleAvailable = async (id: string, available: boolean) => {
+    const result = await setMenuItemAvailabilityAction({ id, available });
+    if (!result.ok) {
+      reportError(result.error);
+      return;
+    }
+    refresh();
+  };
 
   // ── Marmita handlers ──────────────────────────────────────────────────────
   const filteredMenu = menuList.filter((i) => {
     const q = menuSearch.toLowerCase();
-    return q === "" || i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q);
+    return q === "" || i.name.toLowerCase().includes(q) || (i.description ?? "").toLowerCase().includes(q);
   });
 
-  const handleDeleteMenu = (id: string) => {
-    setMenuList((p) => p.filter((i) => i.id !== id));
+  const handleDeleteMenu = async (id: string) => {
     setDeleteMenuId(null);
-    if (selectedMenu?.id === id) setSelectedMenu(null);
-  };
-
-  const handleSaveMenu = (updated: MenuItem) => {
-    if (editMenu) {
-      setMenuList((p) => p.map((i) => i.id === updated.id ? updated : i));
-      setSelectedMenu(updated);
-      setEditMenu(null);
-    } else {
-      setMenuList((p) => [updated, ...p]);
-      setNewMenuOpen(false);
-    }
+    await archive(id, () => selectedMenuId === id && setSelectedMenuId(null));
   };
 
   // ── Drink handlers ────────────────────────────────────────────────────────
   const filteredDrinks = drinkList.filter((i) => {
     const q = drinkSearch.toLowerCase();
-    return q === "" || i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q);
+    return q === "" || i.name.toLowerCase().includes(q) || (i.description ?? "").toLowerCase().includes(q);
   });
 
-  const handleDeleteDrink = (id: string) => {
-    setDrinkList((p) => p.filter((i) => i.id !== id));
+  const handleDeleteDrink = async (id: string) => {
     setDeleteDrinkId(null);
-    if (selectedDrink?.id === id) setSelectedDrink(null);
-  };
-
-  const handleSaveDrink = (updated: DrinkItem) => {
-    if (editDrink) {
-      setDrinkList((p) => p.map((i) => i.id === updated.id ? updated : i));
-      setSelectedDrink(updated);
-      setEditDrink(null);
-    } else {
-      setDrinkList((p) => [updated, ...p]);
-      setNewDrinkOpen(false);
-    }
+    await archive(id, () => selectedDrinkId === id && setSelectedDrinkId(null));
   };
 
   return (
@@ -822,14 +1101,14 @@ export function CardapioPage() {
           {/* Tabs */}
           <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
             <button
-              onClick={() => { setActiveTab("marmitas"); setSelectedDrink(null); }}
+              onClick={() => { setActiveTab("marmitas"); setSelectedDrinkId(null); }}
               className={cn("flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-medium transition-colors",
                 activeTab === "marmitas" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
             >
               <UtensilsCrossed className="w-4 h-4" /> Marmitas
             </button>
             <button
-              onClick={() => { setActiveTab("bebidas"); setSelectedMenu(null); }}
+              onClick={() => { setActiveTab("bebidas"); setSelectedMenuId(null); }}
               className={cn("flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-medium transition-colors",
                 activeTab === "bebidas" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
             >
@@ -874,9 +1153,9 @@ export function CardapioPage() {
                     <MenuItemCard
                       key={item.id}
                       item={item}
-                      isSelected={selectedMenu?.id === item.id}
-                      onSelect={() => setSelectedMenu(selectedMenu?.id === item.id ? null : item)}
-                      onEdit={() => { setEditMenu(item); setSelectedMenu(null); }}
+                      isSelected={selectedMenuId === item.id}
+                      onSelect={() => setSelectedMenuId(selectedMenuId === item.id ? null : item.id)}
+                      onEdit={() => { setEditMenu(item); setSelectedMenuId(null); }}
                       onDelete={() => setDeleteMenuId(item.id)}
                     />
                   ))}
@@ -894,9 +1173,9 @@ export function CardapioPage() {
                     <DrinkItemCard
                       key={item.id}
                       item={item}
-                      isSelected={selectedDrink?.id === item.id}
-                      onSelect={() => setSelectedDrink(selectedDrink?.id === item.id ? null : item)}
-                      onEdit={() => { setEditDrink(item); setSelectedDrink(null); }}
+                      isSelected={selectedDrinkId === item.id}
+                      onSelect={() => setSelectedDrinkId(selectedDrinkId === item.id ? null : item.id)}
+                      onEdit={() => { setEditDrink(item); setSelectedDrinkId(null); }}
                       onDelete={() => setDeleteDrinkId(item.id)}
                     />
                   ))}
@@ -911,59 +1190,69 @@ export function CardapioPage() {
       {selectedMenu && (
         <MenuDetailPanel
           item={selectedMenu}
-          onClose={() => setSelectedMenu(null)}
-          onEdit={() => { setEditMenu(selectedMenu); setSelectedMenu(null); }}
-          onDelete={() => { setDeleteMenuId(selectedMenu.id); setSelectedMenu(null); }}
+          onClose={() => setSelectedMenuId(null)}
+          onEdit={() => { setEditMenu(selectedMenu); setSelectedMenuId(null); }}
+          onDelete={() => { setDeleteMenuId(selectedMenu.id); setSelectedMenuId(null); }}
+          onToggleAvailable={(available) => void toggleAvailable(selectedMenu.id, available)}
         />
       )}
       {selectedDrink && (
         <DrinkDetailPanel
           item={selectedDrink}
-          onClose={() => setSelectedDrink(null)}
-          onEdit={() => { setEditDrink(selectedDrink); setSelectedDrink(null); }}
-          onDelete={() => { setDeleteDrinkId(selectedDrink.id); setSelectedDrink(null); }}
+          onClose={() => setSelectedDrinkId(null)}
+          onEdit={() => { setEditDrink(selectedDrink); setSelectedDrinkId(null); }}
+          onDelete={() => { setDeleteDrinkId(selectedDrink.id); setSelectedDrinkId(null); }}
+          onToggleAvailable={(available) => void toggleAvailable(selectedDrink.id, available)}
         />
       )}
 
-      {/* Dialogs */}
-      <MenuItemFormDialog
-        open={newMenuOpen}
-        onClose={() => setNewMenuOpen(false)}
-        onSave={handleSaveMenu}
-      />
+      {/* Dialogs. Mounted only while open so each opening starts from fresh form state. */}
+      {newMenuOpen && (
+        <MenuItemFormDialog
+          open
+          restaurantId={restaurantId}
+          onClose={() => setNewMenuOpen(false)}
+          onSaved={() => { setNewMenuOpen(false); refresh(); }}
+        />
+      )}
       {editMenu && (
         <MenuItemFormDialog
           item={editMenu}
-          open={!!editMenu}
+          open
+          restaurantId={restaurantId}
           onClose={() => setEditMenu(null)}
-          onSave={handleSaveMenu}
+          onSaved={() => { setEditMenu(null); refresh(); }}
         />
       )}
 
-      <DrinkFormDialog
-        open={newDrinkOpen}
-        onClose={() => setNewDrinkOpen(false)}
-        onSave={handleSaveDrink}
-      />
+      {newDrinkOpen && (
+        <DrinkFormDialog
+          open
+          restaurantId={restaurantId}
+          onClose={() => setNewDrinkOpen(false)}
+          onSaved={() => { setNewDrinkOpen(false); refresh(); }}
+        />
+      )}
       {editDrink && (
         <DrinkFormDialog
           item={editDrink}
-          open={!!editDrink}
+          open
+          restaurantId={restaurantId}
           onClose={() => setEditDrink(null)}
-          onSave={handleSaveDrink}
+          onSaved={() => { setEditDrink(null); refresh(); }}
         />
       )}
 
-      {/* Delete confirm */}
+      {/* Delete confirm (archives, FR-057) */}
       <Dialog open={!!deleteMenuId} onOpenChange={() => setDeleteMenuId(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Remover marmita?</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">Esta acao nao pode ser desfeita.</p>
+          <p className="text-sm text-muted-foreground">A marmita sai do cardapio. Pedidos antigos nao mudam.</p>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setDeleteMenuId(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={() => deleteMenuId && handleDeleteMenu(deleteMenuId)}>Remover</Button>
+            <Button variant="destructive" onClick={() => deleteMenuId && void handleDeleteMenu(deleteMenuId)}>Remover</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -973,10 +1262,10 @@ export function CardapioPage() {
           <DialogHeader>
             <DialogTitle>Remover bebida?</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">Esta acao nao pode ser desfeita.</p>
+          <p className="text-sm text-muted-foreground">A bebida sai do cardapio. Pedidos antigos nao mudam.</p>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setDeleteDrinkId(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={() => deleteDrinkId && handleDeleteDrink(deleteDrinkId)}>Remover</Button>
+            <Button variant="destructive" onClick={() => deleteDrinkId && void handleDeleteDrink(deleteDrinkId)}>Remover</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

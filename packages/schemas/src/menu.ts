@@ -95,3 +95,9 @@ export const listMenuQuerySchema = z
     q: z.string().trim().max(100).optional(),
   })
   .merge(paginationQuerySchema);
+
+/** `listMenu` Server Action (Appendix A): the dashboard reads the whole menu, so no paging. */
+export const listMenuItemsSchema = z.object({
+  kind: z.enum(MENU_KINDS).optional(),
+  q: z.string().trim().max(100).optional(),
+});

@@ -1,142 +1,237 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Users, Search, MapPin, Phone, Mail, ShoppingBag, TrendingUp, Calendar } from "lucide-react";
+import type { CustomerDto, CustomerOrderSummary } from "@mt/http";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Users, Search, MapPin, Phone, Mail, ShoppingBag, Calendar, Plus, Pencil, IdCard } from "lucide-react";
+import { Button } from "@mt/ui/components/button";
 import { Input } from "@mt/ui/components/input";
+import { Label } from "@mt/ui/components/label";
+import { Textarea } from "@mt/ui/components/textarea";
 import { Badge } from "@mt/ui/components/badge";
 import { Separator } from "@mt/ui/components/separator";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@mt/ui/components/sheet";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@mt/ui/components/table";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@mt/ui/components/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@mt/ui/components/sheet";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mt/ui/components/table";
 import { cn } from "@mt/ui/lib/utils";
+
+import { createCustomerAction, updateCustomerAction } from "@/app/(app)/contatos/actions";
 import {
-  contacts as allContacts,
-  orders as allOrders,
-  statusLabels,
-  paymentLabels,
-  type Contact,
-  type OrderStatus,
-} from "@/lib/marmita-data";
+  addressLine,
+  formatBRL,
+  formatDate,
+  initials,
+  ORDER_STATUS_LABELS,
+  ORDER_STATUS_STYLES,
+  PAYMENT_LABELS,
+} from "@/components/messaging-format";
 
-// ─── Status style map ─────────────────────────────────────────────────────────
+// ─── Customer form (create and edit; FR-045, FR-046, ADR-016) ────────────────
 
-const statusStyles: Record<OrderStatus, string> = {
-  aguardando: "bg-yellow-100 text-yellow-700 border-yellow-200",
-  confirmado:  "bg-blue-100 text-blue-700 border-blue-200",
-  preparando:  "bg-amber-100 text-amber-700 border-amber-200",
-  pronto:      "bg-green-100 text-green-700 border-green-200",
-  saiu:        "bg-purple-100 text-purple-700 border-purple-200",
-  entregue:    "bg-slate-100 text-slate-600 border-slate-200",
-};
+const FIELDS = [
+  "name",
+  "phone",
+  "email",
+  "cpfCnpj",
+  "cep",
+  "logradouro",
+  "numero",
+  "complemento",
+  "bairro",
+  "cidade",
+  "uf",
+  "codigoMunicipio",
+  "notes",
+] as const;
+type Field = (typeof FIELDS)[number];
+type FormState = Record<Field, string>;
 
-// ─── Contact detail sheet ─────────────────────────────────────────────────────
+function formFrom(customer: CustomerDto | null): FormState {
+  const form = {} as FormState;
+  for (const f of FIELDS) form[f] = customer?.[f] ?? "";
+  return form;
+}
+
+function CustomerFormDialog({
+  customer,
+  open,
+  onClose,
+  onSaved,
+}: {
+  customer: CustomerDto | null;
+  open: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState<FormState>(() => formFrom(customer));
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [pending, start] = useTransition();
+
+  useEffect(() => {
+    if (open) {
+      setForm(formFrom(customer));
+      setErrors({});
+    }
+  }, [open, customer]);
+
+  const set = (field: Field) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  const submit = () =>
+    start(async () => {
+      const result = customer
+        ? await updateCustomerAction({ customerId: customer.id, ...form })
+        : await createCustomerAction(form);
+      if (!result.ok) {
+        setErrors(result.error.fieldErrors ?? {});
+        toast.error(result.error.message);
+        return;
+      }
+      toast.success(customer ? "Cliente atualizado." : "Cliente criado.");
+      onSaved();
+      onClose();
+    });
+
+  const field = (id: Field, label: string, props: React.ComponentProps<typeof Input> = {}) => (
+    <div className="space-y-1.5">
+      <Label htmlFor={`customer-${id}`}>{label}</Label>
+      <Input id={`customer-${id}`} value={form[id]} onChange={set(id)} aria-invalid={!!errors[id]} {...props} />
+      {errors[id] && <p className="text-xs text-destructive">{errors[id]}</p>}
+    </div>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{customer ? "Editar cliente" : "Novo cliente"}</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">{field("name", "Nome", { maxLength: 120 })}</div>
+          {field("phone", "Telefone", { placeholder: "(11) 98888-7777", inputMode: "tel" })}
+          {field("email", "E-mail", { type: "email" })}
+          <div className="sm:col-span-2">{field("cpfCnpj", "CPF ou CNPJ", { inputMode: "numeric" })}</div>
+          {field("cep", "CEP", { placeholder: "00000-000", inputMode: "numeric" })}
+          {field("bairro", "Bairro")}
+          <div className="sm:col-span-2">{field("logradouro", "Rua")}</div>
+          {field("numero", "Número")}
+          {field("complemento", "Complemento")}
+          {field("cidade", "Cidade")}
+          <div className="grid grid-cols-2 gap-4">
+            {field("uf", "UF", { maxLength: 2 })}
+            {field("codigoMunicipio", "Cód. município (IBGE)", { inputMode: "numeric", maxLength: 7 })}
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="customer-notes">Observações</Label>
+            <Textarea id="customer-notes" value={form.notes} onChange={set("notes")} maxLength={1000} rows={3} />
+            {errors.notes && <p className="text-xs text-destructive">{errors.notes}</p>}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={pending}>
+            Cancelar
+          </Button>
+          <Button onClick={submit} disabled={pending || !form.name.trim() || !form.phone.trim()}>
+            Salvar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Contact detail sheet (FR-042, FR-043, FR-044) ───────────────────────────
 
 function ContactSheet({
   contact,
-  open,
+  orders,
   onClose,
+  onEdit,
 }: {
-  contact: Contact | null;
-  open: boolean;
+  contact: CustomerDto;
+  orders: readonly CustomerOrderSummary[];
   onClose: () => void;
+  onEdit: () => void;
 }) {
-  const contactOrders = useMemo(
-    () => (contact ? allOrders.filter((o) => o.contactId === contact.id) : []),
-    [contact]
-  );
-
-  if (!contact) return null;
-
-  const totalSpent = contactOrders
-    .reduce((s, o) => s + o.total, 0);
-
+  const address = addressLine(contact);
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+    <Sheet open onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="right" className="w-full sm:max-w-md flex flex-col gap-0 p-0">
         <SheetHeader className="px-5 pt-5 pb-4 border-b border-border">
-          {/* Avatar + name */}
           <div className="flex items-center gap-4">
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-primary/15 text-primary text-xl font-bold shrink-0">
-              {contact.avatar}
+              {initials(contact.name)}
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <SheetTitle className="text-lg">{contact.name}</SheetTitle>
-              <SheetDescription className="text-sm">{contact.neighborhood}</SheetDescription>
+              <SheetDescription className="text-sm">{contact.bairro ?? ""}</SheetDescription>
             </div>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={onEdit}>
+              <Pencil className="h-3.5 w-3.5" /> Editar
+            </Button>
           </div>
         </SheetHeader>
 
-        {/* Info */}
         <div className="px-5 py-4 space-y-3">
           <div className="flex items-center gap-2 text-sm text-foreground">
             <Phone className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
             {contact.phone}
           </div>
-          <div className="flex items-center gap-2 text-sm text-foreground">
-            <Mail className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
-            {contact.email}
-          </div>
-          <div className="flex items-center gap-2 text-sm text-foreground">
-            <MapPin className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
-            {contact.address}
-          </div>
+          {contact.email && (
+            <div className="flex items-center gap-2 text-sm text-foreground">
+              <Mail className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+              {contact.email}
+            </div>
+          )}
+          {contact.cpfCnpj && (
+            <div className="flex items-center gap-2 text-sm text-foreground">
+              <IdCard className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+              {contact.cpfCnpj}
+            </div>
+          )}
+          {address && (
+            <div className="flex items-center gap-2 text-sm text-foreground">
+              <MapPin className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+              {address}
+            </div>
+          )}
           <div className="flex items-center gap-2 text-sm text-foreground">
             <Calendar className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
-            Cliente desde {new Date(contact.joinDate + "T00:00:00").toLocaleDateString("pt-BR")}
+            Cliente desde {formatDate(contact.createdAt)}
           </div>
+          {contact.notes && <p className="text-sm text-muted-foreground">{contact.notes}</p>}
         </div>
 
         <Separator />
 
-        {/* Stats */}
         <div className="grid grid-cols-2 gap-3 px-5 py-4">
           <div className="bg-muted/50 rounded-lg p-3 text-center">
             <p className="text-xs text-muted-foreground">Total de pedidos</p>
-            <p className="text-2xl font-bold text-foreground">{contact.totalOrders}</p>
+            <p className="text-2xl font-bold text-foreground">{contact.ordersCount}</p>
           </div>
           <div className="bg-muted/50 rounded-lg p-3 text-center">
             <p className="text-xs text-muted-foreground">Total gasto</p>
-            <p className="text-2xl font-bold text-primary">
-              R$ {totalSpent.toFixed(2).replace(".", ",")}
-            </p>
+            <p className="text-2xl font-bold text-primary">{formatBRL(contact.totalSpentCents)}</p>
           </div>
         </div>
 
         <Separator />
 
-        {/* Order history */}
         <div className="flex-1 overflow-y-auto">
           <p className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Histórico de pedidos
           </p>
-          {contactOrders.length === 0 ? (
+          {orders.length === 0 ? (
             <p className="px-5 py-4 text-sm text-muted-foreground">Nenhum pedido registrado.</p>
           ) : (
             <div className="px-5 pb-5 space-y-3">
-              {contactOrders.map((order) => (
-                <div
-                  key={order.id}
-                  className="border border-border rounded-lg p-3 space-y-2 bg-card"
-                >
+              {orders.map((order) => (
+                <div key={order.id} className="border border-border rounded-lg p-3 space-y-2 bg-card">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-medium text-primary">{order.id}</span>
-                    <Badge
-                      variant="outline"
-                      className={cn("text-xs border", statusStyles[order.status])}
-                    >
-                      {statusLabels[order.status]}
+                    <span className="font-mono text-xs font-medium text-primary">{order.code}</span>
+                    <Badge variant="outline" className={cn("text-xs border", ORDER_STATUS_STYLES[order.status])}>
+                      {ORDER_STATUS_LABELS[order.status] ?? order.status}
                     </Badge>
                   </div>
                   <ul className="space-y-0.5">
@@ -147,12 +242,10 @@ function ContactSheet({
                     ))}
                   </ul>
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{new Date(order.date + "T00:00:00").toLocaleDateString("pt-BR")} — {order.createdAt}</span>
-                    <span className="font-semibold text-foreground">
-                      R$ {order.total.toFixed(2).replace(".", ",")}
-                    </span>
+                    <span>{formatDate(order.createdAt)}</span>
+                    <span className="font-semibold text-foreground">{formatBRL(order.totalCents)}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground">{paymentLabels[order.payment]}</div>
+                  <div className="text-xs text-muted-foreground">{PAYMENT_LABELS[order.paymentMethod] ?? order.paymentMethod}</div>
                 </div>
               ))}
             </div>
@@ -163,42 +256,56 @@ function ContactSheet({
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Main component ──────────────────────────────────────────────────────────
 
-export function ContactsPage() {
-  const [search, setSearch] = useState("");
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+interface ContactsPageProps {
+  query: string;
+  customers: CustomerDto[];
+  hasMore: boolean;
+  selected: { customer: CustomerDto; orders: CustomerOrderSummary[] } | null;
+}
 
-  const filtered = useMemo(() => {
-    const term = search.toLowerCase();
-    return allContacts.filter(
-      (c) =>
-        !term ||
-        c.name.toLowerCase().includes(term) ||
-        c.phone.includes(term) ||
-        c.neighborhood.toLowerCase().includes(term)
-    );
-  }, [search]);
+export function ContactsPage({ query, customers, hasMore, selected }: ContactsPageProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [search, setSearch] = useState(query);
+  const [formOpen, setFormOpen] = useState<"create" | "edit" | null>(null);
+  const first = useRef(true);
 
-  const handleRowClick = (contact: Contact) => {
-    setSelectedContact(contact);
-    setSheetOpen(true);
+  const urlFor = (q: string, id?: string) => {
+    const params = new URLSearchParams();
+    if (q.trim()) params.set("q", q.trim());
+    if (id) params.set("id", id);
+    const qs = params.toString();
+    return qs ? `${pathname}?${qs}` : pathname;
   };
+
+  // Server-side search (FR-041), debounced; the route reloads with ?q=.
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const t = setTimeout(() => router.replace(urlFor(search)), 300);
+    return () => clearTimeout(t);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: only the term should retrigger
+  }, [search]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
-      {/* Header */}
       <div className="flex items-center gap-3 px-6 py-4 border-b border-border bg-card shrink-0">
         <Users className="w-5 h-5 text-primary" aria-hidden="true" />
         <h1 className="text-lg font-semibold text-foreground">Contatos</h1>
         <Badge variant="secondary" className="ml-auto">
-          {allContacts.length} clientes
+          {customers.length}
+          {hasMore ? "+" : ""} clientes
         </Badge>
+        <Button size="sm" className="gap-1.5" onClick={() => setFormOpen("create")}>
+          <Plus className="h-4 w-4" /> Novo cliente
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-        {/* Search */}
         <div className="relative w-full sm:max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
           <Input
@@ -209,7 +316,6 @@ export function ContactsPage() {
           />
         </div>
 
-        {/* Table */}
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <Table>
             <TableHeader>
@@ -223,53 +329,48 @@ export function ContactsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (
+              {customers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                     Nenhum contato encontrado.
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((contact) => (
+                customers.map((contact) => (
                   <TableRow
                     key={contact.id}
                     className="hover:bg-muted/30 cursor-pointer transition-colors"
-                    onClick={() => handleRowClick(contact)}
+                    onClick={() => router.push(urlFor(search, contact.id), { scroll: false })}
                   >
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="flex items-center justify-center w-9 h-9 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0">
-                          {contact.avatar}
+                          {initials(contact.name)}
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">{contact.name}</p>
                           <p className="text-xs text-muted-foreground sm:hidden">{contact.phone}</p>
                         </div>
-                        {contact.online && (
-                          <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" aria-label="Online" />
-                        )}
                       </div>
                     </TableCell>
-                    <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                      {contact.phone}
-                    </TableCell>
+                    <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{contact.phone}</TableCell>
                     <TableCell className="hidden md:table-cell">
                       <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                         <MapPin className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                        {contact.neighborhood}
+                        {contact.bairro ?? "—"}
                       </div>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                      {new Date(contact.joinDate + "T00:00:00").toLocaleDateString("pt-BR")}
+                      {formatDate(contact.createdAt)}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                         <ShoppingBag className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
-                        <span className="text-sm font-medium text-foreground">{contact.totalOrders}</span>
+                        <span className="text-sm font-medium text-foreground">{contact.ordersCount}</span>
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-semibold text-primary text-sm whitespace-nowrap">
-                      R$ {contact.totalSpent.toFixed(2).replace(".", ",")}
+                      {formatBRL(contact.totalSpentCents)}
                     </TableCell>
                   </TableRow>
                 ))
@@ -279,14 +380,25 @@ export function ContactsPage() {
         </div>
 
         <p className="text-xs text-muted-foreground">
+          {hasMore ? "Mostrando os 100 primeiros. Use a busca para achar outros. " : ""}
           Clique em um contato para ver o histórico completo de pedidos.
         </p>
       </div>
 
-      <ContactSheet
-        contact={selectedContact}
-        open={sheetOpen}
-        onClose={() => setSheetOpen(false)}
+      {selected && (
+        <ContactSheet
+          contact={selected.customer}
+          orders={selected.orders}
+          onClose={() => router.replace(urlFor(search), { scroll: false })}
+          onEdit={() => setFormOpen("edit")}
+        />
+      )}
+
+      <CustomerFormDialog
+        customer={formOpen === "edit" ? (selected?.customer ?? null) : null}
+        open={formOpen !== null}
+        onClose={() => setFormOpen(null)}
+        onSaved={() => router.refresh()}
       />
     </div>
   );

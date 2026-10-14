@@ -3,3 +3,7 @@
 // conversations (09.plan.md T4.4–T4.12). See packages/http/README.md.
 
 export * from "./restaurant-profile";
+export * from "./orders";
+export * from "./messaging";
+export * from "./catalog";
+export * from "./admin";

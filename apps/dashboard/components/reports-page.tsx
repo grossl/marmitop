@@ -8,13 +8,9 @@ import {
   BarChart3, DollarSign, ShoppingBag, Users, TrendingUp, Award
 } from "lucide-react";
 import { cn } from "@mt/ui/lib/utils";
-import {
-  monthlyData,
-  dailyData,
-  topItems,
-  contacts,
-  orders as allOrders,
-} from "@/lib/marmita-data";
+import Link from "next/link";
+import type { ReportsView } from "@mt/http";
+import { addDays, formatBRL, formatDayLabel, formatMonthLabel } from "@/components/admin-format";
 
 // ─── KPI card ─────────────────────────────────────────────────────────────────
 
@@ -48,9 +44,7 @@ function RevenueTooltip({ active, payload, label }: any) {
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 shadow-md text-sm">
       <p className="font-semibold text-foreground mb-1">{label}</p>
-      <p className="text-primary">
-        R$ {Number(payload[0]?.value ?? 0).toFixed(2).replace(".", ",")}
-      </p>
+      <p className="text-primary">{formatBRL(Math.round(Number(payload[0]?.value ?? 0) * 100))}</p>
       <p className="text-muted-foreground text-xs">{payload[1]?.value} pedidos</p>
     </div>
   );
@@ -68,16 +62,31 @@ function DailyTooltip({ active, payload, label }: any) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function ReportsPage() {
-  // Summary KPIs
-  const totalRevenue = monthlyData.reduce((s, m) => s + m.revenue, 0);
-  const totalOrders = monthlyData.reduce((s, m) => s + m.orders, 0);
-  const avgTicket = totalRevenue / totalOrders;
-  const totalClients = contacts.length;
-  const currentMonth = monthlyData[monthlyData.length - 1];
-  const prevMonth = monthlyData[monthlyData.length - 2];
-  const revenueGrowth = (((currentMonth.revenue - prevMonth.revenue) / prevMonth.revenue) * 100).toFixed(1);
-  const isGrowthPositive = parseFloat(revenueGrowth) >= 0;
+export function ReportsPage({
+  report,
+  today,
+  periodError,
+}: {
+  report: ReportsView;
+  today: string;
+  periodError: string | null;
+}) {
+  const { summary, topItems } = report;
+  const monthlyData = report.monthly.map((m) => ({
+    month: formatMonthLabel(m.month),
+    revenue: m.revenueCents / 100,
+    orders: m.orderCount,
+    revenueCents: m.revenueCents,
+    avgTicketCents: m.averageTicketCents,
+  }));
+  const dailyData = report.daily.map((d) => ({ day: formatDayLabel(d.day), orders: d.orders }));
+  const growth = report.revenueGrowthPercent;
+  const isGrowthPositive = growth !== null && growth >= 0;
+  const presets = [
+    { label: "Este mês", from: `${today.slice(0, 7)}-01`, to: today },
+    { label: "Últimos 30 dias", from: addDays(today, -29), to: today },
+    { label: "Últimos 90 dias", from: addDays(today, -89), to: today },
+  ];
 
   // Top items bar chart color
   const barColors = [
@@ -97,37 +106,63 @@ export function ReportsPage() {
       <div className="flex items-center gap-3 px-6 py-4 border-b border-border bg-card shrink-0">
         <BarChart3 className="w-5 h-5 text-primary" aria-hidden="true" />
         <h1 className="text-lg font-semibold text-foreground">Relatórios</h1>
-        <span className="ml-auto text-xs text-muted-foreground">Últimos 6 meses</span>
+        <form method="get" className="ml-auto flex flex-wrap items-center gap-2 text-sm">
+          <label className="sr-only" htmlFor="report-from">De</label>
+          <input id="report-from" type="date" name="from" defaultValue={report.period.from} max={today}
+            className="rounded-md border border-border bg-background px-2 py-1 text-sm" />
+          <span className="text-muted-foreground">até</span>
+          <label className="sr-only" htmlFor="report-to">Até</label>
+          <input id="report-to" type="date" name="to" defaultValue={report.period.to} max={today}
+            className="rounded-md border border-border bg-background px-2 py-1 text-sm" />
+          <button type="submit" className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground">
+            Aplicar
+          </button>
+        </form>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {presets.map((p) => (
+            <Link
+              key={p.label}
+              href={`/relatorios?from=${p.from}&to=${p.to}`}
+              className={cn(
+                "rounded-full border border-border px-3 py-1 text-muted-foreground hover:bg-muted",
+                p.from === report.period.from && p.to === report.period.to && "bg-primary/10 font-semibold text-primary",
+              )}
+            >
+              {p.label}
+            </Link>
+          ))}
+          {periodError && <span role="alert" className="text-red-600">{periodError}</span>}
+        </div>
         {/* KPI row */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <KpiCard
-            label="Faturamento total"
-            value={`R$ ${totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
-            sub="últimos 6 meses"
+            label="Faturamento"
+            value={formatBRL(summary.revenueCents)}
+            sub="pedidos entregues no período"
             icon={DollarSign}
             iconClass="bg-primary/10 text-primary"
           />
           <KpiCard
-            label="Total de pedidos"
-            value={String(totalOrders)}
-            sub="últimos 6 meses"
+            label="Pedidos entregues"
+            value={String(summary.orderCount)}
+            sub="no período"
             icon={ShoppingBag}
             iconClass="bg-amber-100 text-amber-600"
           />
           <KpiCard
             label="Ticket médio"
-            value={`R$ ${avgTicket.toFixed(2).replace(".", ",")}`}
+            value={formatBRL(summary.averageTicketCents)}
             sub="por pedido"
             icon={TrendingUp}
             iconClass="bg-green-100 text-green-600"
           />
           <KpiCard
             label="Clientes ativos"
-            value={String(totalClients)}
-            sub="na base"
+            value={String(summary.activeCustomers)}
+            sub="com pedido entregue no período"
             icon={Users}
             iconClass="bg-blue-100 text-blue-600"
           />
@@ -142,16 +177,18 @@ export function ReportsPage() {
                 <p className="text-sm font-semibold text-foreground">Faturamento Mensal</p>
                 <p className="text-xs text-muted-foreground">Receita e pedidos por mês</p>
               </div>
-              <span
-                className={cn(
-                  "text-xs font-semibold px-2 py-1 rounded-full",
-                  isGrowthPositive
-                    ? "bg-green-100 text-green-700"
-                    : "bg-red-100 text-red-700"
-                )}
-              >
-                {isGrowthPositive ? "+" : ""}{revenueGrowth}% vs mês ant.
-              </span>
+              {growth !== null && (
+                <span
+                  className={cn(
+                    "text-xs font-semibold px-2 py-1 rounded-full",
+                    isGrowthPositive
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  )}
+                >
+                  {isGrowthPositive ? "+" : ""}{growth.toLocaleString("pt-BR", { minimumFractionDigits: 1 })}% vs mês ant.
+                </span>
+              )}
             </div>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={monthlyData} barSize={28}>
@@ -229,8 +266,11 @@ export function ReportsPage() {
             <p className="text-sm font-semibold text-foreground">Itens Mais Vendidos</p>
           </div>
           <div className="space-y-3">
+            {topItems.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nenhum pedido entregue no período.</p>
+            )}
             {topItems.map((item, index) => {
-              const maxQty = topItems[0].qty;
+              const maxQty = topItems[0]?.qty ?? 1;
               const pct = Math.round((item.qty / maxQty) * 100);
               return (
                 <div key={item.name} className="flex items-center gap-3">
@@ -251,10 +291,6 @@ export function ReportsPage() {
                       />
                     </div>
                   </div>
-                  {/* Revenue */}
-                  <span className="text-sm font-semibold text-foreground shrink-0 w-24 text-right">
-                    R$ {item.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </span>
                 </div>
               );
             })}
@@ -286,11 +322,11 @@ export function ReportsPage() {
                 >
                   <td className="px-5 py-3 text-foreground">{row.month}</td>
                   <td className="px-5 py-3 text-right text-foreground">
-                    R$ {row.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    {formatBRL(row.revenueCents)}
                   </td>
                   <td className="px-5 py-3 text-right text-foreground hidden sm:table-cell">{row.orders}</td>
                   <td className="px-5 py-3 text-right text-foreground hidden md:table-cell">
-                    R$ {row.avgTicket.toFixed(2).replace(".", ",")}
+                    {formatBRL(row.avgTicketCents)}
                   </td>
                 </tr>
               ))}

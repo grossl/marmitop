@@ -46,3 +46,9 @@ export const createCustomerActionSchema = z.object(customerShapeCamel);
 export const updateCustomerActionSchema = z.object(customerShapeCamel).partial().extend({ customerId: uuidSchema });
 
 export const listCustomersQuerySchema = z.object({ q: searchTermSchema.optional() }).merge(paginationQuerySchema);
+
+/** `getCustomer` Server Action (FR-042, FR-043). */
+export const customerIdActionSchema = z.object({ customerId: uuidSchema });
+
+/** `listCustomers` Server Action (FR-040, FR-041). */
+export const listCustomersActionSchema = listCustomersQuerySchema;

@@ -56,3 +56,12 @@ export const listStockQuerySchema = z.object({
   q: z.string().trim().max(100).optional(),
   category: z.enum(STOCK_CATEGORIES).optional(),
 });
+
+/** "Excluir" on a stock item archives it (ADR-018). */
+export const archiveStockItemSchema = z.object({ id: uuidSchema });
+
+/** Movement history of one item, newest first (FR-066). */
+export const listStockMovementsSchema = z.object({
+  stockItemId: uuidSchema,
+  limit: z.number().int().min(1).max(200).default(50),
+});

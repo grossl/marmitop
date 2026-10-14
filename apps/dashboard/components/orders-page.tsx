@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   DndContext,
   PointerSensor,
@@ -26,17 +28,35 @@ import {
   CheckCircle2,
   CheckCheck,
   GripVertical,
+  XCircle,
 } from "lucide-react";
 import { Input } from "@mt/ui/components/input";
 import { Badge } from "@mt/ui/components/badge";
-import { cn } from "@mt/ui/lib/utils";
+import { Button } from "@mt/ui/components/button";
+import { Textarea } from "@mt/ui/components/textarea";
 import {
-  orders as allOrders,
-  contacts,
-  paymentLabels,
-  type Order,
-  type OrderStatus,
-} from "@/lib/marmita-data";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@mt/ui/components/dialog";
+import { cn } from "@mt/ui/lib/utils";
+import type { BoardOrder, OrderDetail, OrderKpis } from "@mt/http";
+import { useRealtimeTable } from "@/lib/realtime";
+import {
+  PAYMENT_LABELS,
+  STATUS_LABELS,
+  formatCents,
+  formatDateTime,
+  formatTime,
+  initials,
+  sourceLabel,
+} from "@/components/orders-format";
+import { cancelOrderAction, changeOrderStatusAction, getOrderAction } from "@/app/(app)/pedidos/actions";
+
+type OrderStatus = BoardOrder["status"];
 
 // ─── Column config ─────────────────────────────────────────────────────────────
 
@@ -110,6 +130,16 @@ const COLUMNS: {
     colClass: "border-slate-200 bg-slate-50/30",
     dropClass: "bg-slate-100/60 border-slate-300",
   },
+  {
+    status: "cancelado",
+    label: "Cancelado",
+    icon: XCircle,
+    accent: "text-red-500",
+    badgeClass: "bg-red-50 text-red-700 border-red-200",
+    headerClass: "border-red-200 bg-red-50",
+    colClass: "border-red-200 bg-red-50/30",
+    dropClass: "bg-red-100/60 border-red-300",
+  },
 ];
 
 // ─── KPI card ──────────────────────────────────────────────────────────────────
@@ -141,34 +171,53 @@ function KpiCard({
   );
 }
 
+
 // ─── Order card (draggable) ────────────────────────────────────────────────────
 
 function OrderCard({
   order,
+  timezone,
   isDragging = false,
+  pending = false,
+  highlighted = false,
+  onOpen,
 }: {
-  order: Order;
+  order: BoardOrder;
+  timezone: string;
   isDragging?: boolean;
+  pending?: boolean;
+  highlighted?: boolean;
+  onOpen: (order: BoardOrder) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: order.id,
+    // FR-022: final orders cannot move; a request in flight blocks a second drag.
+    disabled: pending || order.allowedStatuses.length === 0,
   });
+  const ref = useRef<HTMLDivElement | null>(null);
 
-  const style = transform
-    ? { transform: CSS.Translate.toString(transform) }
-    : undefined;
+  useEffect(() => {
+    if (highlighted) ref.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [highlighted]);
 
-  const contact = contacts.find((c) => c.id === order.contactId);
+  const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
+  const movable = order.allowedStatuses.length > 0 && !pending;
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => {
+        setNodeRef(node);
+        ref.current = node;
+      }}
       style={style}
       {...listeners}
       {...attributes}
+      onClick={() => onOpen(order)}
       className={cn(
         "bg-card border border-border rounded-xl p-4 flex flex-col gap-3 shadow-sm transition-all select-none",
-        isDragging ? "opacity-40" : "hover:shadow-md cursor-grab active:cursor-grabbing"
+        isDragging ? "opacity-40" : movable ? "hover:shadow-md cursor-grab active:cursor-grabbing" : "cursor-pointer",
+        pending && "opacity-70",
+        highlighted && "ring-2 ring-primary ring-offset-2 animate-pulse"
       )}
     >
       {/* Header row */}
@@ -176,16 +225,16 @@ function OrderCard({
         <div className="flex items-center gap-2 min-w-0">
           <GripVertical className="w-4 h-4 text-muted-foreground/40 shrink-0" aria-hidden="true" />
           <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">
-            {contact?.avatar ?? "?"}
+            {initials(order.customerName)}
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground truncate leading-tight">
-              {contact?.name ?? "—"}
-            </p>
-            <p className="text-xs text-muted-foreground font-mono">{order.id}</p>
+            <p className="text-sm font-semibold text-foreground truncate leading-tight">{order.customerName}</p>
+            <p className="text-xs text-muted-foreground font-mono">{order.code}</p>
           </div>
         </div>
-        <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">{order.createdAt}</span>
+        <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+          {formatTime(order.createdAt, timezone)}
+        </span>
       </div>
 
       {/* Items */}
@@ -196,14 +245,14 @@ function OrderCard({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs font-medium text-foreground leading-tight">{item.name}</span>
-                {item.size && (
+                {item.sizeName && (
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary leading-none shrink-0">
-                    {item.size}
+                    {item.sizeName}
                   </span>
                 )}
               </div>
-              {item.obs && (
-                <p className="text-xs text-muted-foreground italic leading-tight mt-0.5">{item.obs}</p>
+              {item.notes && (
+                <p className="text-xs text-muted-foreground italic leading-tight mt-0.5">{item.notes}</p>
               )}
             </div>
           </li>
@@ -213,18 +262,16 @@ function OrderCard({
       {/* Address */}
       <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
         <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden="true" />
-        <span className="truncate">{order.address}</span>
+        <span className="truncate">{order.addressLine || "—"}</span>
       </div>
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-1 border-t border-border">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <CreditCard className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-          <span>{paymentLabels[order.payment]}</span>
+          <span>{PAYMENT_LABELS[order.paymentMethod]}</span>
         </div>
-        <span className="text-sm font-bold text-foreground">
-          R$ {order.total.toFixed(2).replace(".", ",")}
-        </span>
+        <span className="text-sm font-bold text-foreground">{formatCents(order.totalCents)}</span>
       </div>
     </div>
   );
@@ -236,10 +283,18 @@ function KanbanColumn({
   col,
   orders,
   activeId,
+  pendingIds,
+  highlightId,
+  timezone,
+  onOpen,
 }: {
   col: (typeof COLUMNS)[number];
-  orders: Order[];
+  orders: BoardOrder[];
   activeId: string | null;
+  pendingIds: ReadonlySet<string>;
+  highlightId: string | null;
+  timezone: string;
+  onOpen: (order: BoardOrder) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.status });
   const Icon = col.icon;
@@ -273,7 +328,11 @@ function KanbanColumn({
             <OrderCard
               key={order.id}
               order={order}
+              timezone={timezone}
               isDragging={activeId === order.id}
+              pending={pendingIds.has(order.id)}
+              highlighted={highlightId === order.id}
+              onOpen={onOpen}
             />
           ))
         )}
@@ -282,58 +341,312 @@ function KanbanColumn({
   );
 }
 
+// ─── Cancel dialog (FR-026) ────────────────────────────────────────────────────
+
+function CancelDialog({
+  order,
+  busy,
+  onConfirm,
+  onClose,
+}: {
+  order: BoardOrder | null;
+  busy: boolean;
+  onConfirm: (order: BoardOrder, reason: string) => void;
+  onClose: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  useEffect(() => {
+    if (order) setReason("");
+  }, [order]);
+
+  return (
+    <Dialog open={order !== null} onOpenChange={(open) => !open && !busy && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Cancelar pedido {order?.code}</DialogTitle>
+          <DialogDescription>
+            O pedido continua no histórico com o status Cancelado. Essa ação não pode ser desfeita.
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
+          placeholder="Motivo do cancelamento (opcional)"
+          value={reason}
+          maxLength={500}
+          onChange={(e) => setReason(e.target.value)}
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={busy}>
+            Voltar
+          </Button>
+          <Button variant="destructive" disabled={busy} onClick={() => order && onConfirm(order, reason)}>
+            Cancelar pedido
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Order detail (FR-023) ─────────────────────────────────────────────────────
+
+function OrderDetailDialog({
+  order,
+  timezone,
+  onClose,
+  onCancel,
+}: {
+  order: BoardOrder | null;
+  timezone: string;
+  onClose: () => void;
+  onCancel: (order: BoardOrder) => void;
+}) {
+  const [detail, setDetail] = useState<OrderDetail | null>(null);
+  const [loading, setLoading] = useState(false);
+  const orderId = order?.id ?? null;
+  const orderStatus = order?.status ?? null;
+
+  useEffect(() => {
+    if (!orderId) {
+      setDetail(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    void getOrderAction({ orderId }).then((result) => {
+      if (cancelled) return;
+      setLoading(false);
+      if (result.ok) setDetail(result.data);
+      else toast.error(result.error.message);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Reload when the status changes under an open dialog.
+  }, [orderId, orderStatus]);
+
+  const view = detail && detail.id === orderId ? detail : null;
+
+  return (
+    <Dialog open={order !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <span className="font-mono">{order?.code}</span>
+            {order && <Badge variant="outline">{STATUS_LABELS[order.status]}</Badge>}
+          </DialogTitle>
+          <DialogDescription>
+            {order?.customerName} · {order?.customerPhone}
+          </DialogDescription>
+        </DialogHeader>
+        {order && (
+          <div className="space-y-4 text-sm">
+            <ul className="space-y-1">
+              {order.items.map((item, i) => (
+                <li key={i} className="flex justify-between gap-2">
+                  <span>
+                    {item.qty}x {item.name}
+                    {item.sizeName ? ` (${item.sizeName})` : ""}
+                    {item.notes ? <em className="block text-xs text-muted-foreground">{item.notes}</em> : null}
+                  </span>
+                  <span className="shrink-0 font-medium">{formatCents(item.lineTotalCents)}</span>
+                </li>
+              ))}
+            </ul>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 border-t pt-3 text-xs">
+              <dt className="text-muted-foreground">Subtotal</dt>
+              <dd className="text-right">{formatCents(order.subtotalCents)}</dd>
+              <dt className="text-muted-foreground">Entrega</dt>
+              <dd className="text-right">{formatCents(order.deliveryFeeCents)}</dd>
+              <dt className="font-semibold">Total</dt>
+              <dd className="text-right font-semibold">{formatCents(order.totalCents)}</dd>
+              <dt className="text-muted-foreground">Pagamento</dt>
+              <dd className="text-right">
+                {PAYMENT_LABELS[order.paymentMethod]}
+                {order.changeForCents ? ` · troco para ${formatCents(order.changeForCents)}` : ""}
+              </dd>
+              <dt className="text-muted-foreground">Origem</dt>
+              <dd className="text-right">{sourceLabel(order.source)}</dd>
+              <dt className="text-muted-foreground">Endereço</dt>
+              <dd className="text-right">{order.addressLine || "—"}</dd>
+              {order.notes && (
+                <>
+                  <dt className="text-muted-foreground">Observação</dt>
+                  <dd className="text-right">{order.notes}</dd>
+                </>
+              )}
+              {order.cancelReason && (
+                <>
+                  <dt className="text-muted-foreground">Motivo do cancelamento</dt>
+                  <dd className="text-right">{order.cancelReason}</dd>
+                </>
+              )}
+            </dl>
+            <div className="border-t pt-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Histórico</p>
+              {loading && !view ? (
+                <p className="text-xs text-muted-foreground">Carregando...</p>
+              ) : (
+                <ol className="space-y-1 text-xs">
+                  {view?.history.map((h, i) => (
+                    <li key={i} className="flex justify-between gap-2">
+                      <span>
+                        {h.fromStatus ? `${STATUS_LABELS[h.fromStatus]} → ` : "Criado como "}
+                        <strong>{STATUS_LABELS[h.toStatus]}</strong>
+                      </span>
+                      <span className="text-muted-foreground">{formatDateTime(h.changedAt, timezone)}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          {order && order.allowedStatuses.includes("cancelado") && (
+            <Button variant="destructive" onClick={() => onCancel(order)}>
+              Cancelar pedido
+            </Button>
+          )}
+          <Button variant="outline" onClick={onClose}>
+            Fechar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function OrdersPage() {
+export function OrdersPage({
+  restaurantId,
+  timezone,
+  orders,
+  kpis,
+  highlightId,
+}: {
+  restaurantId: string;
+  timezone: string;
+  orders: BoardOrder[];
+  kpis: OrderKpis;
+  highlightId: string | null;
+}) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
-  const [orderList, setOrderList] = useState<Order[]>(allOrders);
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Optimistic status per order id (FR-021). Dropped when the server catches up or the call fails.
+  const [optimistic, setOptimistic] = useState<Record<string, OrderStatus>>({});
+  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
+  const [cancelTarget, setCancelTarget] = useState<BoardOrder | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [highlight, setHighlight] = useState<string | null>(highlightId);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 1 } })
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  // FR-027: any change to this restaurant's orders refreshes the Server Component data.
+  useRealtimeTable("orders", restaurantId, () => router.refresh());
+
+  // The new-order highlight fades after a few seconds.
+  useEffect(() => {
+    if (!highlightId) return;
+    setHighlight(highlightId);
+    const t = setTimeout(() => setHighlight(null), 6000);
+    return () => clearTimeout(t);
+  }, [highlightId]);
+
+  const pendingRef = useRef<ReadonlySet<string>>(pending);
+  pendingRef.current = pending;
+
+  // Forget optimistic overrides the server data has caught up with.
+  useEffect(() => {
+    setOptimistic((prev) => {
+      const next: Record<string, OrderStatus> = {};
+      for (const [id, status] of Object.entries(prev)) {
+        const server = orders.find((o) => o.id === id);
+        if (server && server.status !== status && pendingRef.current.has(id)) next[id] = status;
+      }
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+  }, [orders]);
+
+  const orderList = useMemo(
+    () => orders.map((o) => (optimistic[o.id] ? { ...o, status: optimistic[o.id] as OrderStatus } : o)),
+    [orders, optimistic]
   );
 
   const filtered = useMemo(() => {
-    const term = search.toLowerCase();
+    const term = search.trim().toLowerCase();
     if (!term) return orderList;
-    return orderList.filter((o) => {
-      const contact = contacts.find((c) => c.id === o.contactId);
-      return (
-        o.id.toLowerCase().includes(term) ||
-        contact?.name.toLowerCase().includes(term) ||
+    return orderList.filter(
+      (o) =>
+        o.code.toLowerCase().includes(term) ||
+        o.customerName.toLowerCase().includes(term) ||
         o.items.some((i) => i.name.toLowerCase().includes(term))
-      );
-    });
+    );
   }, [search, orderList]);
+
+  const detailOrder = detailId ? (orderList.find((o) => o.id === detailId) ?? null) : null;
+
+  function setPendingFlag(id: string, on: boolean) {
+    setPending((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function rollback(id: string) {
+    setOptimistic((prev) => {
+      const { [id]: _removed, ...rest } = prev;
+      return rest;
+    });
+  }
+
+  async function move(order: BoardOrder, to: OrderStatus, reason?: string) {
+    setOptimistic((prev) => ({ ...prev, [order.id]: to }));
+    setPendingFlag(order.id, true);
+    const result =
+      to === "cancelado"
+        ? await cancelOrderAction({ orderId: order.id, reason })
+        : await changeOrderStatusAction({ orderId: order.id, toStatus: to });
+    setPendingFlag(order.id, false);
+    if (!result.ok) {
+      rollback(order.id);
+      toast.error(result.error.message);
+      return;
+    }
+    router.refresh();
+  }
 
   function handleDragStart(event: DragStartEvent) {
     setActiveId(String(event.active.id));
   }
 
-  const VALID_STATUSES = new Set<string>(COLUMNS.map((c) => c.status));
-
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveId(null);
     if (!over) return;
-    const orderId = String(active.id);
-    const newStatus = String(over.id);
-    if (!VALID_STATUSES.has(newStatus)) return;
-    setOrderList((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: newStatus as OrderStatus } : o))
-    );
+    const order = orderList.find((o) => o.id === String(active.id));
+    const to = String(over.id) as OrderStatus;
+    if (!order || to === order.status || !COLUMNS.some((c) => c.status === to)) return;
+    // FR-021/FR-022: the server list of legal targets (core canTransition) decides; an illegal drop snaps back.
+    if (!order.allowedStatuses.includes(to)) {
+      toast.error(`Não é possível mover ${order.code} de ${STATUS_LABELS[order.status]} para ${STATUS_LABELS[to]}.`);
+      return;
+    }
+    if (to === "cancelado") {
+      setCancelTarget(order);
+      return;
+    }
+    void move(order, to);
   }
 
-  // KPIs
-  const activeCount = orderList.filter((o) =>
-    ["aguardando", "confirmado", "preparando"].includes(o.status)
-  ).length;
-  const readyCount = orderList.filter((o) => o.status === "pronto").length;
-  const outCount   = orderList.filter((o) => o.status === "saiu").length;
-  const delivered  = orderList.filter((o) => o.status === "entregue").length;
-  const todayRevenue = orderList
-    .filter((o) => o.status === "entregue")
-    .reduce((s, o) => s + o.total, 0);
+  async function confirmCancel(order: BoardOrder, reason: string) {
+    setCancelTarget(null);
+    setDetailId(null);
+    await move(order, "cancelado", reason);
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
@@ -347,32 +660,32 @@ export function OrdersPage() {
       </div>
 
       <div className="flex flex-col flex-1 overflow-hidden px-6 py-4 gap-4">
-        {/* KPIs */}
+        {/* KPIs (FR-025): the restaurant's current day; revenue counts entregue only (ADR-015) */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 shrink-0">
           <KpiCard
             label="Faturamento entregue"
-            value={`R$ ${todayRevenue.toFixed(2).replace(".", ",")}`}
-            sub={`${delivered} pedido(s) entregue(s)`}
+            value={formatCents(kpis.deliveredRevenueCents)}
+            sub={`${kpis.deliveredCount} pedido(s) entregue(s)`}
             icon={DollarSign}
             color="bg-primary/10 text-primary"
           />
           <KpiCard
             label="Em andamento"
-            value={String(activeCount)}
+            value={String(kpis.inProgressCount)}
             sub="aguardando + confirmado + preparo"
             icon={Clock}
             color="bg-amber-100 text-amber-600"
           />
           <KpiCard
             label="Prontos"
-            value={String(readyCount)}
+            value={String(kpis.readyCount)}
             sub="aguardando retirada/entrega"
             icon={Package}
             color="bg-green-100 text-green-600"
           />
           <KpiCard
             label="Saiu para entrega"
-            value={String(outCount)}
+            value={String(kpis.outForDeliveryCount)}
             sub="a caminho do cliente"
             icon={Bike}
             color="bg-purple-100 text-purple-600"
@@ -391,11 +704,7 @@ export function OrdersPage() {
         </div>
 
         {/* Kanban board */}
-        <DndContext
-          sensors={sensors}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="flex gap-3 flex-1 overflow-hidden">
             {COLUMNS.map((col) => (
               <KanbanColumn
@@ -403,13 +712,28 @@ export function OrdersPage() {
                 col={col}
                 orders={filtered.filter((o) => o.status === col.status)}
                 activeId={activeId}
+                pendingIds={pending}
+                highlightId={highlight}
+                timezone={timezone}
+                onOpen={(o) => setDetailId(o.id)}
               />
             ))}
           </div>
-
-
         </DndContext>
       </div>
+
+      <OrderDetailDialog
+        order={detailOrder}
+        timezone={timezone}
+        onClose={() => setDetailId(null)}
+        onCancel={(o) => setCancelTarget(o)}
+      />
+      <CancelDialog
+        order={cancelTarget}
+        busy={false}
+        onConfirm={(o, reason) => void confirmCancel(o, reason)}
+        onClose={() => setCancelTarget(null)}
+      />
     </div>
   );
 }
