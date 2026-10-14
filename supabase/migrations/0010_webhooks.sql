@@ -7,14 +7,17 @@ create table if not exists public.webhook_endpoints (
   id            uuid primary key default gen_random_uuid(),
   restaurant_id uuid not null references public.restaurants(id) on delete cascade,
   url           text not null check (url ~ '^https?://'),
-  secret_id     uuid not null references public.secrets(id) on delete restrict,
+  secret_id     uuid not null,
   enabled       boolean not null default true,
   events        text[] not null check (
                   events <@ array['order.created', 'order.status_changed', 'message.received', 'invoice.updated']::text[]),
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now(),
   -- One endpoint per restaurant in v1 (ADR-009).
-  constraint webhook_endpoints_restaurant_key unique (restaurant_id)
+  constraint webhook_endpoints_restaurant_key unique (restaurant_id),
+  constraint webhook_endpoints_restaurant_id_id_key unique (restaurant_id, id),
+  constraint webhook_endpoints_secret_fkey foreign key (restaurant_id, secret_id)
+    references public.secrets (restaurant_id, id) on delete restrict
 );
 
 comment on column public.webhook_endpoints.url is '^https:// in production; the service enforces it with the SSRF guard (ADR-017).';
@@ -36,7 +39,7 @@ select mt.apply_tenant_policies('webhook_endpoints', 'member', 'admin', 'admin',
 create table if not exists public.webhook_deliveries (
   id               uuid primary key default gen_random_uuid(),
   restaurant_id    uuid not null references public.restaurants(id) on delete cascade,
-  endpoint_id      uuid not null references public.webhook_endpoints(id) on delete cascade,
+  endpoint_id      uuid not null,
   event            text not null,
   payload          jsonb not null,
   status           text not null default 'pending' check (status in ('pending', 'delivered', 'failed', 'exhausted')),
@@ -45,7 +48,9 @@ create table if not exists public.webhook_deliveries (
   last_error       text check (char_length(last_error) <= 200),
   next_attempt_at  timestamptz,
   delivered_at     timestamptz,
-  created_at       timestamptz not null default now()
+  created_at       timestamptz not null default now(),
+  constraint webhook_deliveries_endpoint_fkey foreign key (restaurant_id, endpoint_id)
+    references public.webhook_endpoints (restaurant_id, id) on delete cascade
 );
 
 create index if not exists webhook_deliveries_restaurant_created_idx

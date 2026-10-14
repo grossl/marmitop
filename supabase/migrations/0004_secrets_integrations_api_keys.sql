@@ -19,7 +19,8 @@ create table if not exists public.secrets (
   wrapped_key   bytea not null,
   kek_version   smallint not null default 1,
   last4         text not null,
-  created_at    timestamptz not null default now()
+  created_at    timestamptz not null default now(),
+  constraint secrets_restaurant_id_id_key unique (restaurant_id, id)
 );
 
 create index if not exists secrets_restaurant_kind_idx on public.secrets (restaurant_id, kind);
@@ -76,14 +77,18 @@ revoke all on function mt.check_secret_refs() from public;
 create table if not exists public.integrations_whatsapp (
   restaurant_id     uuid primary key references public.restaurants(id) on delete cascade,
   base_url          text not null check (base_url ~ '^https?://'),
-  api_key_secret_id uuid not null references public.secrets(id) on delete restrict,
-  webhook_secret_id uuid not null references public.secrets(id) on delete restrict,
+  api_key_secret_id uuid not null,
+  webhook_secret_id uuid not null,
   phone_number_id   text not null,
   status            text not null default 'disconnected' check (status in ('disconnected', 'connected', 'error')),
   last_error        text,
   last_sync_cursor  timestamptz,
   last_synced_at    timestamptz,
-  updated_at        timestamptz not null default now()
+  updated_at        timestamptz not null default now(),
+  constraint integrations_whatsapp_api_key_secret_fkey foreign key (restaurant_id, api_key_secret_id)
+    references public.secrets (restaurant_id, id) on delete restrict,
+  constraint integrations_whatsapp_webhook_secret_fkey foreign key (restaurant_id, webhook_secret_id)
+    references public.secrets (restaurant_id, id) on delete restrict
 );
 
 create trigger integrations_whatsapp_set_updated_at
@@ -105,8 +110,8 @@ select mt.apply_tenant_policies('integrations_whatsapp', 'admin', 'admin', 'admi
 create table if not exists public.integrations_fiscal (
   restaurant_id      uuid primary key references public.restaurants(id) on delete cascade,
   base_url           text not null check (base_url ~ '^https?://'),
-  api_key_secret_id  uuid not null references public.secrets(id) on delete restrict,
-  webhook_secret_id  uuid not null references public.secrets(id) on delete restrict,
+  api_key_secret_id  uuid not null,
+  webhook_secret_id  uuid not null,
   environment        text not null default 'homologacao' check (environment in ('homologacao', 'producao')),
   nfce_serie         integer not null default 1 check (nfce_serie between 1 and 999),
   nfe_serie          integer not null default 1 check (nfe_serie between 1 and 999),
@@ -118,7 +123,11 @@ create table if not exists public.integrations_fiscal (
   delivery_fee_mode  text not null default 'item' check (delivery_fee_mode in ('item', 'none')),
   status             text not null default 'disconnected' check (status in ('disconnected', 'connected', 'error')),
   last_error         text,
-  updated_at         timestamptz not null default now()
+  updated_at         timestamptz not null default now(),
+  constraint integrations_fiscal_api_key_secret_fkey foreign key (restaurant_id, api_key_secret_id)
+    references public.secrets (restaurant_id, id) on delete restrict,
+  constraint integrations_fiscal_webhook_secret_fkey foreign key (restaurant_id, webhook_secret_id)
+    references public.secrets (restaurant_id, id) on delete restrict
 );
 
 create trigger integrations_fiscal_set_updated_at
@@ -150,7 +159,8 @@ create table if not exists public.api_keys (
   created_at    timestamptz not null default now(),
   last_used_at  timestamptz,
   revoked_at    timestamptz,
-  constraint api_keys_hash_key unique (hash)
+  constraint api_keys_hash_key unique (hash),
+  constraint api_keys_restaurant_id_id_key unique (restaurant_id, id)
 );
 
 create index if not exists api_keys_restaurant_created_idx on public.api_keys (restaurant_id, created_at desc);
@@ -173,3 +183,31 @@ $fn$;
 
 revoke all on function mt.api_key_lookup(text) from public;
 grant execute on function mt.api_key_lookup(text) to app_service;
+
+-- Records that a key was used (FR-089 "last use"). An API key actor is an
+-- attendant and api_keys writes are admin-only, so apps/api calls this definer
+-- function instead. It writes last_used_at only, only for a key of the current
+-- restaurant, and at most once a minute per key, so a busy key does not turn
+-- every request into a row update. Returns true when it wrote.
+create or replace function mt.touch_api_key(p_key_id uuid)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = pg_catalog, pg_temp
+as $fn$
+declare
+  v_count integer;
+begin
+  update public.api_keys k
+     set last_used_at = pg_catalog.now()
+   where k.id = p_key_id
+     and k.restaurant_id = mt.current_restaurant_id()
+     and (k.last_used_at is null or k.last_used_at < pg_catalog.now() - interval '60 seconds');
+  get diagnostics v_count = row_count;
+  return v_count > 0;
+end
+$fn$;
+
+revoke all on function mt.touch_api_key(uuid) from public;
+grant execute on function mt.touch_api_key(uuid) to app_service;

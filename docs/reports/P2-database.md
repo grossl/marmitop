@@ -79,3 +79,23 @@ Every tenant table uses one call to `mt.apply_tenant_policies`, which enables an
 * `supabase/seed.sql` is about 1.2 MB of generated SQL. It regenerates byte-identically; `dev-seed.test.ts` fails on drift.
 * The seeded WhatsApp integrations are `connected`, so pg_cron enqueues one `mt_sync` message per restaurant (deduplicated). Nothing consumes it until the worker runs.
 * Nothing was committed (chief commits).
+
+## P2.1 — Hardening (ADR-018)
+
+### What was done
+
+* **Composite tenant foreign keys.** Each parent (`secrets`, `api_keys`, `customers`, `conversations`, `orders`, `menu_items`, `stock_items`, `webhook_endpoints`) has `unique (restaurant_id, id)`. All 18 child keys between tenant tables are now `(restaurant_id, parent_id) → parent (restaurant_id, id)`, with `on delete set null (column)` where the key was `set null`. Migrations 0004 to 0011 were edited in place; no environment had applied them.
+* **No deletes.** `app_service` has no delete grant or delete policy on `customers`, `conversations`, `messages`, `menu_items`, `orders`, `order_items`, `order_invoices`, or `stock_items` (the append-only tables already had none). `menu_items` and `stock_items` gained `archived_at`; `stock_items.archived_at` is in the column update grant. No v1 requirement edits order items after creation, so none needs a delete. `menu_item_sizes` keeps its admin delete.
+* **`mt.touch_api_key(key_id)`** in 0004: `security definer`, granted to `app_service`, writes `last_used_at` only, only for a key of the current restaurant, and only when null or older than 60 seconds.
+* Docs: new `docs/decisions/ADR-018-tenant-composite-fks.md` and index row; 05 (conventions, helper table, role table, `archived_at` columns, Realtime note, migration list); 07 (RLS section, T14, new T21). `packages/db/src/types.ts` has the `archived_at` fields.
+
+### Tests
+
+* New `tenant-fks.integration.test.ts` (20): for each of 16 key groups, the child statement with the restaurant's own parent passes, and the same statement pointing at the other restaurant's parent fails with `23503`. Both run on `app_service` as the child restaurant's system actor, so RLS passes and only the key refuses. The secret-kind trigger may refuse first for secret keys, so one more test disables it and proves the key alone refuses. A meta-test fails when any key between tenant tables lacks `restaurant_id` on either side. Three `mt.touch_api_key` tests: the 60-second throttle, no touch of another restaurant's key, and no direct write for an API key actor.
+* `rls.integration.test.ts`: the role table now expects no delete on the eight tables. A new meta-test checks that `app_service` holds delete only where 05 allows it.
+* Mutation check on `mt_test`: a single-column `order_items` key, a dropped `mt.touch_api_key`, and a delete grant on `orders` made 5 tests fail.
+* `@mt/db`: 256 tests, 0 failures, against the rebuilt `mt_test` (the harness rebuilt it because the checksums changed). `bun run typecheck --force`: 9 of 9 tasks pass.
+
+### Not verified yet
+
+* The Docker daemon stopped responding while `bun run db:reset` was running. `docker version` hung for more than 8 minutes, and the web-nf and backend-uatis stacks share that daemon. The reset of the dev database with the P2.1 migrations, `verify.ts`, and `bun run test --force` have not run since the docs changes. The seed did not change: `supabase/seed.sql` is identical, and the drift test passes. The seed references only same-restaurant parents, so it should satisfy the composite keys, but this has not been run.

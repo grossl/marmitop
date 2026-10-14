@@ -294,6 +294,8 @@ export interface MenuItemRow {
   popular: boolean;
   available_weekdays: Weekday[];
   image_url: string | null;
+  /** Set by "Excluir" (FR-057, ADR-018); archived items leave lists and new orders. */
+  archived_at: Date | null;
   ncm: string | null;
   cfop: string | null;
   created_at: Date;
@@ -404,6 +406,8 @@ export interface StockItemRow {
   current_qty: string;
   minimum_qty: string;
   unit_cost_cents: number;
+  /** Archived items leave the stock lists (ADR-018). */
+  archived_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }

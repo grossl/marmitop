@@ -25,7 +25,7 @@ create table if not exists public.orders (
   id                 uuid primary key default gen_random_uuid(),
   restaurant_id      uuid not null references public.restaurants(id) on delete cascade,
   code               text not null check (code ~ '^ORD-[0-9]{3,}$'),
-  customer_id        uuid not null references public.customers(id) on delete restrict,
+  customer_id        uuid not null,
   status             text not null check (status in (
                        'aguardando', 'confirmado', 'preparando', 'pronto', 'saiu', 'entregue', 'cancelado')),
   fulfillment        text not null check (fulfillment in ('delivery', 'pickup')),
@@ -44,9 +44,9 @@ create table if not exists public.orders (
   delivery_fee_cents bigint not null default 0 check (delivery_fee_cents >= 0),
   total_cents        bigint not null,
   source             text not null,
-  conversation_id    uuid references public.conversations(id) on delete set null,
+  conversation_id    uuid,
   created_by         uuid references auth.users(id) on delete set null,
-  created_by_api_key uuid references public.api_keys(id) on delete set null,
+  created_by_api_key uuid,
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now(),
   delivered_at       timestamptz,
@@ -59,7 +59,14 @@ create table if not exists public.orders (
   constraint orders_change_for check (
     change_for_cents is null or (payment_method = 'dinheiro' and change_for_cents >= total_cents)),
   constraint orders_saiu_delivery_only check (status <> 'saiu' or fulfillment = 'delivery'),
-  constraint orders_source check (source in ('counter', 'phone', 'whatsapp', 'api'))
+  constraint orders_source check (source in ('counter', 'phone', 'whatsapp', 'api')),
+  constraint orders_restaurant_id_id_key unique (restaurant_id, id),
+  constraint orders_customer_fkey foreign key (restaurant_id, customer_id)
+    references public.customers (restaurant_id, id) on delete restrict,
+  constraint orders_conversation_fkey foreign key (restaurant_id, conversation_id)
+    references public.conversations (restaurant_id, id) on delete set null (conversation_id),
+  constraint orders_created_by_api_key_fkey foreign key (restaurant_id, created_by_api_key)
+    references public.api_keys (restaurant_id, id) on delete set null (created_by_api_key)
 );
 
 create index if not exists orders_board_idx on public.orders (restaurant_id, status, created_at desc);
@@ -71,7 +78,8 @@ create trigger orders_set_updated_at
   before update on public.orders
   for each row execute function mt.set_updated_at();
 
-select mt.apply_tenant_policies('orders', 'member', 'attendant', 'attendant', 'attendant');
+-- No delete grant: rows are never deleted in v1 (05.data-model.md "Role rules", ADR-018).
+select mt.apply_tenant_policies('orders', 'member', 'attendant', 'attendant', null);
 
 grant select on table public.orders to authenticated;
 create policy orders_user_select on public.orders for select to authenticated
@@ -79,7 +87,8 @@ create policy orders_user_select on public.orders for select to authenticated
 
 -- The `Pedido #ORD-001` tag on a message (0005 left the column without a key).
 alter table public.messages
-  add constraint messages_order_id_fkey foreign key (order_id) references public.orders(id) on delete set null;
+  add constraint messages_order_fkey foreign key (restaurant_id, order_id)
+    references public.orders (restaurant_id, id) on delete set null (order_id);
 
 -- ---------------------------------------------------------------------------
 -- order_items
@@ -88,21 +97,26 @@ alter table public.messages
 create table if not exists public.order_items (
   id               uuid primary key default gen_random_uuid(),
   restaurant_id    uuid not null references public.restaurants(id) on delete cascade,
-  order_id         uuid not null references public.orders(id) on delete cascade,
-  menu_item_id     uuid references public.menu_items(id) on delete set null,
+  order_id         uuid not null,
+  menu_item_id     uuid,
   name             text not null,
   size_name        text,
   unit_price_cents bigint not null check (unit_price_cents >= 0),
   qty              integer not null check (qty between 1 and 99),
   line_total_cents bigint generated always as (unit_price_cents * qty) stored,
   notes            text check (char_length(notes) <= 280),
-  position         smallint not null default 0
+  position         smallint not null default 0,
+  constraint order_items_order_fkey foreign key (restaurant_id, order_id)
+    references public.orders (restaurant_id, id) on delete cascade,
+  constraint order_items_menu_item_fkey foreign key (restaurant_id, menu_item_id)
+    references public.menu_items (restaurant_id, id) on delete set null (menu_item_id)
 );
 
 create index if not exists order_items_restaurant_order_idx on public.order_items (restaurant_id, order_id);
 create index if not exists order_items_restaurant_menu_item_idx on public.order_items (restaurant_id, menu_item_id);
 
-select mt.apply_tenant_policies('order_items', 'member', 'attendant', 'attendant', 'attendant');
+-- No delete grant: rows are never deleted in v1 (05.data-model.md "Role rules", ADR-018).
+select mt.apply_tenant_policies('order_items', 'member', 'attendant', 'attendant', null);
 
 -- ---------------------------------------------------------------------------
 -- order_status_history (append-only)
@@ -111,12 +125,14 @@ select mt.apply_tenant_policies('order_items', 'member', 'attendant', 'attendant
 create table if not exists public.order_status_history (
   id            uuid primary key default gen_random_uuid(),
   restaurant_id uuid not null references public.restaurants(id) on delete cascade,
-  order_id      uuid not null references public.orders(id) on delete cascade,
+  order_id      uuid not null,
   from_status   text,
   to_status     text not null,
   changed_by    uuid references auth.users(id) on delete set null,
   actor_type    text not null check (actor_type in ('user', 'api_key', 'system')),
-  changed_at    timestamptz not null default now()
+  changed_at    timestamptz not null default now(),
+  constraint order_status_history_order_fkey foreign key (restaurant_id, order_id)
+    references public.orders (restaurant_id, id) on delete cascade
 );
 
 create index if not exists order_status_history_order_idx

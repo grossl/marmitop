@@ -12,20 +12,23 @@ create table if not exists public.stock_items (
   current_qty     numeric(12,3) not null default 0 check (current_qty >= 0),
   minimum_qty     numeric(12,3) not null default 0 check (minimum_qty >= 0),
   unit_cost_cents bigint not null default 0 check (unit_cost_cents >= 0),
+  archived_at     timestamptz,
   created_at      timestamptz not null default now(),
-  updated_at      timestamptz not null default now()
+  updated_at      timestamptz not null default now(),
+  constraint stock_items_restaurant_id_id_key unique (restaurant_id, id)
 );
 
 create trigger stock_items_set_updated_at
   before update on public.stock_items
   for each row execute function mt.set_updated_at();
 
-select mt.apply_tenant_policies('stock_items', 'member', 'admin', 'admin', 'admin');
+-- No delete grant: an item leaves the lists through archived_at (ADR-018).
+select mt.apply_tenant_policies('stock_items', 'member', 'admin', 'admin', null);
 
 -- current_qty is not writable by an update: only the movement trigger below
 -- changes it, so every quantity change leaves a stock_movements row.
 revoke update on table public.stock_items from app_service;
-grant update (name, unit, category, minimum_qty, unit_cost_cents, updated_at)
+grant update (name, unit, category, minimum_qty, unit_cost_cents, archived_at, updated_at)
   on table public.stock_items to app_service;
 
 -- ---------------------------------------------------------------------------
@@ -35,7 +38,7 @@ grant update (name, unit, category, minimum_qty, unit_cost_cents, updated_at)
 create table if not exists public.stock_movements (
   id            uuid primary key default gen_random_uuid(),
   restaurant_id uuid not null references public.restaurants(id) on delete cascade,
-  stock_item_id uuid not null references public.stock_items(id) on delete cascade,
+  stock_item_id uuid not null,
   kind          text not null check (kind in ('in', 'out', 'adjust')),
   qty           numeric(12,3) not null,
   balance_after numeric(12,3) not null,
@@ -43,7 +46,9 @@ create table if not exists public.stock_movements (
   created_by    uuid references auth.users(id) on delete set null,
   created_at    timestamptz not null default now(),
   constraint stock_movements_qty_sign check (
-    (kind in ('in', 'out') and qty > 0) or (kind = 'adjust' and qty <> 0))
+    (kind in ('in', 'out') and qty > 0) or (kind = 'adjust' and qty <> 0)),
+  constraint stock_movements_stock_item_fkey foreign key (restaurant_id, stock_item_id)
+    references public.stock_items (restaurant_id, id) on delete cascade
 );
 
 create index if not exists stock_movements_item_idx

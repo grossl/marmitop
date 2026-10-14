@@ -184,7 +184,7 @@ const SPECS: TableSpec[] = [
     select: "member",
     insert: "attendant",
     update: "attendant",
-    delete: "attendant",
+    delete: null,
     updateSet: "notes = 'crossed'",
     insertRow: (tx, f) => tx`
       insert into public.customers (restaurant_id, name, phone)
@@ -198,7 +198,7 @@ const SPECS: TableSpec[] = [
     select: "member",
     insert: "attendant",
     update: "attendant",
-    delete: "attendant",
+    delete: null,
     updateSet: "unread_count = 0",
     insertRow: (tx, f) =>
       tx`insert into public.conversations (restaurant_id, customer_id) values (${f.restaurantId}, ${f.customerId})`,
@@ -211,7 +211,7 @@ const SPECS: TableSpec[] = [
     select: "member",
     insert: "attendant",
     update: "attendant",
-    delete: "attendant",
+    delete: null,
     updateSet: "status = 'read'",
     insertRow: (tx, f) => tx`
       insert into public.messages (restaurant_id, conversation_id, direction, body, status)
@@ -225,7 +225,7 @@ const SPECS: TableSpec[] = [
     select: "member",
     insert: "admin",
     update: "admin",
-    delete: "admin",
+    delete: null,
     updateSet: "available = false",
     insertRow: (tx, f) => tx`
       insert into public.menu_items (restaurant_id, kind, name, category, price_cents, volume)
@@ -266,7 +266,7 @@ const SPECS: TableSpec[] = [
     select: "member",
     insert: "attendant",
     update: "attendant",
-    delete: "attendant",
+    delete: null,
     updateSet: "notes = 'crossed'",
     insertRow: (tx, f) => tx`
       insert into public.orders
@@ -281,7 +281,7 @@ const SPECS: TableSpec[] = [
     select: "member",
     insert: "attendant",
     update: "attendant",
-    delete: "attendant",
+    delete: null,
     updateSet: "notes = 'crossed'",
     insertRow: (tx, f) => tx`
       insert into public.order_items (restaurant_id, order_id, name, unit_price_cents, qty)
@@ -309,7 +309,7 @@ const SPECS: TableSpec[] = [
     select: "member",
     insert: "attendant",
     update: "attendant",
-    delete: "attendant",
+    delete: null,
     updateSet: "error_code = 'crossed'",
     insertRow: (tx, f) => tx`
       insert into public.order_invoices (restaurant_id, order_id, kind, status)
@@ -323,7 +323,7 @@ const SPECS: TableSpec[] = [
     select: "member",
     insert: "admin",
     update: "admin",
-    delete: "admin",
+    delete: null,
     updateSet: "name = 'crossed'",
     insertRow: (tx, f) =>
       tx`insert into public.stock_items (restaurant_id, name, unit, category) values (${f.restaurantId}, 'Feijão', 'kg', 'insumos')`,
@@ -590,6 +590,18 @@ describe("meta: every table is protected", () => {
       order by grantee, table_name
     `;
     expect([...rows]).toEqual([...REALTIME_TABLES].sort().map((t) => ({ grantee: "authenticated", table_name: t })));
+  });
+
+  test("app_service holds delete only where 05 'Role rules' allows it (ADR-018)", async () => {
+    const rows = await db<{ table_name: string }[]>`
+      select table_name from information_schema.role_table_grants
+      where table_schema = 'public' and grantee = 'app_service' and privilege_type = 'DELETE'
+      order by table_name`;
+    const expected = SPECS.filter((s) => s.delete !== null)
+      .map((s) => s.table as string)
+      .concat(["rate_counters"])
+      .sort();
+    expect(rows.map((r) => r.table_name)).toEqual(expected);
   });
 
   test("app_service cannot bypass RLS", async () => {

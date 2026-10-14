@@ -6,7 +6,7 @@
 create table if not exists public.order_invoices (
   id                  uuid primary key default gen_random_uuid(),
   restaurant_id       uuid not null references public.restaurants(id) on delete cascade,
-  order_id            uuid not null references public.orders(id) on delete restrict,
+  order_id            uuid not null,
   kind                text not null check (kind in ('nfce', 'nfe')),
   status              text not null default 'queued' check (status in (
                         'queued', 'received', 'processing', 'authorized',
@@ -23,7 +23,9 @@ create table if not exists public.order_invoices (
   cancel_requested_by uuid references auth.users(id) on delete set null,
   cancel_reason       text check (char_length(cancel_reason) between 15 and 255),
   created_at          timestamptz not null default now(),
-  updated_at          timestamptz not null default now()
+  updated_at          timestamptz not null default now(),
+  constraint order_invoices_order_fkey foreign key (restaurant_id, order_id)
+    references public.orders (restaurant_id, id) on delete restrict
 );
 
 create unique index if not exists order_invoices_restaurant_external_key
@@ -37,7 +39,8 @@ create trigger order_invoices_set_updated_at
   before update on public.order_invoices
   for each row execute function mt.set_updated_at();
 
-select mt.apply_tenant_policies('order_invoices', 'member', 'attendant', 'attendant', 'attendant');
+-- No delete grant: rows are never deleted in v1 (05.data-model.md "Role rules", ADR-018).
+select mt.apply_tenant_policies('order_invoices', 'member', 'attendant', 'attendant', null);
 
 -- ---------------------------------------------------------------------------
 -- Guard (07.security.md "Triggers guard invariants")
