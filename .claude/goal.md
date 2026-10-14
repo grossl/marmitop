@@ -59,6 +59,7 @@ Propose the monorepo layout in `04.architecture.md`. Expected shape: `apps/dashb
 * Stock: items with unit, category, current and minimum quantity, unit cost; in/out adjustments recorded as movements; low-stock alerts and total stock value.
 * Reports: revenue, order count, average ticket and active customers; monthly revenue (last 6 months), orders per day (last 14 days), top-selling items.
 * Settings: restaurant profile, order preferences (auto-accept, pickup, delivery estimate), business hours, automatic messages, WhatsApp connection, outbound webhook URL and API key.
+* Finance (admin/manager): list of all paid orders with filters by customer and by date range, totals for the filtered set, the invoice status of each order, and issuing invoices to the tax authority (one order or a selected batch) through web-nf.
 
 ### WhatsApp channel
 
