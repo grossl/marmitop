@@ -5,14 +5,14 @@
 export type Role = "admin" | "attendant";
 
 export type Section =
-  | "novo-pedido"
-  | "mensagens"
-  | "pedidos"
-  | "contatos"
-  | "cardapio"
-  | "estoque"
-  | "relatorios"
-  | "configuracoes";
+  | "new-order"
+  | "messages"
+  | "orders"
+  | "contacts"
+  | "menu"
+  | "stock"
+  | "reports"
+  | "settings";
 
 export interface NavItem {
   readonly id: Section;
@@ -22,17 +22,17 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: readonly NavItem[] = [
-  { id: "novo-pedido", label: "Novo pedido", href: "/novo-pedido", minRole: "attendant" },
-  { id: "mensagens", label: "Mensagens", href: "/mensagens", minRole: "attendant" },
-  { id: "pedidos", label: "Pedidos", href: "/pedidos", minRole: "attendant" },
-  { id: "contatos", label: "Contatos", href: "/contatos", minRole: "attendant" },
-  { id: "cardapio", label: "Cardápio", href: "/cardapio", minRole: "admin" },
-  { id: "estoque", label: "Estoque", href: "/estoque", minRole: "admin" },
-  { id: "relatorios", label: "Relatórios", href: "/relatorios", minRole: "admin" },
-  { id: "configuracoes", label: "Configurações", href: "/configuracoes", minRole: "admin" },
+  { id: "new-order", label: "Novo pedido", href: "/new-order", minRole: "attendant" },
+  { id: "messages", label: "Mensagens", href: "/messages", minRole: "attendant" },
+  { id: "orders", label: "Pedidos", href: "/orders", minRole: "attendant" },
+  { id: "contacts", label: "Contatos", href: "/contacts", minRole: "attendant" },
+  { id: "menu", label: "Cardápio", href: "/menu", minRole: "admin" },
+  { id: "stock", label: "Estoque", href: "/stock", minRole: "admin" },
+  { id: "reports", label: "Relatórios", href: "/reports", minRole: "admin" },
+  { id: "settings", label: "Configurações", href: "/settings", minRole: "admin" },
 ];
 
-export const HOME_PATH = "/mensagens";
+export const HOME_PATH = "/messages";
 
 export function canOpen(role: Role, section: Section): boolean {
   const item = NAV_ITEMS.find((i) => i.id === section);

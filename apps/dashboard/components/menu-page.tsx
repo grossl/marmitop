@@ -41,7 +41,7 @@ import {
   deleteMenuItemAction,
   saveMenuItemAction,
   setMenuItemAvailabilityAction,
-} from "@/app/(app)/cardapio/actions";
+} from "@/app/(app)/menu/actions";
 import {
   centsToInput,
   DISPLAY_WEEKDAYS,
@@ -52,7 +52,7 @@ import {
   menuImagePath,
   reaisToCents,
   WEEKDAY_LABELS,
-} from "@/app/(app)/cardapio/menu-helpers";
+} from "@/app/(app)/menu/menu-helpers";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1008,7 +1008,7 @@ function DrinkFormDialog({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export function CardapioPage({ items, restaurantId }: { items: Item[]; restaurantId: string }) {
+export function MenuPage({ items, restaurantId }: { items: Item[]; restaurantId: string }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState<Tab>("marmitas");
@@ -1089,7 +1089,7 @@ export function CardapioPage({ items, restaurantId }: { items: Item[]; restauran
               <ChefHat className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-base font-bold text-foreground">Cardapio</h1>
+              <h1 className="text-base font-bold text-foreground">Cardápio</h1>
               <p className="text-xs text-muted-foreground">
                 {activeTab === "marmitas"
                   ? `${menuList.length} marmitas`

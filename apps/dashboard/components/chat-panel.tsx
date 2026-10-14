@@ -10,7 +10,7 @@ import { Textarea } from "@mt/ui/components/textarea";
 import { ScrollArea } from "@mt/ui/components/scroll-area";
 import { cn } from "@mt/ui/lib/utils";
 
-import { retryMessageAction, sendMessageAction } from "@/app/(app)/mensagens/actions";
+import { retryMessageAction, sendMessageAction } from "@/app/(app)/messages/actions";
 import { CustomerOrdersPanel } from "@/components/customer-orders-panel";
 import { formatDate, formatTime, initials } from "@/components/messaging-format";
 
@@ -87,7 +87,7 @@ export function ChatPanel({ detail, onChanged }: ChatPanelProps) {
           </div>
           <div className="flex items-center gap-1">
             <Button variant="outline" size="sm" className="mr-1 h-8 gap-1.5 text-xs" asChild>
-              <Link href={`/novo-pedido?conversation=${conversation.id}&customer=${conversation.customerId}`}>
+              <Link href={`/new-order?conversation=${conversation.id}&customer=${conversation.customerId}`}>
                 <ShoppingBag className="h-3.5 w-3.5" /> Criar pedido
               </Link>
             </Button>

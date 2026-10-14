@@ -17,9 +17,9 @@ import {
   listStockMovementsAction,
   recordStockMovementAction,
   saveStockItemAction,
-} from "@/app/(app)/estoque/actions";
-import { centsToInput, formatBRL, reaisToCents } from "@/app/(app)/cardapio/menu-helpers";
-import { formatMovementDelta, formatQty, MOVEMENT_LABELS, parseQty, UNIT_OPTIONS } from "@/app/(app)/estoque/stock-helpers";
+} from "@/app/(app)/stock/actions";
+import { centsToInput, formatBRL, reaisToCents } from "@/app/(app)/menu/menu-helpers";
+import { formatMovementDelta, formatQty, MOVEMENT_LABELS, parseQty, UNIT_OPTIONS } from "@/app/(app)/stock/stock-helpers";
 
 type Category = StockItemDto["category"];
 type MovementKind = "in" | "out" | "adjust";

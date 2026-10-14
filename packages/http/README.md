@@ -91,7 +91,7 @@ Rules:
    that stays untouched. Name the requirements: `// covers FR-0xx`.
 4. In the dashboard, add a Server Action with `memberAction` or `adminAction`
    from `apps/dashboard/lib/server/safe-action.ts`. Pass the same schema. See
-   `apps/dashboard/app/(app)/configuracoes/actions.ts`.
+   `apps/dashboard/app/(app)/settings/actions.ts`.
 
 ## Session to context
 

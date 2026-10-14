@@ -13,14 +13,14 @@ import { navItemsFor, type Role, type Section, sectionForPath } from "@/lib/nav"
 // too; hiding an item here is a convenience, not the check.
 
 const ICONS: Record<Section, React.ElementType> = {
-  "novo-pedido": PlusCircle,
-  mensagens: MessageCircle,
-  pedidos: ClipboardList,
-  contatos: Users,
-  cardapio: BookOpen,
-  estoque: Boxes,
-  relatorios: BarChart3,
-  configuracoes: Settings,
+  "new-order": PlusCircle,
+  messages: MessageCircle,
+  orders: ClipboardList,
+  contacts: Users,
+  menu: BookOpen,
+  stock: Boxes,
+  reports: BarChart3,
+  settings: Settings,
 };
 
 interface NavSidebarProps {
@@ -34,8 +34,8 @@ interface NavSidebarProps {
 export function NavSidebar({ role, restaurantName, userEmail, unreadCount = 0, newOrdersCount = 0 }: NavSidebarProps) {
   const active = sectionForPath(usePathname());
   const getBadge = (id: Section) => {
-    if (id === "mensagens" && unreadCount > 0) return unreadCount;
-    if (id === "pedidos" && newOrdersCount > 0) return newOrdersCount;
+    if (id === "messages" && unreadCount > 0) return unreadCount;
+    if (id === "orders" && newOrdersCount > 0) return newOrdersCount;
     return undefined;
   };
 

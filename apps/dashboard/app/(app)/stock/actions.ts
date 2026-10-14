@@ -24,7 +24,7 @@ export const saveStockItemAction = adminAction(
   { name: "stock.save", input: saveStockItemSchema },
   async ({ deps, ctx, input }) => {
     const item = await saveStockItem(deps, ctx, input);
-    revalidatePath("/estoque");
+    revalidatePath("/stock");
     return item;
   },
 );
@@ -33,7 +33,7 @@ export const archiveStockItemAction = adminAction(
   { name: "stock.archive", input: archiveStockItemSchema },
   async ({ deps, ctx, input }) => {
     const result = await archiveStockItem(deps, ctx, input);
-    revalidatePath("/estoque");
+    revalidatePath("/stock");
     return result;
   },
 );
@@ -42,7 +42,7 @@ export const recordStockMovementAction = adminAction(
   { name: "stock.recordMovement", input: recordStockMovementSchema },
   async ({ deps, ctx, input }) => {
     const movement = await recordStockMovement(deps, ctx, input);
-    revalidatePath("/estoque");
+    revalidatePath("/stock");
     return movement;
   },
 );

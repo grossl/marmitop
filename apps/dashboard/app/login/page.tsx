@@ -8,7 +8,7 @@ import { getPublicEnv } from "@/lib/env";
 
 export const metadata: Metadata = { title: "Entrar — Marmitop" };
 
-// FR-001. The proxy sends signed-in users to /mensagens.
+// FR-001. The proxy sends signed-in users to /messages.
 export default async function LoginPage() {
   // Request time, so a build without the public env does not bake in the notice.
   await connection();

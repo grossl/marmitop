@@ -15,7 +15,7 @@ import {
   createOrderAction,
   lookupCustomersAction,
   quickCreateCustomerAction,
-} from "@/app/(app)/novo-pedido/actions";
+} from "@/app/(app)/new-order/actions";
 
 interface CartLine {
   key: string;
@@ -197,7 +197,7 @@ export function ManualOrderPage({
       }
       toast.success(`Pedido ${result.data.code} criado.`);
       // Back to the board with the new card highlighted.
-      router.push(`/pedidos?novo=${result.data.id}`);
+      router.push(`/orders?new=${result.data.id}`);
     });
   }
 

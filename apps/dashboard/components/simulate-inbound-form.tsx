@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@mt/ui/components/button";
 import { Input } from "@mt/ui/components/input";
 
-import { simulateInboundMessageAction } from "@/app/(app)/mensagens/actions";
+import { simulateInboundMessageAction } from "@/app/(app)/messages/actions";
 
 // Dev-only control (ADR-002): inserts an inbound message as if the customer
 // had written. The route shows it only outside production, to admins.

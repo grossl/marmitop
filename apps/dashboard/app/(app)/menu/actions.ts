@@ -22,7 +22,7 @@ export const saveMenuItemAction = adminAction(
   { name: "menu.save", input: saveMenuItemSchema },
   async ({ deps, ctx, input }) => {
     const item = await saveMenuItem(deps, ctx, input);
-    revalidatePath("/cardapio");
+    revalidatePath("/menu");
     return item;
   },
 );
@@ -32,7 +32,7 @@ export const deleteMenuItemAction = adminAction(
   { name: "menu.delete", input: deleteMenuItemSchema },
   async ({ deps, ctx, input }) => {
     const result = await archiveMenuItem(deps, ctx, input);
-    revalidatePath("/cardapio");
+    revalidatePath("/menu");
     return result;
   },
 );
@@ -41,7 +41,7 @@ export const setMenuItemAvailabilityAction = adminAction(
   { name: "menu.setAvailability", input: setMenuItemAvailabilitySchema },
   async ({ deps, ctx, input }) => {
     const result = await setMenuItemAvailability(deps, ctx, input);
-    revalidatePath("/cardapio");
+    revalidatePath("/menu");
     return result;
   },
 );

@@ -36,7 +36,7 @@ import {
   saveWebhookEndpointAction,
   testFiscalConnectionAction,
   testWhatsAppConnectionAction,
-} from "@/app/(app)/configuracoes/actions";
+} from "@/app/(app)/settings/actions";
 import type { ActionResult } from "@/lib/server/action-core";
 
 const tabs = [

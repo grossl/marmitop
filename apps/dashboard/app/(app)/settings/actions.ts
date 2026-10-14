@@ -42,7 +42,7 @@ import { adminAction } from "@/lib/server/safe-action";
 // once (FR-088, FR-089, ADR-009).
 
 const none = z.undefined();
-const refresh = () => revalidatePath("/configuracoes");
+const refresh = () => revalidatePath("/settings");
 
 async function saved<T>(work: Promise<T>): Promise<T> {
   const result = await work;

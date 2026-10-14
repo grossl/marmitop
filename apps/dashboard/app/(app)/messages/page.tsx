@@ -12,8 +12,8 @@ export const metadata: Metadata = { title: "Mensagens — Marmitop" };
 // Role gate on the server (FR-005): a screen the role cannot open is a 404.
 // Data loads here (ADR-004). `?c=<conversationId>` selects a conversation;
 // loading it marks it read (FR-012). The client refreshes on Realtime events.
-export default async function MensagensRoute({ searchParams }: { searchParams: Promise<{ c?: string }> }) {
-  const ctx = await requireScreen("mensagens");
+export default async function MessagesRoute({ searchParams }: { searchParams: Promise<{ c?: string }> }) {
+  const ctx = await requireScreen("messages");
   const deps = requireDeps();
   const { c } = await searchParams;
 

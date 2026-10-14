@@ -16,7 +16,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mt/ui/components/table";
 import { cn } from "@mt/ui/lib/utils";
 
-import { createCustomerAction, updateCustomerAction } from "@/app/(app)/contatos/actions";
+import { createCustomerAction, updateCustomerAction } from "@/app/(app)/contacts/actions";
 import {
   addressLine,
   formatBRL,

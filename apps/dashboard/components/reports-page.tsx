@@ -125,7 +125,7 @@ export function ReportsPage({
           {presets.map((p) => (
             <Link
               key={p.label}
-              href={`/relatorios?from=${p.from}&to=${p.to}`}
+              href={`/reports?from=${p.from}&to=${p.to}`}
               className={cn(
                 "rounded-full border border-border px-3 py-1 text-muted-foreground hover:bg-muted",
                 p.from === report.period.from && p.to === report.period.to && "bg-primary/10 font-semibold text-primary",

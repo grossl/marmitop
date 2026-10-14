@@ -54,7 +54,7 @@ import {
   initials,
   sourceLabel,
 } from "@/components/orders-format";
-import { cancelOrderAction, changeOrderStatusAction, getOrderAction } from "@/app/(app)/pedidos/actions";
+import { cancelOrderAction, changeOrderStatusAction, getOrderAction } from "@/app/(app)/orders/actions";
 import { InvoiceBadge, InvoicePanel } from "@/components/invoice-panel";
 
 type OrderStatus = BoardOrder["status"];

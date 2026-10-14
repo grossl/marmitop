@@ -9,7 +9,7 @@ import Link from "next/link";
 import { formatBRL, formatDate, ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "@/components/messaging-format";
 
 // The open conversation customer's orders, newest first (FR-018). Moving an
-// order to its next status stays on /pedidos until the orders agent exposes
+// order to its next status stays on /orders until the orders agent exposes
 // changeOrderStatus here.
 export function CustomerOrdersPanel({
   orders,
@@ -36,7 +36,7 @@ export function CustomerOrdersPanel({
               )}
             >
               <div className="flex items-center justify-between">
-                <Link href="/pedidos" className="font-mono text-xs font-medium text-primary hover:underline">
+                <Link href="/orders" className="font-mono text-xs font-medium text-primary hover:underline">
                   {order.code}
                 </Link>
                 <Badge variant="outline" className={cn("border text-[10px]", ORDER_STATUS_STYLES[order.status])}>

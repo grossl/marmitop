@@ -26,3 +26,7 @@ The screens keep their current components. State-based navigation becomes App Ro
 
 * Every Server Action resolves the caller's restaurant and role from `restaurant_members`. It never uses ids that the client sends.
 * `orders`, `messages`, and `conversations` are added to the `supabase_realtime` publication.
+
+## Amendment 1 — 2026-10-14
+
+The routes are now English (`/messages`, `/orders`, `/new-order`, `/contacts`, `/menu`, `/stock`, `/reports`, `/settings`). See ADR-019.

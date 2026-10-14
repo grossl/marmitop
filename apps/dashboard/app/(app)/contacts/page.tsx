@@ -10,8 +10,8 @@ export const metadata: Metadata = { title: "Contatos — Marmitop" };
 
 // Role gate on the server (FR-005): a screen the role cannot open is a 404.
 // `?q=` searches name, phone, or bairro (FR-041); `?id=` opens the sheet (FR-042).
-export default async function ContatosRoute({ searchParams }: { searchParams: Promise<{ q?: string; id?: string }> }) {
-  const ctx = await requireScreen("contatos");
+export default async function ContactsRoute({ searchParams }: { searchParams: Promise<{ q?: string; id?: string }> }) {
+  const ctx = await requireScreen("contacts");
   const deps = requireDeps();
   const params = await searchParams;
   const q = searchTermSchema.safeParse(params.q ?? "");

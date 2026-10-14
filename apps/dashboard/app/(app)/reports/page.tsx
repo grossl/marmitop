@@ -14,8 +14,8 @@ const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v
 
 // Role gate on the server (FR-005, FR-079): a screen the role cannot open is a 404.
 // The period lives in the URL (`?from=&to=`), so it survives reloads and links.
-export default async function RelatoriosRoute({ searchParams }: { searchParams: SearchParams }) {
-  const ctx = await requireScreen("relatorios");
+export default async function ReportsRoute({ searchParams }: { searchParams: SearchParams }) {
+  const ctx = await requireScreen("reports");
   const deps = requireDeps();
   const params = await searchParams;
   const defaults = await getReportPeriodDefault(deps, ctx, undefined);

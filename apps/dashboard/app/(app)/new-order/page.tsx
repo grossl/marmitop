@@ -13,12 +13,12 @@ const asUuid = (v: string | undefined) => (v !== undefined && uuidSchema.safePar
 
 // Role gate on the server (FR-005): a screen the role cannot open is a 404.
 // The messaging screen links here with `?conversation=<id>&customer=<id>` (FR-030..FR-039).
-export default async function NovoPedidoRoute({
+export default async function NewOrderRoute({
   searchParams,
 }: {
   searchParams: Promise<{ conversation?: string; customer?: string }>;
 }) {
-  const ctx = await requireScreen("novo-pedido");
+  const ctx = await requireScreen("new-order");
   const params = await searchParams;
   const conversationId = asUuid(params.conversation);
   const customerId = asUuid(params.customer);

@@ -35,7 +35,7 @@ import {
   getInvoiceFilesAction,
   issueInvoiceAction,
   refreshInvoiceAction,
-} from "@/app/(app)/pedidos/invoice-actions";
+} from "@/app/(app)/orders/invoice-actions";
 
 const INVOICEABLE = new Set(["pronto", "saiu", "entregue"]);
 const POLL_MS = 5000;

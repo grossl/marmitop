@@ -9,8 +9,8 @@ export const metadata: Metadata = { title: "Configurações — Marmitop" };
 
 // Role gate on the server (FR-005, FR-098): a screen the role cannot open is a 404.
 // Secrets never reach this component: `getSettings` returns "configured" and last4 only (FR-094).
-export default async function ConfiguracoesRoute() {
-  const ctx = await requireScreen("configuracoes");
+export default async function SettingsRoute() {
+  const ctx = await requireScreen("settings");
   const deps = requireDeps();
   const [settings, plan, deliveries] = await Promise.all([
     getSettings(deps, ctx, undefined),

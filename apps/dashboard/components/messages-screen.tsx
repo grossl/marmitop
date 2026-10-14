@@ -41,9 +41,9 @@ export function MessagesScreen({ restaurantId, restaurantName, conversations, de
         restaurantName={restaurantName}
         conversations={conversations}
         selectedId={detail?.conversation.id ?? null}
-        onSelect={(id) => router.push(`/mensagens?c=${id}`)}
+        onSelect={(id) => router.push(`/messages?c=${id}`)}
         canSimulate={canSimulate}
-        onSimulated={(conversationId) => router.push(`/mensagens?c=${conversationId}`)}
+        onSimulated={(conversationId) => router.push(`/messages?c=${conversationId}`)}
       />
       {detail ? (
         <ChatPanel key={detail.conversation.id} detail={detail} onChanged={() => router.refresh()} />

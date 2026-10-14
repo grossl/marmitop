@@ -39,7 +39,7 @@ export const changeOrderStatusAction = memberAction(
   { name: "orders.changeStatus", input: changeOrderStatusActionSchema },
   async ({ deps, ctx, input }) => {
     const result = await changeOrderStatus(deps, ctx, input);
-    revalidatePath("/pedidos");
+    revalidatePath("/orders");
     return result;
   },
 );
@@ -48,7 +48,7 @@ export const cancelOrderAction = memberAction(
   { name: "orders.cancel", input: cancelOrderActionSchema },
   async ({ deps, ctx, input }) => {
     const result = await cancelOrder(deps, ctx, input);
-    revalidatePath("/pedidos");
+    revalidatePath("/orders");
     return result;
   },
 );

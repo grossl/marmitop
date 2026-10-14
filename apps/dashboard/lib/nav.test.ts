@@ -6,7 +6,7 @@ import { canOpen, NAV_ITEMS, navItemsFor, sectionForPath } from "./nav";
 describe("navigation by role", () => {
   test("an attendant sees messages, orders, new order, and contacts only", () => {
     expect(navItemsFor("attendant").map((i): string => i.id).sort()).toEqual(
-      ["contatos", "mensagens", "novo-pedido", "pedidos"].sort(),
+      ["contacts", "messages", "new-order", "orders"].sort(),
     );
   });
 
@@ -16,7 +16,7 @@ describe("navigation by role", () => {
   });
 
   test("canOpen refuses admin-only screens to an attendant", () => {
-    for (const id of ["cardapio", "estoque", "relatorios", "configuracoes"] as const) {
+    for (const id of ["menu", "stock", "reports", "settings"] as const) {
       expect(canOpen("attendant", id)).toBe(false);
       expect(canOpen("admin", id)).toBe(true);
     }
@@ -27,8 +27,8 @@ describe("navigation by role", () => {
   });
 
   test("sectionForPath matches nested paths and ignores unknown ones", () => {
-    expect(sectionForPath("/pedidos")).toBe("pedidos");
-    expect(sectionForPath("/pedidos/123")).toBe("pedidos");
+    expect(sectionForPath("/orders")).toBe("orders");
+    expect(sectionForPath("/orders/123")).toBe("orders");
     expect(sectionForPath("/login")).toBeUndefined();
   });
 });

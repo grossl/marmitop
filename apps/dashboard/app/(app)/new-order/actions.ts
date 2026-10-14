@@ -16,7 +16,7 @@ export const createOrderAction = memberAction(
   { name: "orders.create", input: createOrderActionSchema },
   async ({ deps, ctx, input }) => {
     const created = await createOrder(deps, ctx, input);
-    revalidatePath("/pedidos");
+    revalidatePath("/orders");
     return created;
   },
 );

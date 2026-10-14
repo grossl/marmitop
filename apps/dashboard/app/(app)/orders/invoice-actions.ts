@@ -15,7 +15,7 @@ export const issueInvoiceAction = memberAction(
   { name: "invoices.issue", input: issueInvoiceSchema },
   async ({ deps, ctx, input }) => {
     const result = await issueInvoice(deps, ctx, input);
-    if (result.outcome === "queued") revalidatePath("/pedidos");
+    if (result.outcome === "queued") revalidatePath("/orders");
     return result;
   },
 );
@@ -39,7 +39,7 @@ export const cancelInvoiceAction = adminAction(
   { name: "invoices.cancel", input: cancelInvoiceSchema },
   async ({ deps, ctx, input }) => {
     const result = await cancelInvoice(deps, ctx, input);
-    revalidatePath("/pedidos");
+    revalidatePath("/orders");
     return result;
   },
 );
