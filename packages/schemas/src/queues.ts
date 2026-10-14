@@ -1,0 +1,36 @@
+// Queue wire shapes (05.data-model.md "Queues", 04.architecture.md "Queue design"; ADR-007).
+// camelCase, versioned with `v`. `restaurantId` lets the worker set the RLS context before it reads a row.
+
+import { z } from "zod";
+import { uuidSchema } from "./common";
+import { WEBHOOK_EVENTS } from "./integrations";
+
+export const QUEUE_NAMES = ["mt_outbound_messages", "mt_webhook_deliveries", "mt_invoice_jobs", "mt_sync"] as const;
+
+export const outboundMessageJobSchema = z.object({ v: z.literal(1), restaurantId: uuidSchema, messageId: uuidSchema });
+export const webhookDeliveryJobSchema = z.object({ v: z.literal(1), restaurantId: uuidSchema, deliveryId: uuidSchema });
+export const invoiceJobSchema = z.object({
+  v: z.literal(1),
+  restaurantId: uuidSchema,
+  orderInvoiceId: uuidSchema,
+  op: z.enum(["issue", "poll", "cancel"]),
+});
+export const syncJobSchema = z.object({
+  v: z.literal(1),
+  restaurantId: uuidSchema,
+  op: z.literal("whatsapp_reconcile"),
+});
+
+export type OutboundMessageJob = z.infer<typeof outboundMessageJobSchema>;
+export type WebhookDeliveryJob = z.infer<typeof webhookDeliveryJobSchema>;
+export type InvoiceJob = z.infer<typeof invoiceJobSchema>;
+export type SyncJob = z.infer<typeof syncJobSchema>;
+
+/** The body of every outbound webhook delivery (06.api-spec.md "Outbound webhooks"). */
+export const webhookEnvelopeSchema = z.object({
+  id: uuidSchema,
+  type: z.enum(WEBHOOK_EVENTS),
+  created_at: z.string().datetime({ offset: true }),
+  restaurant_id: uuidSchema,
+  data: z.record(z.unknown()),
+});

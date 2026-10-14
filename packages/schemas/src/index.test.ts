@@ -1,6 +1,44 @@
-import { expect, test } from 'bun:test'
-import * as pkg from './index'
+// covers FR-144
+import { describe, expect, test } from "bun:test";
+import * as pkg from "./index";
 
-test('@mt/schemas exports are loadable', () => {
-  expect(Object.keys(pkg).length).toBeGreaterThan(0)
-})
+describe("@mt/schemas public surface", () => {
+  test("exports a schema for every request in 06.api-spec.md and the Appendix A actions", () => {
+    for (const name of [
+      "createOrderBodySchema",
+      "patchOrderBodySchema",
+      "listOrdersQuerySchema",
+      "createCustomerBodySchema",
+      "updateCustomerBodySchema",
+      "listCustomersQuerySchema",
+      "listMenuQuerySchema",
+      "sendMessageBodySchema",
+      "createOrderActionSchema",
+      "changeOrderStatusActionSchema",
+      "createCustomerActionSchema",
+      "updateCustomerActionSchema",
+      "saveMenuItemSchema",
+      "saveStockItemSchema",
+      "recordStockMovementSchema",
+      "saveProfileSchema",
+      "saveOrderPreferencesSchema",
+      "saveBusinessHoursSchema",
+      "saveAutomaticMessageSchema",
+      "makeConnectWhatsAppSchema",
+      "makeSaveWebhookEndpointSchema",
+      "makeSaveFiscalConfigSchema",
+      "createApiKeySchema",
+      "issueInvoiceSchema",
+      "cancelInvoiceSchema",
+      "getReportsSchema",
+      "apiErrorSchema",
+      "outboundMessageJobSchema",
+      "invoiceJobSchema",
+      "cpfCnpjSchema",
+      "cepSchema",
+      "ufSchema",
+    ]) {
+      expect((pkg as Record<string, unknown>)[name], name).toBeDefined();
+    }
+  });
+});
