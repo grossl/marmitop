@@ -2,7 +2,9 @@
   "$schema": "https://turborepo.com/schema.json",
   "ui": "stream",
   "globalDependencies": [
-    "supabase/migrations/**"
+    "supabase/migrations/**",
+    "supabase/seed.sql",
+    "scripts/**"
   ],
   "tasks": {
     "build": {

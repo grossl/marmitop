@@ -12,7 +12,13 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "format": "biome format --write .",
-    "lint": "turbo run lint"
+    "lint": "turbo run lint",
+    "dev:stack": "bun scripts/local-dev.ts up",
+    "dev:stack:down": "bun scripts/local-dev.ts down",
+    "db:reset": "bun scripts/local-dev.ts reset",
+    "db:test": "bun scripts/test-db.ts",
+    "seed:generate": "bun scripts/dev-seed/generate.ts",
+    "seed:verify": "bun scripts/dev-seed/verify.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.15",
