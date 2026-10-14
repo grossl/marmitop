@@ -5,7 +5,7 @@
       "name": "dashboard",
       "runtimeExecutable": "bun",
       "runtimeArgs": ["run", "--cwd", "apps/dashboard", "dev"],
-      "port": 3000
+      "port": 3100
     }
   ]
 }

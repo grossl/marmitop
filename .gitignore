@@ -13,3 +13,13 @@ __v0_jsx-dev-runtime.ts
 node_modules
 .next/
 .DS_Store
+# monorepo
+node_modules
+.turbo
+.next
+dist
+coverage
+.env*
+!.env.example
+next-env.d.ts
+*.tsbuildinfo
