@@ -29,6 +29,7 @@ import {
   CheckCheck,
   GripVertical,
   XCircle,
+  CircleCheck,
 } from "lucide-react";
 import { Input } from "@mt/ui/components/input";
 import { Badge } from "@mt/ui/components/badge";
@@ -54,7 +55,13 @@ import {
   initials,
   sourceLabel,
 } from "@/components/orders-format";
-import { cancelOrderAction, changeOrderStatusAction, getOrderAction } from "@/app/(app)/orders/actions";
+import {
+  cancelOrderAction,
+  changeOrderStatusAction,
+  getOrderAction,
+  markOrderPaidAction,
+  unmarkOrderPaidAction,
+} from "@/app/(app)/orders/actions";
 import { InvoiceBadge, InvoicePanel } from "@/components/invoice-panel";
 
 type OrderStatus = BoardOrder["status"];
@@ -387,26 +394,96 @@ function CancelDialog({
   );
 }
 
+// ─── Payment mark (ADR-020; FR-161, FR-162) ────────────────────────────────────
+
+function PaymentSection({
+  orderId,
+  status,
+  paidAt,
+  timezone,
+  isAdmin,
+  onChanged,
+}: {
+  orderId: string;
+  status: string;
+  paidAt: string | null;
+  timezone: string;
+  isAdmin: boolean;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const paid = paidAt !== null && status !== "cancelado";
+
+  async function run(kind: "mark" | "unmark") {
+    setBusy(true);
+    const result = kind === "mark" ? await markOrderPaidAction({ orderId }) : await unmarkOrderPaidAction({ orderId });
+    setBusy(false);
+    if (!result.ok) {
+      toast.error(result.error.message);
+      return;
+    }
+    toast.success(kind === "mark" ? "Pedido marcado como pago." : "Pagamento desmarcado.");
+    onChanged();
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 border-t pt-3">
+      <div className="flex items-center gap-2 text-xs">
+        <span className="font-semibold uppercase tracking-wide text-muted-foreground">Pagamento</span>
+        {paid ? (
+          <span className="inline-flex items-center gap-1 rounded border border-green-200 bg-green-50 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-green-700">
+            <CircleCheck className="h-3 w-3" aria-hidden="true" />
+            Pago em {formatDateTime(paidAt, timezone)}
+          </span>
+        ) : (
+          <span className="inline-flex items-center rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-slate-600">
+            Não pago
+          </span>
+        )}
+      </div>
+      {status !== "cancelado" && !paid && (
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => void run("mark")}>
+          Marcar como pago
+        </Button>
+      )}
+      {paid && isAdmin && (
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run("unmark")}>
+          Desmarcar pagamento
+        </Button>
+      )}
+    </div>
+  );
+}
+
 // ─── Order detail (FR-023) ─────────────────────────────────────────────────────
 
-function OrderDetailDialog({
+/**
+ * The order detail dialog. The Finance page opens it too, for orders that are not on today's
+ * board; it then passes no `onCancel` and gets `onChanged` after a payment or invoice change.
+ */
+export function OrderDetailDialog({
   order,
   timezone,
   isAdmin,
   onClose,
   onCancel,
+  onChanged,
 }: {
   order: BoardOrder | null;
   timezone: string;
   isAdmin: boolean;
   onClose: () => void;
-  onCancel: (order: BoardOrder) => void;
+  onCancel?: (order: BoardOrder) => void;
+  onChanged?: () => void;
 }) {
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(false);
   // Bumped by the invoice panel after an issue, a cancel, or a final status (FR-128).
   const [reloadKey, setReloadKey] = useState(0);
-  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
+  const reload = useCallback(() => {
+    setReloadKey((k) => k + 1);
+    onChanged?.();
+  }, [onChanged]);
   const orderId = order?.id ?? null;
   const orderStatus = order?.status ?? null;
 
@@ -504,11 +581,19 @@ function OrderDetailDialog({
                 </ol>
               )}
             </div>
+            <PaymentSection
+              orderId={order.id}
+              status={view?.status ?? order.status}
+              paidAt={view ? view.paidAt : order.paidAt}
+              timezone={timezone}
+              isAdmin={isAdmin}
+              onChanged={reload}
+            />
             <InvoicePanel order={order} detail={view} isAdmin={isAdmin} onChanged={reload} />
           </div>
         )}
         <DialogFooter>
-          {order && order.allowedStatuses.includes("cancelado") && (
+          {order && onCancel && order.allowedStatuses.includes("cancelado") && (
             <Button variant="destructive" onClick={() => onCancel(order)}>
               Cancelar pedido
             </Button>

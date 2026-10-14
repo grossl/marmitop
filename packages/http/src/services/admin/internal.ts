@@ -32,6 +32,8 @@ export async function writeAudit(
     readonly context: Record<string, string | number | boolean | null>;
   },
 ): Promise<void> {
+  // `::text::jsonb`: a bare `::jsonb` on a string parameter stored a JSON string scalar, not an
+  // object (found in P9; issue.ts uses the same cast for request_payload).
   await tx`
     insert into public.audit_logs (restaurant_id, actor_type, actor_id, action, entity_type, entity_id, context)
     values (
@@ -41,7 +43,7 @@ export async function writeAudit(
       ${entry.action},
       ${entry.entityType},
       ${entry.entityId},
-      ${JSON.stringify(entry.context)}::jsonb
+      ${JSON.stringify(entry.context)}::text::jsonb
     )
   `;
 }

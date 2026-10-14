@@ -5,6 +5,7 @@ export const packageName = "@mt/schemas";
 
 export * from "./common";
 export * from "./customers";
+export * from "./finance";
 export * from "./integrations";
 export * from "./invoices";
 export * from "./menu";

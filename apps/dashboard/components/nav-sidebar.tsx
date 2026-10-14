@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageCircle, ClipboardList, Users, UtensilsCrossed, BookOpen, Boxes, PlusCircle, Settings, BarChart3, LogOut } from "lucide-react";
+import { MessageCircle, ClipboardList, Users, UtensilsCrossed, BookOpen, Boxes, PlusCircle, Settings, BarChart3, LogOut, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@mt/ui/lib/utils";
@@ -20,6 +20,7 @@ const ICONS: Record<Section, React.ElementType> = {
   menu: BookOpen,
   stock: Boxes,
   reports: BarChart3,
+  finance: Wallet,
   settings: Settings,
 };
 

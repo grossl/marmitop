@@ -4,6 +4,7 @@ import { AppError } from "@mt/core";
 import type { Db } from "@mt/db";
 import { createTestDb, type RestaurantFixture, seedRestaurant } from "@mt/db/test-harness";
 
+import type { ApiKeyContext } from "../../context";
 import type { ServiceDeps } from "../../deps";
 import { createTestServiceDeps, userCtx } from "../../testing";
 import { cancelOrder, changeOrderStatus } from "./change-status";
@@ -11,6 +12,7 @@ import { createOrder } from "./create-order";
 import { lookupCustomers, quickCreateCustomer } from "./customer-lookup";
 import { getOrder, getOrderKpis, getOrdersBoard, listOrders } from "./list-orders";
 import { getOrderFormData } from "./order-form";
+import { apiCreateOrder } from "../public-api/orders";
 
 let db: Db;
 let deps: ServiceDeps;
@@ -35,10 +37,15 @@ afterAll(async () => {
   await db.end();
 });
 
+// The dashboard form always sends the address it copied from the customer
+// (createOrderActionSchema requires logradouro and bairro for delivery, FR-034).
 const base = (over: Record<string, unknown> = {}) => ({
   customerId: a.customerId,
   items: [{ menuItemId: a.menuItemId, sizeId: a.menuItemSizeId, qty: 2 }],
   fulfillment: "delivery" as const,
+  logradouro: "Rua das Flores",
+  numero: "342",
+  bairro: "Vila Madalena",
   paymentMethod: "pix" as const,
   source: "counter" as const,
   ...over,
@@ -60,7 +67,14 @@ describe("createOrder", () => {
   });
 
   test("copies the address from the customer and the city from the restaurant (FR-034, ADR-016)", async () => {
-    const created = await createOrder(deps, att(), base());
+    // The copy runs in createOrderInTx; the public API reaches it without an address.
+    const keyCtx: ApiKeyContext = { restaurantId: a.restaurantId, actorType: "api_key", apiKeyId: a.apiKeyId, role: "attendant" };
+    const created = await apiCreateOrder(deps, keyCtx, {
+      customer_id: a.customerId,
+      fulfillment: "delivery",
+      payment_method: "pix",
+      items: [{ menu_item_id: a.menuItemId, size_id: a.menuItemSizeId, qty: 1 }],
+    });
     const detail = await getOrder(deps, att(), { orderId: created.id });
     expect(detail).toMatchObject({ logradouro: "Rua das Flores", bairro: "Vila Madalena", cidade: "São Paulo", uf: "SP" });
   });
@@ -230,6 +244,9 @@ describe("listOrders / getOrderKpis", () => {
     const before = await getOrderKpis(deps, att(), { day: DAY });
     const o = await createOrder(deps, att(), base({ fulfillment: "pickup" }));
     await changeOrderStatus(deps, att(), { orderId: o.id, toStatus: "entregue" });
+    // The status trigger stamps delivered_at with the database clock, not the
+    // service FixedClock, so pin it to the test day.
+    await db`update public.orders set delivered_at = '2026-10-13T15:00:00Z' where id = ${o.id}`;
     const after = await getOrderKpis(deps, att(), { day: DAY });
     expect(after.deliveredRevenueCents - before.deliveredRevenueCents).toBe(3780);
     expect(after.deliveredCount - before.deliveredCount).toBe(1);

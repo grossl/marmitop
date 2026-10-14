@@ -13,6 +13,11 @@ function parseDay(day: string): number | null {
 
 const day = z.string().refine((v) => parseDay(v) !== null, "Use uma data válida (AAAA-MM-DD).");
 
+/** A local day `YYYY-MM-DD`, shared with the Finance filters (ADR-020). */
+export const localDaySchema = day;
+/** Midnight UTC of `YYYY-MM-DD` in ms, or null when the day is not real. */
+export const parseLocalDay = parseDay;
+
 /** Inclusive local days in the restaurant timezone, at most 366 days apart. */
 export const getReportsSchema = z.object({ from: day, to: day }).superRefine((v, ctx) => {
   const from = parseDay(v.from);

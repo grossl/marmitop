@@ -6,6 +6,8 @@ import {
   getOrder,
   getOrderKpis,
   listOrders,
+  markOrderPaid,
+  unmarkOrderPaid,
 } from "@mt/http";
 import {
   cancelOrderActionSchema,
@@ -13,10 +15,11 @@ import {
   getOrderActionSchema,
   getOrderKpisSchema,
   listOrdersActionSchema,
+  orderPaymentSchema,
 } from "@mt/schemas";
 import { revalidatePath } from "next/cache";
 
-import { memberAction } from "@/lib/server/safe-action";
+import { adminAction, memberAction } from "@/lib/server/safe-action";
 
 // Orders board Server Actions (06.api-spec.md Appendix A, all `AA`). FR-020..FR-029.
 
@@ -49,6 +52,28 @@ export const cancelOrderAction = memberAction(
   async ({ deps, ctx, input }) => {
     const result = await cancelOrder(deps, ctx, input);
     revalidatePath("/orders");
+    return result;
+  },
+);
+
+// Payment mark (ADR-020; FR-161, FR-162). Marking is `AA`; clearing is `A`.
+
+export const markOrderPaidAction = memberAction(
+  { name: "finance.markPaid", input: orderPaymentSchema },
+  async ({ deps, ctx, input }) => {
+    const result = await markOrderPaid(deps, ctx, input);
+    revalidatePath("/orders");
+    revalidatePath("/finance");
+    return result;
+  },
+);
+
+export const unmarkOrderPaidAction = adminAction(
+  { name: "finance.unmarkPaid", input: orderPaymentSchema },
+  async ({ deps, ctx, input }) => {
+    const result = await unmarkOrderPaid(deps, ctx, input);
+    revalidatePath("/orders");
+    revalidatePath("/finance");
     return result;
   },
 );

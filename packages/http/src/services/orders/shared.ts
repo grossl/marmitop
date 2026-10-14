@@ -44,6 +44,8 @@ export interface BoardOrder {
   readonly createdAt: string;
   readonly deliveredAt: string | null;
   readonly cancelledAt: string | null;
+  /** ADR-020: when the order was paid; null while unpaid. A cancelled order keeps it for the record. */
+  readonly paidAt: string | null;
   readonly cancelReason: string | null;
   readonly items: readonly OrderItemView[];
   /** The latest invoice's status, for the card badge (FR-139). Null without an invoice. */
@@ -123,6 +125,7 @@ export interface OrderRowForView {
   readonly delivered_at: Date | null;
   readonly cancelled_at: Date | null;
   readonly cancel_reason: string | null;
+  readonly paid_at: Date | null;
   /** The latest `order_invoices.status` (P6). */
   readonly invoice_status?: InvoiceStatusValue | null;
   readonly items: readonly {
@@ -159,6 +162,7 @@ export function toBoardOrder(r: OrderRowForView): BoardOrder {
     createdAt: r.created_at.toISOString(),
     deliveredAt: iso(r.delivered_at),
     cancelledAt: iso(r.cancelled_at),
+    paidAt: iso(r.paid_at),
     cancelReason: r.cancel_reason,
     items: r.items,
     invoiceStatus: r.invoice_status ?? null,
@@ -173,7 +177,7 @@ export function orderViewColumns(tx: Tx) {
   o.cep, o.logradouro, o.numero, o.complemento, o.bairro, o.cidade, o.uf,
   o.payment_method, o.change_for_cents, o.notes,
   o.subtotal_cents, o.delivery_fee_cents, o.total_cents,
-  o.source, o.conversation_id, o.created_at, o.delivered_at, o.cancelled_at, o.cancel_reason,
+  o.source, o.conversation_id, o.created_at, o.delivered_at, o.cancelled_at, o.cancel_reason, o.paid_at,
   (
     select oi.status from public.order_invoices oi
     where oi.restaurant_id = o.restaurant_id and oi.order_id = o.id

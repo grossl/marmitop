@@ -155,6 +155,8 @@ interface OrderRow {
   deliveredAt: string | null;
   cancelledAt: string | null;
   cancelReason: string | null;
+  /** ADR-020: `entregue` orders are paid at delivery; a Pix order on today's board in `pronto` or `saiu` was paid in advance. */
+  paidAt: string | null;
   mockId: string | null;
 }
 
@@ -330,12 +332,22 @@ function buildRestaurant(restaurant: SeedRestaurant, content: RestaurantContent,
   const conversationByCustomer = new Map(conversations.map((c) => [c.customer.id, c]));
 
   const fee = content.settings.deliveryFeeCents;
-  const makeOrder = (o: Omit<OrderRow, "id" | "code" | "subtotalCents" | "feeCents" | "changeForCents">): OrderRow => {
+  const makeOrder = (
+    o: Omit<OrderRow, "id" | "code" | "subtotalCents" | "feeCents" | "changeForCents" | "paidAt">,
+  ): OrderRow => {
     const subtotal = o.items.reduce((sum, item) => sum + item.unitPriceCents * item.qty, 0);
     const feeCents = o.fulfillment === "delivery" ? fee : 0;
     const total = subtotal + feeCents;
+    // No rng call here, so the generated history stays the same as before 0018.
+    const paidAt =
+      o.status === "entregue"
+        ? o.deliveredAt
+        : o.payment === "pix" && (o.status === "pronto" || o.status === "saiu")
+          ? plusMinutes(o.createdAt, 5)
+          : null;
     return {
       ...o,
+      paidAt,
       id: nextId(UUID_FAMILY.order),
       code: "",
       subtotalCents: subtotal,
@@ -1003,6 +1015,8 @@ function ordersSection(models: RestaurantModel[]): string {
         o.deliveredAt ?? "null",
         o.cancelledAt ?? "null",
         strOrNull(o.cancelReason),
+        o.paidAt ?? "null",
+        o.paidAt === null ? "null" : str(o.createdBy),
       ];
     }),
   );
@@ -1061,6 +1075,8 @@ function ordersSection(models: RestaurantModel[]): string {
         "delivered_at",
         "cancelled_at",
         "cancel_reason",
+        "paid_at",
+        "paid_by",
       ],
       orders,
     ) +

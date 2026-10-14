@@ -346,6 +346,9 @@ export interface OrderRow extends AddressColumns {
   delivered_at: Date | null;
   cancelled_at: Date | null;
   cancel_reason: string | null;
+  /** ADR-020: set on `entregue` when null, or by "Marcar como pago". Paid = set and not `cancelado`. */
+  paid_at: Date | null;
+  paid_by: string | null;
 }
 
 export interface OrderItemRow {

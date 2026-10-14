@@ -12,6 +12,7 @@ export type Section =
   | "menu"
   | "stock"
   | "reports"
+  | "finance"
   | "settings";
 
 export interface NavItem {
@@ -29,6 +30,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: "menu", label: "Cardápio", href: "/menu", minRole: "admin" },
   { id: "stock", label: "Estoque", href: "/stock", minRole: "admin" },
   { id: "reports", label: "Relatórios", href: "/reports", minRole: "admin" },
+  { id: "finance", label: "Financeiro", href: "/finance", minRole: "admin" },
   { id: "settings", label: "Configurações", href: "/settings", minRole: "admin" },
 ];
 

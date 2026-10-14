@@ -67,6 +67,13 @@ async function main(): Promise<void> {
         check(rows[0]?.n === count, `${restaurant.name}: ${table} = ${count} (got ${rows[0]?.n})`);
       }
     }
+    // ADR-020: every entregue order carries paid_at (Finance page), and no cancelled one is paid.
+    const unpaid = await owner<{ n: number }[]>`
+      select count(*)::int as n from public.orders where status = 'entregue' and paid_at is null`;
+    check(unpaid[0]?.n === 0, `every entregue order has paid_at (unpaid: ${unpaid[0]?.n})`);
+    const paidCancelled = await owner<{ n: number }[]>`
+      select count(*)::int as n from public.orders where status = 'cancelado' and paid_at is not null`;
+    check(paidCancelled[0]?.n === 0, `no cancelled order carries paid_at (got ${paidCancelled[0]?.n})`);
     const users = await owner<
       { n: number }[]
     >`select count(*)::int as n from auth.users where id = any(${USER_LIST.map((u) => u.id)})`;

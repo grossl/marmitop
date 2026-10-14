@@ -58,6 +58,7 @@ describe("toBoardOrder (FR-021, ADR-017)", () => {
     delivered_at: null,
     cancelled_at: null,
     cancel_reason: null,
+    paid_at: null,
     items: [],
   } as const;
   test("a pickup order never lists saiu as a target", () => {

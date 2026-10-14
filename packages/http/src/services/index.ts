@@ -12,3 +12,4 @@ export * from "./webhooks";
 export * from "./billing";
 export * from "./public-api";
 export * from "./invoices";
+export * from "./finance";
