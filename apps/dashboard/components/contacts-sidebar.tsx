@@ -70,7 +70,7 @@ export function ContactsSidebar({
       </div>
 
       {/* Conversation list */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="py-2">
           <p className="px-4 py-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
             Conversas

@@ -24,7 +24,7 @@ export function CustomerOrdersPanel({
         <p className="text-sm font-semibold text-foreground">Pedidos do cliente</p>
         <p className="text-xs text-muted-foreground">{orders.length} no histórico</p>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="space-y-2 p-3">
           {orders.length === 0 && <p className="py-6 text-center text-xs text-muted-foreground">Nenhum pedido ainda.</p>}
           {orders.map((order) => (

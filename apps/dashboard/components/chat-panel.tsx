@@ -104,7 +104,7 @@ export function ChatPanel({ detail, onChanged }: ChatPanelProps) {
         </header>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 px-4 py-4">
+        <ScrollArea className="flex-1 min-h-0 px-4 py-4">
           <div className="flex flex-col gap-3 max-w-2xl mx-auto">
             {messages.length === 0 && (
               <p className="py-10 text-center text-sm text-muted-foreground">Nenhuma mensagem ainda.</p>

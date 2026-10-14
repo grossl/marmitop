@@ -383,7 +383,7 @@ function MenuDetailPanel({
           <X className="w-4 h-4" />
         </Button>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="p-5 flex flex-col gap-4">
           <div>
             <h3 className="text-lg font-bold text-foreground leading-tight">{item.name}</h3>
@@ -496,7 +496,7 @@ function DrinkDetailPanel({
           <X className="w-4 h-4" />
         </Button>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="p-5 flex flex-col gap-4">
           <div>
             <h3 className="text-lg font-bold text-foreground leading-tight">{item.name}</h3>
@@ -1139,7 +1139,7 @@ export function CardapioPage({ items, restaurantId }: { items: Item[]; restauran
         </div>
 
         {/* Grid */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0">
           <div className="p-6">
             {activeTab === "marmitas" ? (
               filteredMenu.length === 0 ? (
