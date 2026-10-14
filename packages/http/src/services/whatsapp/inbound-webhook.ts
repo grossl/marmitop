@@ -47,6 +47,8 @@ export interface RateDecision {
   readonly allowed: boolean;
   /** Seconds until the window resets. */
   readonly retryAfterSeconds: number;
+  /** Requests counted in this window, this one included. */
+  readonly count: number;
 }
 
 export interface UatisInboundStore {
@@ -138,7 +140,7 @@ export async function hitRateCounter(
     "app_service",
   );
   const retryAfterSeconds = Math.max(1, Math.ceil((windowStart.getTime() + 60_000 - now.getTime()) / 1000));
-  return { allowed: count <= limit, retryAfterSeconds };
+  return { allowed: count <= limit, retryAfterSeconds, count };
 }
 
 /** The production store: secrets from `secrets`, rows through `applyGatewayMessage`. */

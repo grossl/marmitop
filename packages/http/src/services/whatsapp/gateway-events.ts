@@ -83,6 +83,6 @@ export async function applyGatewayMessage(
     conversationCreated: ingest.conversationCreated,
     customerName: customer?.name ?? message.contactAddress,
   });
-  // P7: emit message.received (FR-146) here, in the same transaction.
+  // message.received (FR-146) was emitted by ingestInboundMessage, in this transaction.
   return { action: "ingested", messageId: ingest.messageId, conversationId: ingest.conversationId, automatic };
 }

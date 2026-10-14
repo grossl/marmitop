@@ -11,6 +11,7 @@ describe("AppError", () => {
       validation_failed: 422,
       conflict: 409,
       idempotency_conflict: 409,
+      idempotency_in_progress: 409,
       rate_limited: 429,
       signature_invalid: 401,
       invalid_status_transition: 422,
@@ -23,7 +24,7 @@ describe("AppError", () => {
       upstream_error: 502,
       internal_error: 500,
     });
-    expect(ERROR_CODES.length).toBe(17);
+    expect(ERROR_CODES.length).toBe(18);
   });
 
   test("renders the one JSON envelope with details", () => {

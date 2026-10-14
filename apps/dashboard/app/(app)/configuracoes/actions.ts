@@ -9,6 +9,7 @@ import {
   getPlanAndUsage,
   getRestaurantProfile,
   getSettings,
+  redeliverWebhook,
   revokeApiKey,
   rotateWebhookSecret,
   saveAutomaticMessage,
@@ -100,6 +101,12 @@ export const saveWebhookEndpointAction = adminAction(
 export const rotateWebhookSecretAction = adminAction(
   { name: "settings.rotateWebhookSecret", input: none },
   ({ deps, ctx }) => saved(rotateWebhookSecret(deps, ctx, undefined)),
+);
+
+/** FR-149: send a delivered or exhausted webhook delivery again. */
+export const redeliverWebhookAction = adminAction(
+  { name: "settings.redeliverWebhook", input: z.object({ deliveryId: z.string().uuid() }) },
+  ({ deps, ctx, input }) => saved(redeliverWebhook(deps, ctx, input)),
 );
 
 export const createApiKeyAction = adminAction(

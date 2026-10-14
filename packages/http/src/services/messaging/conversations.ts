@@ -12,7 +12,10 @@ import {
   sendMessageActionSchema,
 } from "@mt/schemas";
 
+import type { z } from "zod";
+
 import type { ServiceContext } from "../../context";
+import type { ServiceDeps } from "../../deps";
 import { defineService } from "../../service";
 import { type CustomerOrderSummary, listCustomerOrders } from "./customer-orders";
 import { decodeCursor, encodeCursor, likePattern, previewOf } from "./helpers";
@@ -217,40 +220,48 @@ export const sendMessage = defineService({
   name: "messages.send",
   minRole: "attendant",
   input: sendMessageActionSchema,
-  run: async ({ tx, ctx, deps, input }) => {
-    const conversation = await loadConversation(tx, ctx.restaurantId, input.conversationId);
-    assertFreeTextAllowed(conversation.last_inbound_at, deps.clock.now());
+  run: ({ tx, ctx, deps, input }) => sendMessageInTx(tx, deps, ctx, input),
+});
 
-    if (input.orderId !== undefined) {
-      const [order] = await tx<{ id: string }[]>`
+/** The send, in the caller's transaction. `POST /v1/messages` runs it too (06.api-spec.md). */
+export async function sendMessageInTx(
+  tx: Tx,
+  deps: ServiceDeps,
+  ctx: ServiceContext,
+  input: z.output<typeof sendMessageActionSchema>,
+): Promise<{ messageId: string; conversationId: string }> {
+  const conversation = await loadConversation(tx, ctx.restaurantId, input.conversationId);
+  assertFreeTextAllowed(conversation.last_inbound_at, deps.clock.now());
+
+  if (input.orderId !== undefined) {
+    const [order] = await tx<{ id: string }[]>`
         select id from public.orders
         where id = ${input.orderId} and restaurant_id = ${ctx.restaurantId} and customer_id = ${conversation.customer_id}
       `;
-      if (order === undefined) {
-        throw new AppError("validation_failed", "The order does not belong to this customer.", {
-          details: [{ path: "orderId", code: "custom", message: "Pedido não encontrado para este cliente." }],
-        });
-      }
+    if (order === undefined) {
+      throw new AppError("validation_failed", "The order does not belong to this customer.", {
+        details: [{ path: "orderId", code: "custom", message: "Pedido não encontrado para este cliente." }],
+      });
     }
+  }
 
-    const [message] = await tx<{ id: string; created_at: Date }[]>`
+  const [message] = await tx<{ id: string; created_at: Date }[]>`
       insert into public.messages (restaurant_id, conversation_id, direction, body, status, order_id, sent_by)
       values (${ctx.restaurantId}, ${conversation.id}, 'out', ${input.body}, 'pending',
               ${input.orderId ?? null}, ${userIdOf(ctx)})
       returning id, created_at
     `;
-    if (message === undefined) throw new AppError("forbidden", "Your role cannot perform this action.");
+  if (message === undefined) throw new AppError("forbidden", "Your role cannot perform this action.");
 
-    await tx`
+  await tx`
       update public.conversations set
         last_message_at = ${message.created_at},
         last_message_preview = ${previewOf(input.body)}
       where id = ${conversation.id} and restaurant_id = ${ctx.restaurantId}
     `;
-    await enqueueOutbound(tx, ctx.restaurantId, message.id);
-    return { messageId: message.id, conversationId: conversation.id };
-  },
-});
+  await enqueueOutbound(tx, ctx.restaurantId, message.id);
+  return { messageId: message.id, conversationId: conversation.id };
+}
 
 /** FR-019: a failed message goes back to `pending` and is enqueued again. */
 export const retryMessage = defineService({

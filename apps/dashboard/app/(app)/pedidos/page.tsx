@@ -23,6 +23,7 @@ export default async function PedidosRoute({ searchParams }: { searchParams: Pro
         orders={[...board.orders]}
         kpis={board.kpis}
         highlightId={novo ?? null}
+        isAdmin={ctx.role === "admin"}
       />
     </div>
   );

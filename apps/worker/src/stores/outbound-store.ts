@@ -4,7 +4,7 @@
 
 import type { MessageStatus } from "@mt/core";
 import { type Tx, withRestaurantContext } from "@mt/db";
-import { loadWhatsAppConnection, type ServiceDeps, systemCtx, toDbContext } from "@mt/http";
+import { loadWhatsAppConnection, recordUsage, type ServiceDeps, systemCtx, toDbContext } from "@mt/http";
 
 import type { ClaimResult, OutboundStore } from "../handlers/outbound-message";
 
@@ -63,17 +63,18 @@ export class DbOutboundStore implements OutboundStore {
   }
 
   async markSent(restaurantId: string, messageId: string, externalId: string, status: MessageStatus): Promise<void> {
-    await this.tx(
-      restaurantId,
-      (tx) => tx`
-      update public.messages set
-        external_id = ${externalId},
-        status = case when status in ('pending', 'failed') then ${status} else status end,
-        error_code = null,
-        error_message = null
-      where id = ${messageId} and restaurant_id = ${restaurantId}
-    `,
-    );
+    await this.tx(restaurantId, async (tx) => {
+      await tx`
+        update public.messages set
+          external_id = ${externalId},
+          status = case when status in ('pending', 'failed') then ${status} else status end,
+          error_code = null,
+          error_message = null
+        where id = ${messageId} and restaurant_id = ${restaurantId}
+      `;
+      // FR-152: one message.sent usage row when backend-uatis accepts the message (unique per message).
+      await recordUsage(tx, restaurantId, "message.sent", messageId, this.deps.clock.now());
+    });
   }
 
   async markFailed(restaurantId: string, messageId: string, errorCode: string, errorMessage: string): Promise<void> {

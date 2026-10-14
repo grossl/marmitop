@@ -68,3 +68,64 @@ export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return ((parts[0]?.[0] ?? "?") + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "")).toUpperCase();
 }
+
+// ─── Invoices (08.fiscal-mapping.md section 8.4; FR-122, FR-125, FR-128, FR-132, FR-139) ───
+
+export type InvoiceTone = "green" | "blue" | "red" | "amber" | "grey";
+
+const PENDING_INVOICE = new Set(["queued", "received", "processing"]);
+const INVOICE_LABELS: Record<string, { label: string; tone: InvoiceTone }> = {
+  rejected: { label: "Rejeitada", tone: "red" },
+  denied: { label: "Denegada", tone: "red" },
+  failed: { label: "Falhou", tone: "amber" },
+  cancelled: { label: "Cancelada", tone: "grey" },
+};
+
+/** `received`, `queued`, and `processing` all read "Em processamento" (08 section 6). */
+export function invoiceBadge(status: string, kind?: string): { label: string; tone: InvoiceTone } {
+  if (status === "authorized") {
+    const label = kind === "nfe" ? "NF-e emitida" : kind === "nfce" ? "NFC-e emitida" : "NF emitida";
+    return { label, tone: "green" };
+  }
+  if (PENDING_INVOICE.has(status)) return { label: "Em processamento", tone: "blue" };
+  return INVOICE_LABELS[status] ?? { label: status, tone: "grey" };
+}
+
+export const INVOICE_TONE_CLASSES: Record<InvoiceTone, string> = {
+  green: "bg-green-50 text-green-700 border-green-200",
+  blue: "bg-blue-50 text-blue-700 border-blue-200",
+  red: "bg-red-50 text-red-700 border-red-200",
+  amber: "bg-amber-50 text-amber-700 border-amber-200",
+  grey: "bg-slate-100 text-slate-600 border-slate-200",
+};
+
+export const isInvoicePending = (status: string) => PENDING_INVOICE.has(status);
+
+/** FR-132: one live invoice per order; after a final non-authorized one, issue again. */
+export function canIssueInvoice(latestStatus: string | null): boolean {
+  return latestStatus === null || !(PENDING_INVOICE.has(latestStatus) || latestStatus === "authorized");
+}
+
+export const isCnpj = (doc: string | null | undefined): boolean => !!doc && /^\d{14}$/.test(doc);
+
+/** Labels for the "complete the data" form, by problem path (FR-125). */
+export const MISSING_FIELD_LABELS: Record<string, string> = {
+  "customer.cpf_cnpj": "CPF/CNPJ",
+  "address.cep": "CEP",
+  "address.logradouro": "Rua",
+  "address.numero": "Número",
+  "address.bairro": "Bairro",
+  "address.cidade": "Cidade",
+  "address.uf": "UF",
+  "address.codigo_municipio": "Código IBGE do município",
+};
+
+/** Problem path to the `fill` key of `issueInvoice`. */
+export function fillKey(path: string): string {
+  const field = path.split(".").pop() ?? path;
+  return field.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+}
+
+export function formatChave(chave: string): string {
+  return chave.replace(/(\d{4})(?=\d)/g, "$1 ");
+}

@@ -8,3 +8,7 @@ export * from "./messaging";
 export * from "./catalog";
 export * from "./admin";
 export * from "./whatsapp";
+export * from "./webhooks";
+export * from "./billing";
+export * from "./public-api";
+export * from "./invoices";

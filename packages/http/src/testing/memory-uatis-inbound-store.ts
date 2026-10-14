@@ -28,7 +28,7 @@ export class MemoryUatisInboundStore implements UatisInboundStore {
     const count = (this.counts.get(key) ?? 0) + 1;
     this.counts.set(key, count);
     const retryAfterSeconds = Math.max(1, Math.ceil(((window + 1) * 60_000 - now.getTime()) / 1000));
-    return { allowed: count <= this.limitPerMinute, retryAfterSeconds };
+    return { allowed: count <= this.limitPerMinute, retryAfterSeconds, count };
   }
 
   async apply(restaurantId: string, event: MessageEvent): Promise<ApplyResult> {

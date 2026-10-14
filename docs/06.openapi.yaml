@@ -27,6 +27,9 @@ tags:
 security:
   - ApiKeyAuth: []
 
+# Every response of an API-key route carries X-RateLimit-Limit, X-RateLimit-Remaining,
+# and X-RateLimit-Reset (components/headers). Every error body carries details (maybe []).
+
 paths:
   /v1/health:
     get:
@@ -73,6 +76,7 @@ paths:
                     items: { $ref: '#/components/schemas/Order' }
                   next_cursor: { type: [string, 'null'] }
         '401': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
         '429': { $ref: '#/components/responses/RateLimited' }
     post:
       operationId: createOrder
@@ -105,7 +109,7 @@ paths:
       - name: id
         in: path
         required: true
-        description: Order uuid or code (for example ORD-012).
+        description: Order uuid or code (for example ORD-012). Any other value, or another restaurant's order, is 404.
         schema: { type: string }
     get:
       operationId: getOrder
@@ -127,6 +131,7 @@ paths:
                         items: { $ref: '#/components/schemas/StatusHistoryEntry' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
     patch:
       operationId: updateOrderStatus
       summary: Change the status of an order
@@ -177,10 +182,12 @@ paths:
                     items: { $ref: '#/components/schemas/Customer' }
                   next_cursor: { type: [string, 'null'] }
         '401': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
         '429': { $ref: '#/components/responses/RateLimited' }
     post:
       operationId: createCustomer
       summary: Create a customer
+      description: A phone that already exists in this restaurant is 409 conflict.
       tags: [Customers]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -192,6 +199,8 @@ paths:
       responses:
         '201':
           description: Customer created.
+          headers:
+            Idempotency-Replayed: { $ref: '#/components/headers/IdempotencyReplayed' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Customer' }
@@ -202,7 +211,7 @@ paths:
 
   /v1/customers/{id}:
     parameters:
-      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: id, in: path, required: true, description: Customer uuid. Any other value, or another restaurant's customer, is 404., schema: { type: string } }
     get:
       operationId: getCustomer
       summary: Get a customer
@@ -215,6 +224,7 @@ paths:
               schema: { $ref: '#/components/schemas/Customer' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
     patch:
       operationId: updateCustomer
       summary: Update a customer
@@ -246,6 +256,7 @@ paths:
         - { name: kind, in: query, schema: { type: string, enum: [meal, drink] } }
         - { name: available, in: query, schema: { type: boolean } }
         - { name: weekday, in: query, description: 0 (Sunday) to 6., schema: { type: integer, minimum: 0, maximum: 6 } }
+        - { name: q, in: query, description: Item name., schema: { type: string, maxLength: 100 } }
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -262,6 +273,7 @@ paths:
                     items: { $ref: '#/components/schemas/MenuItem' }
                   next_cursor: { type: [string, 'null'] }
         '401': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /v1/messages:
@@ -274,7 +286,10 @@ paths:
         and stores nothing. Inside the window it inserts a pending message and
         enqueues delivery. The worker sends it through backend-uatis. A timeout
         or a 5xx after the request left sets the status to failed with
-        error_code ambiguous, and the worker does not retry (ADR-017).
+        error_code ambiguous, and the worker does not retry (ADR-017). A customer
+        without a conversation has never written, so the window is closed. A
+        restaurant without a WhatsApp integration gets the message stored and
+        then failed by the worker with error_code whatsapp_not_configured.
       tags: [Messages]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -293,6 +308,8 @@ paths:
       responses:
         '201':
           description: Message accepted.
+          headers:
+            Idempotency-Replayed: { $ref: '#/components/headers/IdempotencyReplayed' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Message' }
@@ -361,8 +378,11 @@ webhooks:
       summary: Outbound webhook delivered to the restaurant's URL
       description: >
         Headers X-Marmitop-Signature (t=unix,v1=hex HMAC-SHA256 of "t.rawBody"),
-        X-Marmitop-Event, X-Marmitop-Delivery. A 2xx within 10 seconds counts
-        as delivered. Retries at 1 m, 5 m, 30 m, 2 h, 8 h.
+        X-Marmitop-Event, X-Marmitop-Delivery, User-Agent Marmitop-Webhooks/1.
+        A 2xx within 10 seconds counts as delivered. Any other answer, a
+        timeout, or a network error retries at 1 m, 5 m, 30 m, 2 h, 8 h; then
+        the delivery is exhausted. A host the SSRF guard refuses is exhausted at
+        once. Redirects are not followed.
       parameters:
         - { name: X-Marmitop-Signature, in: header, required: true, schema: { type: string } }
         - { name: X-Marmitop-Event, in: header, required: true, schema: { type: string, enum: [order.created, order.status_changed, message.received, invoice.updated] } }
@@ -394,7 +414,12 @@ components:
     IdempotencyKey:
       name: Idempotency-Key
       in: header
-      description: Max 255 characters. Scoped per restaurant. Keys expire after 30 days.
+      description: >
+        1 to 255 characters (otherwise 422). Scoped per restaurant. Keys expire
+        after 30 days. The key is claimed before the request runs. Same key and
+        body while the first request runs: 409 idempotency_in_progress with
+        Retry-After 1. Another body: 409 idempotency_conflict. Only 2xx
+        responses are stored; any other outcome releases the key.
       schema: { type: string, maxLength: 255 }
 
   headers:
@@ -421,6 +446,9 @@ components:
       description: Over the rate limit.
       headers:
         Retry-After: { schema: { type: integer }, description: Seconds. }
+        X-RateLimit-Limit: { $ref: '#/components/headers/X-RateLimit-Limit' }
+        X-RateLimit-Remaining: { $ref: '#/components/headers/X-RateLimit-Remaining' }
+        X-RateLimit-Reset: { $ref: '#/components/headers/X-RateLimit-Reset' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
@@ -435,6 +463,7 @@ components:
         - validation_failed
         - conflict
         - idempotency_conflict
+        - idempotency_in_progress
         - rate_limited
         - signature_invalid
         - invalid_status_transition

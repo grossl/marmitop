@@ -9,6 +9,7 @@ import type { Tx } from "@mt/db";
 import { cancelOrderActionSchema, changeOrderStatusActionSchema } from "@mt/schemas";
 
 import { defineService } from "../../service";
+import { emitEvent } from "../webhooks/emit";
 
 export interface OrderStatusResult {
   readonly id: string;
@@ -19,7 +20,7 @@ export interface OrderStatusResult {
   readonly cancelledAt: string | null;
 }
 
-async function move(
+export async function changeOrderStatusInTx(
   tx: Tx,
   ctx: { restaurantId: string; actorType: "user" | "api_key" | "system" },
   orderId: string,
@@ -59,6 +60,26 @@ async function move(
   `;
   // RLS hides the row from a role that cannot write; zero rows means the second line refused.
   if (updated === undefined) throw new AppError("forbidden", "Your role cannot perform this action.");
+
+  // FR-146: order.status_changed in this transaction. changed_at is the history row the trigger wrote.
+  const [history] = await tx<{ changed_at: Date }[]>`
+    select changed_at from public.order_status_history
+    where restaurant_id = ${ctx.restaurantId} and order_id = ${orderId} and to_status = ${to}
+    order by changed_at desc, id desc limit 1
+  `;
+  await emitEvent(
+    tx,
+    ctx.restaurantId,
+    "order.status_changed",
+    {
+      order_id: order.id,
+      code: order.code,
+      from_status: order.status,
+      to_status: to,
+      changed_at: (history?.changed_at ?? now).toISOString(),
+    },
+    { now },
+  );
   return {
     id: order.id,
     code: order.code,
@@ -74,12 +95,13 @@ export const changeOrderStatus = defineService({
   minRole: "attendant",
   input: changeOrderStatusActionSchema,
   run: ({ tx, ctx, deps, input }) =>
-    move(tx, ctx, input.orderId, input.toStatus, input.reason, deps.clock.now()),
+    changeOrderStatusInTx(tx, ctx, input.orderId, input.toStatus, input.reason, deps.clock.now()),
 });
 
 export const cancelOrder = defineService({
   name: "orders.cancel",
   minRole: "attendant",
   input: cancelOrderActionSchema,
-  run: ({ tx, ctx, deps, input }) => move(tx, ctx, input.orderId, "cancelado", input.reason, deps.clock.now()),
+  run: ({ tx, ctx, deps, input }) =>
+    changeOrderStatusInTx(tx, ctx, input.orderId, "cancelado", input.reason, deps.clock.now()),
 });

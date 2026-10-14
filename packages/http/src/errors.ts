@@ -63,6 +63,7 @@ export const ERROR_MESSAGES_PT: Readonly<Record<ErrorCode, string>> = {
   validation_failed: "Alguns campos precisam de correção.",
   conflict: "Já existe um registro com estes dados.",
   idempotency_conflict: "Esta requisição já foi enviada com outro conteúdo.",
+  idempotency_in_progress: "Esta requisição ainda está em processamento. Tente novamente em instantes.",
   rate_limited: "Muitas requisições. Tente novamente em instantes.",
   signature_invalid: "Assinatura inválida.",
   invalid_status_transition: "Não é possível mover o pedido para este status.",

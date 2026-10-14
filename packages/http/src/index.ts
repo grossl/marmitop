@@ -38,3 +38,9 @@ export {
   type SafeResponse,
 } from "./adapters/safe-fetch";
 export { UatisGateway, type UatisGatewayOptions } from "./adapters/uatis-gateway";
+export {
+  SafeFetchWebhookSender,
+  type SafeFetchWebhookSenderOptions,
+  WEBHOOK_USER_AGENT,
+} from "./adapters/webhook-sender";
+export { WebNfGateway, type WebNfGatewayOptions } from "./adapters/web-nf-gateway";

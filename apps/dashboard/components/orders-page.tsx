@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -55,6 +55,7 @@ import {
   sourceLabel,
 } from "@/components/orders-format";
 import { cancelOrderAction, changeOrderStatusAction, getOrderAction } from "@/app/(app)/pedidos/actions";
+import { InvoiceBadge, InvoicePanel } from "@/components/invoice-panel";
 
 type OrderStatus = BoardOrder["status"];
 
@@ -171,7 +172,6 @@ function KpiCard({
   );
 }
 
-
 // ─── Order card (draggable) ────────────────────────────────────────────────────
 
 function OrderCard({
@@ -217,7 +217,7 @@ function OrderCard({
         "bg-card border border-border rounded-xl p-4 flex flex-col gap-3 shadow-sm transition-all select-none",
         isDragging ? "opacity-40" : movable ? "hover:shadow-md cursor-grab active:cursor-grabbing" : "cursor-pointer",
         pending && "opacity-70",
-        highlighted && "ring-2 ring-primary ring-offset-2 animate-pulse"
+        highlighted && "ring-2 ring-primary ring-offset-2 animate-pulse",
       )}
     >
       {/* Header row */}
@@ -251,9 +251,7 @@ function OrderCard({
                   </span>
                 )}
               </div>
-              {item.notes && (
-                <p className="text-xs text-muted-foreground italic leading-tight mt-0.5">{item.notes}</p>
-              )}
+              {item.notes && <p className="text-xs text-muted-foreground italic leading-tight mt-0.5">{item.notes}</p>}
             </div>
           </li>
         ))}
@@ -267,9 +265,11 @@ function OrderCard({
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-1 border-t border-border">
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
           <CreditCard className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
           <span>{PAYMENT_LABELS[order.paymentMethod]}</span>
+          {/* FR-139: a small invoice badge when the order has an invoice */}
+          {order.invoiceStatus && <InvoiceBadge status={order.invoiceStatus} className="ml-1" />}
         </div>
         <span className="text-sm font-bold text-foreground">{formatCents(order.totalCents)}</span>
       </div>
@@ -304,7 +304,7 @@ function KanbanColumn({
       ref={setNodeRef}
       className={cn(
         "flex flex-col rounded-xl border min-w-0 flex-1 overflow-hidden transition-colors duration-150",
-        isOver ? col.dropClass : col.colClass
+        isOver ? col.dropClass : col.colClass,
       )}
     >
       {/* Column header */}
@@ -392,16 +392,21 @@ function CancelDialog({
 function OrderDetailDialog({
   order,
   timezone,
+  isAdmin,
   onClose,
   onCancel,
 }: {
   order: BoardOrder | null;
   timezone: string;
+  isAdmin: boolean;
   onClose: () => void;
   onCancel: (order: BoardOrder) => void;
 }) {
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  // Bumped by the invoice panel after an issue, a cancel, or a final status (FR-128).
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
   const orderId = order?.id ?? null;
   const orderStatus = order?.status ?? null;
 
@@ -421,8 +426,8 @@ function OrderDetailDialog({
     return () => {
       cancelled = true;
     };
-    // Reload when the status changes under an open dialog.
-  }, [orderId, orderStatus]);
+    // Reload when the status changes under an open dialog, or the invoice panel asks.
+  }, [orderId, orderStatus, reloadKey]);
 
   const view = detail && detail.id === orderId ? detail : null;
 
@@ -499,6 +504,7 @@ function OrderDetailDialog({
                 </ol>
               )}
             </div>
+            <InvoicePanel order={order} detail={view} isAdmin={isAdmin} onChanged={reload} />
           </div>
         )}
         <DialogFooter>
@@ -524,12 +530,15 @@ export function OrdersPage({
   orders,
   kpis,
   highlightId,
+  isAdmin = false,
 }: {
   restaurantId: string;
   timezone: string;
   orders: BoardOrder[];
   kpis: OrderKpis;
   highlightId: string | null;
+  /** Only the admin cancels an invoice (FR-135, ADR-015); the server checks again. */
+  isAdmin?: boolean;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -545,6 +554,8 @@ export function OrdersPage({
 
   // FR-027: any change to this restaurant's orders refreshes the Server Component data.
   useRealtimeTable("orders", restaurantId, () => router.refresh());
+  // FR-139: an invoice status change refreshes the card badges. The detail panel also polls.
+  useRealtimeTable("order_invoices", restaurantId, () => router.refresh());
 
   // The new-order highlight fades after a few seconds.
   useEffect(() => {
@@ -571,7 +582,7 @@ export function OrdersPage({
 
   const orderList = useMemo(
     () => orders.map((o) => (optimistic[o.id] ? { ...o, status: optimistic[o.id] as OrderStatus } : o)),
-    [orders, optimistic]
+    [orders, optimistic],
   );
 
   const filtered = useMemo(() => {
@@ -581,7 +592,7 @@ export function OrdersPage({
       (o) =>
         o.code.toLowerCase().includes(term) ||
         o.customerName.toLowerCase().includes(term) ||
-        o.items.some((i) => i.name.toLowerCase().includes(term))
+        o.items.some((i) => i.name.toLowerCase().includes(term)),
     );
   }, [search, orderList]);
 
@@ -694,7 +705,10 @@ export function OrdersPage({
 
         {/* Search */}
         <div className="relative shrink-0 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+            aria-hidden="true"
+          />
           <Input
             placeholder="Buscar por pedido, cliente ou item..."
             value={search}
@@ -725,6 +739,7 @@ export function OrdersPage({
       <OrderDetailDialog
         order={detailOrder}
         timezone={timezone}
+        isAdmin={isAdmin}
         onClose={() => setDetailId(null)}
         onCancel={(o) => setCancelTarget(o)}
       />

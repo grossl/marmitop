@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Check, Clock3, Copy, CreditCard, KeyRound, Link2, MessageSquareText, Receipt, Save, Settings2 } from "lucide-react";
-import type { ApiKeyListItem, PlanAndUsage, SettingsView } from "@mt/http";
+import type { ApiKeyListItem, PlanAndUsage, SettingsView, WebhookDeliveryView } from "@mt/http";
 import { Button } from "@mt/ui/components/button";
 import { Input } from "@mt/ui/components/input";
 import { Label } from "@mt/ui/components/label";
@@ -12,7 +12,9 @@ import { Textarea } from "@mt/ui/components/textarea";
 import { cn } from "@mt/ui/lib/utils";
 
 import {
+  canRedeliver,
   centsToInput,
+  deliveryStatusLabel,
   formatBRL,
   parseBRLToCents,
   usagePercent,
@@ -23,6 +25,7 @@ import {
   connectWhatsAppAction,
   createApiKeyAction,
   disconnectWhatsAppAction,
+  redeliverWebhookAction,
   revokeApiKeyAction,
   rotateWebhookSecretAction,
   saveAutomaticMessageAction,
@@ -47,7 +50,15 @@ const tabs = [
 
 type TabId = (typeof tabs)[number]["id"];
 
-export function SettingsPage({ settings, plan }: { settings: SettingsView; plan: PlanAndUsage }) {
+export function SettingsPage({
+  settings,
+  plan,
+  deliveries = [],
+}: {
+  settings: SettingsView;
+  plan: PlanAndUsage;
+  deliveries?: WebhookDeliveryView[];
+}) {
   const [activeTab, setActiveTab] = useState<TabId>("restaurant");
 
   return (
@@ -89,7 +100,7 @@ export function SettingsPage({ settings, plan }: { settings: SettingsView; plan:
             {activeTab === "restaurant" && <RestaurantSettings settings={settings} />}
             {activeTab === "hours" && <HoursSettings settings={settings} />}
             {activeTab === "messages" && <AutomationSettings settings={settings} />}
-            {activeTab === "integrations" && <IntegrationSettings settings={settings} />}
+            {activeTab === "integrations" && <IntegrationSettings settings={settings} deliveries={deliveries} />}
             {activeTab === "fiscal" && <FiscalSettings settings={settings} />}
             {activeTab === "plan" && <PlanSettings plan={plan} />}
           </div>
@@ -564,11 +575,12 @@ function AutomaticMessageCard({ message }: { message: SettingsView["automaticMes
 
 // ─── WhatsApp, webhook e API (FR-085..FR-089, FR-094) ─────────────────────────
 
-function IntegrationSettings({ settings }: { settings: SettingsView }) {
+function IntegrationSettings({ settings, deliveries }: { settings: SettingsView; deliveries: WebhookDeliveryView[] }) {
   return (
     <div className="space-y-5">
       <WhatsAppCard state={settings.integrations.whatsapp} />
       <WebhookCard state={settings.integrations.webhook} />
+      {settings.integrations.webhook && <WebhookDeliveriesCard deliveries={deliveries} />}
       <ApiKeysCard keys={settings.integrations.apiKeys} />
     </div>
   );
@@ -747,6 +759,57 @@ function WebhookCard({ state }: { state: SettingsView["integrations"]["webhook"]
         </div>
       </Card>
     </form>
+  );
+}
+
+/** FR-149: recent deliveries with event, status, attempts, last status code, and "Reenviar". */
+function WebhookDeliveriesCard({ deliveries }: { deliveries: WebhookDeliveryView[] }) {
+  const section = useSection();
+  return (
+    <Card title="Entregas recentes" description="As últimas entregas do webhook. Falhas são reenviadas em 1 min, 5 min, 30 min, 2 h e 8 h.">
+      {deliveries.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhuma entrega ainda.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                <th className="py-2 pr-3 font-medium">Evento</th>
+                <th className="py-2 pr-3 font-medium">Status</th>
+                <th className="py-2 pr-3 font-medium">Tentativas</th>
+                <th className="py-2 pr-3 font-medium">Última resposta</th>
+                <th className="py-2 pr-3 font-medium">Criada em</th>
+                <th className="py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {deliveries.map((d) => (
+                <tr key={d.id} className="border-b border-border last:border-0">
+                  <td className="py-2 pr-3">{EVENT_LABELS[d.event] ?? d.event}</td>
+                  <td className="py-2 pr-3">{deliveryStatusLabel(d.status)}</td>
+                  <td className="py-2 pr-3">{d.attempts}</td>
+                  <td className="py-2 pr-3">{d.lastStatusCode ?? d.lastError ?? "—"}</td>
+                  <td className="py-2 pr-3">{formatWhen(d.createdAt)}</td>
+                  <td className="py-2 text-right">
+                    {canRedeliver(d.status) && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={section.pending}
+                        onClick={() => section.run(() => redeliverWebhookAction({ deliveryId: d.id }), "Entrega reenviada.")}
+                      >
+                        Reenviar
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 }
 

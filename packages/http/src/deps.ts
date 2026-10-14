@@ -19,6 +19,7 @@ import { type ContextOptions, createDb, type Db } from "@mt/db";
 
 import { createSafeFetch } from "./adapters/safe-fetch";
 import { UatisGateway } from "./adapters/uatis-gateway";
+import { WebNfGateway } from "./adapters/web-nf-gateway";
 import type { ServerConfig } from "./config";
 
 /** What a per-restaurant adapter needs. Read from `integrations_*` and `secrets` by the caller. */
@@ -63,9 +64,9 @@ function gatewaysFor(config: ServerConfig): GatewayFactory {
       if (fakeWhatsApp) return fakeWhatsApp;
       return new UatisGateway({ baseUrl: conn.baseUrl, apiKey: conn.apiKey, fetch: safeFetch });
     },
-    invoices(_conn) {
+    invoices(conn) {
       if (fakeInvoices) return fakeInvoices;
-      throw new Error("WebNfGateway is not implemented yet (P6). Set MT_WEBNF_FAKE=1.");
+      return new WebNfGateway({ baseUrl: conn.baseUrl, apiKey: conn.apiKey, fetch: safeFetch });
     },
   };
 }

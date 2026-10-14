@@ -11,6 +11,7 @@
 
 import type { Tx } from "@mt/db";
 
+import { emitEvent } from "../webhooks/emit";
 import { previewOf } from "./helpers";
 
 export interface IngestInboundInput {
@@ -98,6 +99,22 @@ export async function ingestInboundMessage(
       last_inbound_at = greatest(coalesce(last_inbound_at, ${input.receivedAt}::timestamptz), ${input.receivedAt}::timestamptz)
     where id = ${conversationId} and restaurant_id = ${restaurantId}
   `;
+
+  // FR-146: message.received, once per stored message, in this transaction. The webhook,
+  // the reconciliation poll, and the dev simulation all pass through here.
+  const [customer] = await tx<{ name: string; phone: string }[]>`
+    select name, phone from public.customers where id = ${customerId} and restaurant_id = ${restaurantId}
+  `;
+  await emitEvent(tx, restaurantId, "message.received", {
+    message: {
+      id: messageId,
+      conversation_id: conversationId,
+      customer_id: customerId,
+      body: input.body,
+      created_at: input.receivedAt.toISOString(),
+    },
+    customer: { id: customerId, name: customer?.name ?? input.phone, phone: customer?.phone ?? input.phone },
+  });
 
   return { customerId, conversationId, messageId, customerCreated, conversationCreated, duplicate: false };
 }

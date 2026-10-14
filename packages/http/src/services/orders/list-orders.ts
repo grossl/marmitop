@@ -10,6 +10,7 @@ import { getOrderActionSchema, getOrderKpisSchema, listOrdersActionSchema } from
 import { z } from "zod";
 
 import { defineService } from "../../service";
+import { listOrderInvoices } from "../invoices/shared";
 import { loadOrderSettings } from "./order-settings";
 import {
   type BoardOrder,
@@ -149,7 +150,7 @@ export const getOrdersBoard = defineService({
   },
 });
 
-/** One order with its items and status history. Invoices join in P6. */
+/** One order with its items, status history, and invoices (FR-023, FR-128). */
 export const getOrder = defineService({
   name: "orders.get",
   minRole: "attendant",
@@ -163,15 +164,30 @@ export const getOrder = defineService({
     `;
     if (row === undefined) throw new AppError("not_found", "Order not found.");
     const history = await tx<
-      { from_status: StatusHistoryView["fromStatus"]; to_status: StatusHistoryView["toStatus"]; actor_type: StatusHistoryView["actorType"]; changed_at: Date }[]
+      {
+        from_status: StatusHistoryView["fromStatus"];
+        to_status: StatusHistoryView["toStatus"];
+        actor_type: StatusHistoryView["actorType"];
+        changed_at: Date;
+      }[]
     >`
       select from_status, to_status, actor_type, changed_at
       from public.order_status_history
       where restaurant_id = ${ctx.restaurantId} and order_id = ${input.orderId}
       order by changed_at, id
     `;
+    const [extra] = await tx<{ codigo_municipio: string | null; cpf_cnpj: string | null }[]>`
+      select o.codigo_municipio, c.cpf_cnpj
+      from public.orders o
+      join public.customers c on c.restaurant_id = o.restaurant_id and c.id = o.customer_id
+      where o.restaurant_id = ${ctx.restaurantId} and o.id = ${input.orderId}
+    `;
+    const invoices = await listOrderInvoices(tx, ctx.restaurantId, input.orderId);
     return {
       ...toBoardOrder(row),
+      codigoMunicipio: extra?.codigo_municipio ?? null,
+      customerCpfCnpj: extra?.cpf_cnpj ?? null,
+      invoices,
       cep: row.cep,
       logradouro: row.logradouro,
       numero: row.numero,

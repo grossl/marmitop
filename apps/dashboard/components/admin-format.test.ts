@@ -1,7 +1,17 @@
 // covers FR-070, FR-082, FR-154
 import { describe, expect, test } from "bun:test";
 
-import { addDays, centsToInput, formatBRL, formatDayLabel, formatMonthLabel, parseBRLToCents, usagePercent } from "./admin-format";
+import {
+  addDays,
+  canRedeliver,
+  centsToInput,
+  deliveryStatusLabel,
+  formatBRL,
+  formatDayLabel,
+  formatMonthLabel,
+  parseBRLToCents,
+  usagePercent,
+} from "./admin-format";
 
 describe("admin-format", () => {
   test("formats cents as BRL", () => {
@@ -38,5 +48,22 @@ describe("admin-format", () => {
     expect(usagePercent(150, 300)).toBe(50);
     expect(usagePercent(400, 300)).toBe(100);
     expect(usagePercent(5, 0)).toBe(0);
+  });
+});
+
+// covers FR-149
+describe("webhook deliveries", () => {
+  test("labels each delivery status in pt-BR", () => {
+    expect(deliveryStatusLabel("pending")).toBe("Pendente");
+    expect(deliveryStatusLabel("delivered")).toBe("Entregue");
+    expect(deliveryStatusLabel("failed")).toBe("Nova tentativa agendada");
+    expect(deliveryStatusLabel("exhausted")).toBe("Esgotada");
+  });
+
+  test("only delivered and exhausted deliveries can be sent again", () => {
+    expect(canRedeliver("delivered")).toBe(true);
+    expect(canRedeliver("exhausted")).toBe(true);
+    expect(canRedeliver("pending")).toBe(false);
+    expect(canRedeliver("failed")).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 {
   "extends": "@mt/config/tsconfig.base.json",
   "compilerOptions": { "types": ["bun"], "noEmit": true },
-  "include": ["src", "e2e-uatis"]
+  "include": ["src", "e2e-uatis", "e2e-nf"]
 }

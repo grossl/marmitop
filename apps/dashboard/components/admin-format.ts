@@ -52,3 +52,22 @@ export function usagePercent(used: number, included: number): number {
   if (included <= 0) return 0;
   return Math.min(100, Math.round((used / included) * 100));
 }
+
+export type DeliveryStatus = "pending" | "delivered" | "failed" | "exhausted";
+
+const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
+  pending: "Pendente",
+  delivered: "Entregue",
+  failed: "Nova tentativa agendada",
+  exhausted: "Esgotada",
+};
+
+/** FR-149: the delivery list status column. */
+export function deliveryStatusLabel(status: DeliveryStatus): string {
+  return DELIVERY_STATUS_LABELS[status];
+}
+
+/** FR-149: a pending or failed delivery is already scheduled; only finished ones can be sent again. */
+export function canRedeliver(status: DeliveryStatus): boolean {
+  return status === "delivered" || status === "exhausted";
+}

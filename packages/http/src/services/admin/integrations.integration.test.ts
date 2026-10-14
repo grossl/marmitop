@@ -152,9 +152,12 @@ describe("connectWhatsApp", () => {
     expect(result).toEqual({ disconnected: true });
     const left = await db`select 1 from public.integrations_whatsapp where restaurant_id = ${a.restaurantId}`;
     expect(left).toHaveLength(0);
-    const secrets = await db`select 1 from public.secrets where restaurant_id = ${a.restaurantId} and kind like 'uatis_%'`;
+    const secrets =
+      await db`select 1 from public.secrets where restaurant_id = ${a.restaurantId} and kind like 'uatis_%'`;
     expect(secrets).toHaveLength(0);
-    expect(code(await testWhatsAppConnection(deps, admin(), undefined).catch((e) => e))).toBe("whatsapp_not_configured");
+    expect(code(await testWhatsAppConnection(deps, admin(), undefined).catch((e) => e))).toBe(
+      "whatsapp_not_configured",
+    );
   });
 
   test("restaurant B's secrets were never touched", async () => {
@@ -175,9 +178,12 @@ describe("saveFiscalConfig", () => {
     deliveryFeeMode: "none",
   };
 
-  test("saves, seals the secrets, and tests the connection", async () => {
+  test("saves, seals the secrets, and tests the connection right after the save", async () => {
+    const before = invoices.calls.filter((c) => c.method === "testConnection").length;
     const saved = await saveFiscalConfig(deps, admin(), input);
-    expect(saved.status).toBe("disconnected");
+    // The automatic test runs after the commit, so issuing is not blocked on a manual click (V1).
+    expect(saved).toEqual({ status: "connected", lastError: null });
+    expect(invoices.calls.filter((c) => c.method === "testConnection").length).toBe(before + 1);
     expect(JSON.stringify(saved)).not.toContain(input.apiKey);
     const s = await getSettings(deps, admin(), undefined);
     expect(s.integrations.fiscal).toMatchObject({
@@ -197,7 +203,9 @@ describe("saveFiscalConfig", () => {
     const s = await getSettings(deps, admin(), undefined);
     expect(s.integrations.fiscal?.nfceSerie).toBe(5);
     expect(s.integrations.fiscal?.apiKey.configured).toBe(true);
-    const bad = await saveFiscalConfig(deps, admin(), { ...input, defaults: { ...input.defaults, ncm: "12" } }).catch((e) => e);
+    const bad = await saveFiscalConfig(deps, admin(), { ...input, defaults: { ...input.defaults, ncm: "12" } }).catch(
+      (e) => e,
+    );
     expect(code(bad)).toBe("validation_failed");
     expect((bad as AppError).details?.map((d) => d.path)).toContain("defaults.ncm");
   });
@@ -205,10 +213,27 @@ describe("saveFiscalConfig", () => {
   test("an attendant is refused", async () => {
     expect(code(await saveFiscalConfig(deps, attendant(), input).catch((e) => e))).toBe("forbidden");
   });
+
+  test("a refused key is saved and ends as error, not disconnected", async () => {
+    invoices.setConnection({ ok: false, error: "A chave de API foi recusada pelo web-nf." });
+    try {
+      const saved = await saveFiscalConfig(deps, admin(), input);
+      expect(saved.status).toBe("error");
+      const [row] = await db<{ status: string }[]>`
+        select status from public.integrations_fiscal where restaurant_id = ${a.restaurantId}`;
+      expect(row?.status).toBe("error");
+    } finally {
+      invoices.setConnection({ ok: true });
+    }
+  });
 });
 
 describe("outbound webhook", () => {
-  const hook = { url: "https://hooks.example.test/in", events: ["order.created", "order.created", "invoice.updated"], enabled: true };
+  const hook = {
+    url: "https://hooks.example.test/in",
+    events: ["order.created", "order.created", "invoice.updated"],
+    enabled: true,
+  };
 
   test("creating returns the signing secret once; updating and listing do not", async () => {
     await db`delete from public.webhook_endpoints where restaurant_id = ${a.restaurantId}`;
@@ -240,16 +265,18 @@ describe("outbound webhook", () => {
     expect(code(await saveWebhookEndpoint(prod, admin(), { ...hook, url: "http://localhost/x" }).catch((e) => e))).toBe(
       "validation_failed",
     );
-    expect(code(await saveWebhookEndpoint(deps, admin(), { ...hook, events: ["nope"] }).catch((e) => e))).toBe("validation_failed");
+    expect(code(await saveWebhookEndpoint(deps, admin(), { ...hook, events: ["nope"] }).catch((e) => e))).toBe(
+      "validation_failed",
+    );
     expect(code(await saveWebhookEndpoint(deps, attendant(), hook).catch((e) => e))).toBe("forbidden");
     expect(code(await rotateWebhookSecret(deps, attendant(), undefined).catch((e) => e))).toBe("forbidden");
   });
 
   test("rotating without an endpoint is not_found", async () => {
     await db`delete from public.webhook_endpoints where restaurant_id = ${b.restaurantId}`;
-    expect(code(await rotateWebhookSecret(deps, userCtx(b.restaurantId, b.adminId, "admin"), undefined).catch((e) => e))).toBe(
-      "not_found",
-    );
+    expect(
+      code(await rotateWebhookSecret(deps, userCtx(b.restaurantId, b.adminId, "admin"), undefined).catch((e) => e)),
+    ).toBe("not_found");
   });
 });
 
@@ -265,7 +292,13 @@ describe("API keys", () => {
 
     const s = await getSettings(deps, admin(), undefined);
     const listed = s.integrations.apiKeys.find((k) => k.id === created.id);
-    expect(listed).toMatchObject({ name: "ERP", prefix: created.prefix, environment: "live", revokedAt: null, lastUsedAt: null });
+    expect(listed).toMatchObject({
+      name: "ERP",
+      prefix: created.prefix,
+      environment: "live",
+      revokedAt: null,
+      lastUsedAt: null,
+    });
     expect(JSON.stringify(s)).not.toContain(created.key);
 
     const audits = await auditFor(a, "api_key.create");
@@ -276,7 +309,9 @@ describe("API keys", () => {
   test("revoke sets revoked_at, audits, and a second revoke is not_found", async () => {
     const created = await createApiKey(deps, admin(), { name: "Temp", environment: "test" });
     await revokeApiKey(deps, admin(), { id: created.id });
-    const [row] = await db<{ revoked_at: Date | null }[]>`select revoked_at from public.api_keys where id = ${created.id}`;
+    const [row] = await db<
+      { revoked_at: Date | null }[]
+    >`select revoked_at from public.api_keys where id = ${created.id}`;
     expect(row?.revoked_at).not.toBeNull();
     expect((await auditFor(a, "api_key.revoke")).length).toBeGreaterThan(0);
     expect(code(await revokeApiKey(deps, admin(), { id: created.id }).catch((e) => e))).toBe("not_found");
@@ -285,13 +320,19 @@ describe("API keys", () => {
   test("another restaurant's key cannot be revoked", async () => {
     const e = await revokeApiKey(deps, admin(), { id: b.apiKeyId }).catch((x) => x);
     expect(code(e)).toBe("not_found");
-    const [row] = await db<{ revoked_at: Date | null }[]>`select revoked_at from public.api_keys where id = ${b.apiKeyId}`;
+    const [row] = await db<
+      { revoked_at: Date | null }[]
+    >`select revoked_at from public.api_keys where id = ${b.apiKeyId}`;
     expect(row?.revoked_at).toBeNull();
   });
 
   test("invalid input and an attendant are refused", async () => {
-    expect(code(await createApiKey(deps, admin(), { name: " ", environment: "prod" }).catch((e) => e))).toBe("validation_failed");
-    expect(code(await createApiKey(deps, attendant(), { name: "x", environment: "test" }).catch((e) => e))).toBe("forbidden");
+    expect(code(await createApiKey(deps, admin(), { name: " ", environment: "prod" }).catch((e) => e))).toBe(
+      "validation_failed",
+    );
+    expect(code(await createApiKey(deps, attendant(), { name: "x", environment: "test" }).catch((e) => e))).toBe(
+      "forbidden",
+    );
     expect(code(await revokeApiKey(deps, attendant(), { id: a.apiKeyId }).catch((e) => e))).toBe("forbidden");
   });
 });

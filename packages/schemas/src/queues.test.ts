@@ -31,6 +31,14 @@ describe('queue wire shapes (05.data-model.md "Queues")', () => {
     }
     expect(invoiceJobSchema.safeParse({ v: 1, restaurantId: U, orderInvoiceId: V, op: "retry" }).success).toBe(false);
   });
+  test("mt_invoice_jobs poll carries its round for the backoff (FR-127)", () => {
+    expect(
+      invoiceJobSchema.parse({ v: 1, restaurantId: U, orderInvoiceId: V, op: "poll", pollRound: 3 }).pollRound,
+    ).toBe(3);
+    expect(
+      invoiceJobSchema.safeParse({ v: 1, restaurantId: U, orderInvoiceId: V, op: "poll", pollRound: -1 }).success,
+    ).toBe(false);
+  });
   test("mt_sync op is whatsapp_reconcile", () => {
     expect(syncJobSchema.safeParse({ v: 1, restaurantId: U, op: "whatsapp_reconcile" }).success).toBe(true);
     expect(syncJobSchema.safeParse({ v: 1, restaurantId: U, op: "poll_invoice" }).success).toBe(false);

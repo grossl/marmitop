@@ -135,7 +135,9 @@ export async function loadIntegrationsState(tx: Tx, ctx: ServiceContext): Promis
            default_cfop, default_csosn, default_pis_cst, default_cofins_cst, delivery_fee_mode, status, last_error
     from public.integrations_fiscal where restaurant_id = ${ctx.restaurantId}
   `;
-  const [hook] = await tx<{ url: string; events: WebhookEndpointState["events"]; enabled: boolean; secret_id: string }[]>`
+  const [hook] = await tx<
+    { url: string; events: WebhookEndpointState["events"]; enabled: boolean; secret_id: string }[]
+  >`
     select url, events, enabled, secret_id from public.webhook_endpoints where restaurant_id = ${ctx.restaurantId}
   `;
   const keys = await tx<
@@ -373,7 +375,7 @@ export const saveFiscalConfigInput = z.object({
   deliveryFeeMode: z.string().optional(),
 });
 
-export const saveFiscalConfig = defineService({
+const storeFiscalConfig = defineService({
   name: "settings.saveFiscalConfig",
   minRole: "admin",
   input: saveFiscalConfigInput,
@@ -435,6 +437,21 @@ export const saveFiscalConfig = defineService({
     return { status: "disconnected", lastError: null };
   },
 });
+
+/**
+ * FR-090, FR-091: saves the fiscal settings, then tests the connection at once, after the save
+ * commits and outside its transaction (the web-nf call can take up to 10 s). The status comes
+ * from the test, so "Emitir NF" is not blocked by V1 waiting for a manual "Testar conexão".
+ * A failed test still keeps the saved settings; the status says `error`.
+ */
+export async function saveFiscalConfig(
+  deps: ServiceDeps,
+  ctx: ServiceContext,
+  input: z.input<typeof saveFiscalConfigInput>,
+): Promise<ConnectionResult> {
+  await storeFiscalConfig(deps, ctx, input);
+  return testFiscalConnection(deps, ctx, undefined);
+}
 
 export const testFiscalConnection = defineService({
   name: "settings.testFiscalConnection",
@@ -565,9 +582,20 @@ export const createApiKey = defineService({
       action: "api_key.create",
       entityType: "api_keys",
       entityId: row.id,
-      context: { kind: "api_key", last4: generated.key.slice(-4), prefix: generated.prefix, environment: input.environment },
+      context: {
+        kind: "api_key",
+        last4: generated.key.slice(-4),
+        prefix: generated.prefix,
+        environment: input.environment,
+      },
     });
-    return { id: row.id, key: generated.key, prefix: generated.prefix, name: input.name, environment: input.environment };
+    return {
+      id: row.id,
+      key: generated.key,
+      prefix: generated.prefix,
+      name: input.name,
+      environment: input.environment,
+    };
   },
 });
 

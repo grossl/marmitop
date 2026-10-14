@@ -4,8 +4,10 @@
 // Money is integer cents (ADR-006). Dates leave as ISO strings so a result
 // crosses the Server Action boundary unchanged.
 
-import { allowedTargets, type Fulfillment, type OrderStatus } from "@mt/core";
+import { allowedTargets, type Fulfillment, type InvoiceStatusValue, type OrderStatus } from "@mt/core";
 import type { Tx } from "@mt/db";
+
+import type { OrderInvoiceView } from "../invoices/shared";
 
 export type PaymentMethodCode = "pix" | "dinheiro" | "cartao_credito" | "cartao_debito";
 export type OrderSourceCode = "counter" | "phone" | "whatsapp" | "api";
@@ -44,6 +46,8 @@ export interface BoardOrder {
   readonly cancelledAt: string | null;
   readonly cancelReason: string | null;
   readonly items: readonly OrderItemView[];
+  /** The latest invoice's status, for the card badge (FR-139). Null without an invoice. */
+  readonly invoiceStatus: InvoiceStatusValue | null;
 }
 
 export interface StatusHistoryView {
@@ -61,7 +65,12 @@ export interface OrderDetail extends BoardOrder {
   readonly bairro: string | null;
   readonly cidade: string | null;
   readonly uf: string | null;
+  readonly codigoMunicipio: string | null;
+  /** Digits only; the invoice panel offers NF-e when it is a CNPJ (FR-122). */
+  readonly customerCpfCnpj: string | null;
   readonly history: readonly StatusHistoryView[];
+  /** Newest first (FR-128). */
+  readonly invoices: readonly OrderInvoiceView[];
 }
 
 export interface AddressParts {
@@ -114,6 +123,8 @@ export interface OrderRowForView {
   readonly delivered_at: Date | null;
   readonly cancelled_at: Date | null;
   readonly cancel_reason: string | null;
+  /** The latest `order_invoices.status` (P6). */
+  readonly invoice_status?: InvoiceStatusValue | null;
   readonly items: readonly {
     readonly name: string;
     readonly sizeName: string | null;
@@ -150,6 +161,7 @@ export function toBoardOrder(r: OrderRowForView): BoardOrder {
     cancelledAt: iso(r.cancelled_at),
     cancelReason: r.cancel_reason,
     items: r.items,
+    invoiceStatus: r.invoice_status ?? null,
   };
 }
 
@@ -162,6 +174,11 @@ export function orderViewColumns(tx: Tx) {
   o.payment_method, o.change_for_cents, o.notes,
   o.subtotal_cents, o.delivery_fee_cents, o.total_cents,
   o.source, o.conversation_id, o.created_at, o.delivered_at, o.cancelled_at, o.cancel_reason,
+  (
+    select oi.status from public.order_invoices oi
+    where oi.restaurant_id = o.restaurant_id and oi.order_id = o.id
+    order by oi.created_at desc, oi.id desc limit 1
+  ) as invoice_status,
   coalesce((
     select json_agg(json_build_object(
       'name', i.name, 'sizeName', i.size_name, 'qty', i.qty,

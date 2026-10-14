@@ -70,4 +70,8 @@ describe("toBoardOrder (FR-021, ADR-017)", () => {
   test("a final order has no targets", () => {
     expect(toBoardOrder({ ...base, status: "entregue" }).allowedStatuses).toEqual([]);
   });
+  test("the card carries the latest invoice status for the badge (FR-139)", () => {
+    expect(toBoardOrder(base).invoiceStatus).toBeNull();
+    expect(toBoardOrder({ ...base, invoice_status: "authorized" }).invoiceStatus).toBe("authorized");
+  });
 });

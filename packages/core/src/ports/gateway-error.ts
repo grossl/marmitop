@@ -3,16 +3,25 @@
 
 import type { CallFailure } from "../retry-schedule";
 
+export interface GatewayErrorDetail {
+  readonly path: string;
+  readonly code: string;
+  readonly message: string;
+}
+
 export class GatewayError extends Error {
   readonly failure: CallFailure;
   /** Seconds-based `Retry-After`, in milliseconds, when the remote sent one. */
   readonly retryAfterMs: number | undefined;
+  /** Field errors the remote sent with a 422 (web-nf `details[]`). Paths only refer to the request body. */
+  readonly details: readonly GatewayErrorDetail[] | undefined;
 
-  constructor(failure: CallFailure, message?: string, retryAfterMs?: number) {
+  constructor(failure: CallFailure, message?: string, retryAfterMs?: number, details?: readonly GatewayErrorDetail[]) {
     super(message ?? describe(failure));
     this.name = "GatewayError";
     this.failure = failure;
     this.retryAfterMs = retryAfterMs;
+    this.details = details;
   }
 
   static http(status: number, code?: string, message?: string): GatewayError {

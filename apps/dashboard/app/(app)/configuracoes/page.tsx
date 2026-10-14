@@ -1,4 +1,4 @@
-import { getPlanAndUsage, getSettings } from "@mt/http";
+import { getPlanAndUsage, getSettings, listWebhookDeliveries } from "@mt/http";
 import type { Metadata } from "next";
 
 import { SettingsPage } from "@/components/settings-page";
@@ -12,10 +12,14 @@ export const metadata: Metadata = { title: "Configurações — Marmitop" };
 export default async function ConfiguracoesRoute() {
   const ctx = await requireScreen("configuracoes");
   const deps = requireDeps();
-  const [settings, plan] = await Promise.all([getSettings(deps, ctx, undefined), getPlanAndUsage(deps, ctx, undefined)]);
+  const [settings, plan, deliveries] = await Promise.all([
+    getSettings(deps, ctx, undefined),
+    getPlanAndUsage(deps, ctx, undefined),
+    listWebhookDeliveries(deps, ctx, undefined),
+  ]);
   return (
     <div className="flex-1 overflow-hidden">
-      <SettingsPage settings={settings} plan={plan} />
+      <SettingsPage settings={settings} plan={plan} deliveries={deliveries} />
     </div>
   );
 }

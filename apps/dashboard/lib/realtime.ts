@@ -12,8 +12,11 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 // Server Action or `router.refresh()` — never trust the payload as the source
 // of truth.
 
-/** The tables published to `supabase_realtime` (05.data-model.md, ADR-017). */
-export type RealtimeTable = "orders" | "messages" | "conversations";
+/**
+ * The tables published to `supabase_realtime` (05.data-model.md, ADR-017). `order_invoices`
+ * arrives with its status columns only (migration 0017).
+ */
+export type RealtimeTable = "orders" | "messages" | "conversations" | "order_invoices";
 
 export type RealtimeChange = RealtimePostgresChangesPayload<Record<string, unknown>>;
 

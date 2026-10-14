@@ -588,5 +588,18 @@ export type TenantTable = (typeof TENANT_TABLES)[number];
 /** Tables without a tenant key. Both still have RLS forced. */
 export const GLOBAL_TABLES = ["plans", "rate_counters"] as const satisfies readonly TableName[];
 
-/** The only tables `authenticated` may read (Realtime, ADR-004, ADR-017). */
-export const REALTIME_TABLES = ["orders", "messages", "conversations"] as const satisfies readonly TenantTable[];
+/** The only tables `authenticated` may read (Realtime, ADR-004, ADR-017 and its Amendment 1). */
+export const REALTIME_TABLES = [
+  "orders",
+  "messages",
+  "conversations",
+  "order_invoices",
+] as const satisfies readonly TenantTable[];
+
+/**
+ * Realtime tables `authenticated` reads by column only (migration 0017). `order_invoices` hides
+ * `request_payload` (CPF/CNPJ, address), the error text, and the cancel reason from the browser.
+ */
+export const REALTIME_COLUMN_GRANTS = {
+  order_invoices: ["id", "restaurant_id", "order_id", "kind", "status", "created_at", "updated_at"],
+} as const satisfies Partial<Record<(typeof REALTIME_TABLES)[number], readonly string[]>>;

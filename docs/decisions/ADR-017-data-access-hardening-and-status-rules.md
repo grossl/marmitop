@@ -22,3 +22,7 @@ Writing 05.data-model.md and 07.security.md raised five points that earlier ADRs
 6. **Order source.** `orders.source` accepts `counter | phone | whatsapp | api`. API-created orders use `api`, so reports can tell them apart.
 7. **API key lookup** uses the unique SHA-256 hash (`mt.api_key_lookup`). No prefix lookup step is needed.
 8. **Test keys do not change behavior.** `mtk_test_` and `mtk_live_` reach the same data and the same gateways. Gateway choice (real or fake) comes from deployment config only (`MT_UATIS_FAKE`, `MT_WEBNF_FAKE`).
+
+## Amendment 1 — `order_invoices` on Realtime (2026-10-14, P6)
+
+The orders board shows an invoice badge per card (FR-139). Polling every card is wasteful, so `order_invoices` joins `supabase_realtime` (migration 0017). `authenticated` gets `select` on `order_invoices` by column only: `id`, `restaurant_id`, `order_id`, `kind`, `status`, `created_at`, `updated_at`. `request_payload` (CPF/CNPJ and address), `error_message`, and the cancel columns stay off the browser path. The row policy is the same as for `orders` (member restaurants). Still no write grant. Point 1 now reads: `select` on `orders`, `messages`, `conversations`, and the status columns of `order_invoices`.

@@ -14,6 +14,9 @@ import {
   updateCustomerActionSchema,
 } from "@mt/schemas";
 
+import type { z } from "zod";
+
+import type { ServiceContext } from "../../context";
 import { defineService } from "../../service";
 import { type CustomerOrderSummary, listCustomerOrders } from "./customer-orders";
 import { decodeCursor, encodeCursor, likePattern } from "./helpers";
@@ -99,8 +102,11 @@ async function loadCustomer(tx: Tx, restaurantId: string, customerId: string): P
   return toDto(row);
 }
 
+/** The detail code of a duplicate phone (FR-047). The public API answers it with `409 conflict`. */
+export const DUPLICATE_PHONE_CODE = "duplicate_phone";
+
 const DUPLICATE_PHONE = new AppError("validation_failed", "A customer with this phone already exists.", {
-  details: [{ path: "phone", code: "custom", message: "Já existe um cliente com este telefone." }],
+  details: [{ path: "phone", code: DUPLICATE_PHONE_CODE, message: "Já existe um cliente com este telefone." }],
 });
 
 export const listCustomers = defineService({
@@ -141,8 +147,16 @@ export const createCustomer = defineService({
   name: "customers.create",
   minRole: "attendant",
   input: createCustomerActionSchema,
-  run: async ({ tx, ctx, input }) => {
-    const rows = await tx<{ id: string }[]>`
+  run: ({ tx, ctx, input }) => createCustomerInTx(tx, ctx, input),
+});
+
+/** The create, in the caller's transaction. `POST /v1/customers` runs it too. */
+export async function createCustomerInTx(
+  tx: Tx,
+  ctx: ServiceContext,
+  input: z.output<typeof createCustomerActionSchema>,
+): Promise<CustomerDto> {
+  const rows = await tx<{ id: string }[]>`
       insert into public.customers
         (restaurant_id, name, phone, email, cpf_cnpj, cep, logradouro, numero, complemento, bairro,
          cidade, uf, codigo_municipio, notes)
@@ -153,18 +167,17 @@ export const createCustomer = defineService({
       on conflict (restaurant_id, phone) do nothing
       returning id
     `;
-    const created = rows[0];
-    if (created === undefined) {
-      // Either the phone exists (FR-047) or RLS hid the insert for this role.
-      const [existing] = await tx<{ id: string }[]>`
+  const created = rows[0];
+  if (created === undefined) {
+    // Either the phone exists (FR-047) or RLS hid the insert for this role.
+    const [existing] = await tx<{ id: string }[]>`
         select id from public.customers where restaurant_id = ${ctx.restaurantId} and phone = ${input.phone}
       `;
-      if (existing !== undefined) throw DUPLICATE_PHONE;
-      throw new AppError("forbidden", "Your role cannot perform this action.");
-    }
-    return loadCustomer(tx, ctx.restaurantId, created.id);
-  },
-});
+    if (existing !== undefined) throw DUPLICATE_PHONE;
+    throw new AppError("forbidden", "Your role cannot perform this action.");
+  }
+  return loadCustomer(tx, ctx.restaurantId, created.id);
+}
 
 const COLUMN_OF = {
   name: "name",
@@ -187,40 +200,47 @@ export const updateCustomer = defineService({
   name: "customers.update",
   minRole: "attendant",
   input: updateCustomerActionSchema,
-  run: async ({ tx, ctx, input }) => {
-    const current = await loadCustomer(tx, ctx.restaurantId, input.customerId);
+  run: ({ tx, ctx, input }) => updateCustomerInTx(tx, ctx, input),
+});
 
-    const patch: Record<string, string | null> = {};
-    for (const [key, column] of Object.entries(COLUMN_OF)) {
-      const value = (input as Record<string, string | null | undefined>)[key];
-      if (value !== undefined) patch[column] = value;
-    }
-    if (patch.name === null) {
-      throw new AppError("validation_failed", "The name is required.", {
-        details: [{ path: "name", code: "custom", message: "Informe o nome." }],
-      });
-    }
-    if (patch.phone === null) {
-      throw new AppError("validation_failed", "The phone is required.", {
-        details: [{ path: "phone", code: "custom", message: "Informe o telefone." }],
-      });
-    }
-    if (typeof patch.phone === "string" && patch.phone !== current.phone) {
-      const [taken] = await tx<{ id: string }[]>`
+/** The update, in the caller's transaction. `PATCH /v1/customers/{id}` runs it too. */
+export async function updateCustomerInTx(
+  tx: Tx,
+  ctx: ServiceContext,
+  input: z.output<typeof updateCustomerActionSchema>,
+): Promise<CustomerDto> {
+  const current = await loadCustomer(tx, ctx.restaurantId, input.customerId);
+
+  const patch: Record<string, string | null> = {};
+  for (const [key, column] of Object.entries(COLUMN_OF)) {
+    const value = (input as Record<string, string | null | undefined>)[key];
+    if (value !== undefined) patch[column] = value;
+  }
+  if (patch.name === null) {
+    throw new AppError("validation_failed", "The name is required.", {
+      details: [{ path: "name", code: "custom", message: "Informe o nome." }],
+    });
+  }
+  if (patch.phone === null) {
+    throw new AppError("validation_failed", "The phone is required.", {
+      details: [{ path: "phone", code: "custom", message: "Informe o telefone." }],
+    });
+  }
+  if (typeof patch.phone === "string" && patch.phone !== current.phone) {
+    const [taken] = await tx<{ id: string }[]>`
         select id from public.customers where restaurant_id = ${ctx.restaurantId} and phone = ${patch.phone}
       `;
-      if (taken !== undefined) throw DUPLICATE_PHONE;
-    }
+    if (taken !== undefined) throw DUPLICATE_PHONE;
+  }
 
-    const columns = Object.keys(patch);
-    if (columns.length > 0) {
-      const rows = await tx<{ id: string }[]>`
+  const columns = Object.keys(patch);
+  if (columns.length > 0) {
+    const rows = await tx<{ id: string }[]>`
         update public.customers set ${tx(patch, ...columns)}
         where id = ${current.id} and restaurant_id = ${ctx.restaurantId}
         returning id
       `;
-      if (rows.length === 0) throw new AppError("forbidden", "Your role cannot perform this action.");
-    }
-    return loadCustomer(tx, ctx.restaurantId, current.id);
-  },
-});
+    if (rows.length === 0) throw new AppError("forbidden", "Your role cannot perform this action.");
+  }
+  return loadCustomer(tx, ctx.restaurantId, current.id);
+}

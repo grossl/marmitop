@@ -1,6 +1,7 @@
 // InvoiceGateway port (ADR-003; FR-124, FR-127, FR-129, FR-130). Adapters: WebNfGateway (http), FakeInvoiceGateway.
 
 import type { InvoiceStatusValue } from "../fiscal/error-mapping";
+import type { InvoiceEventState } from "../fiscal/invoice-lifecycle";
 import type { InvoiceKind, InvoiceRequestBody } from "../fiscal/invoice-request";
 
 export interface CreateInvoiceResult {
@@ -21,6 +22,10 @@ export interface InvoiceView {
   readonly error: { readonly code: string; readonly message: string } | null;
   /** Short-lived signed URLs. Never stored (ADR-003). */
   readonly files: { readonly xml?: string; readonly pdf?: string } | null;
+  /** ISO time of the SEFAZ authorization, when web-nf reports it (the NFC-e cancel window, FR-130). */
+  readonly authorizedAt?: string | null;
+  /** Cancel and CC-e events, oldest first. Only `type`, `status`, and `error` are read. */
+  readonly events?: readonly InvoiceEventState[];
 }
 
 export interface CancelInvoiceResult {

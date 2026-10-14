@@ -66,6 +66,7 @@ export class FakeInvoiceGateway implements InvoiceGateway {
       chaveAcesso: fields.chaveAcesso ?? "4".repeat(44),
       error: null,
       files: { xml: `https://files.fake/${id}.xml`, pdf: `https://files.fake/${id}.pdf` },
+      authorizedAt: "2026-10-13T15:00:00.000Z",
     });
   }
 

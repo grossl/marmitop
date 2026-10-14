@@ -32,6 +32,8 @@ export const invoiceJobSchema = z.object({
   orderInvoiceId: uuidSchema,
   op: z.enum(["issue", "poll", "cancel"]),
   attempt: jobAttemptSchema,
+  /** `poll` only: how many polls ran before this one; sets the next delay (FR-127). Absent means 0. */
+  pollRound: z.number().int().min(0).max(1000).optional(),
 });
 export const syncJobSchema = z.object({
   v: z.literal(1),

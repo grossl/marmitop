@@ -2,7 +2,8 @@
 // A missing or forbidden variable stops the process with its name only (04.architecture.md
 // "Configuration"); MT_ALLOW_PRIVATE_HOSTS with MT_ENV=production is refused (ADR-017 #5).
 
-import { createDbUatisInboundStore, createServiceDeps, readServerConfig } from "@mt/http";
+import { createDbUatisInboundStore, createDbWebNfInboundStore, createServiceDeps, readServerConfig } from "@mt/http";
+import { createPublicApiBackend } from "@mt/http";
 
 import { createApp } from "./app";
 import { createApiLogger } from "./http/logger";
@@ -18,7 +19,13 @@ if (config.allowPrivateHosts)
   log.warn("MT_ALLOW_PRIVATE_HOSTS=1: the SSRF guard allows private hosts (development only)");
 
 const deps = createServiceDeps(config);
-const app = createApp({ clock: deps.clock, log, uatisInbound: createDbUatisInboundStore(deps) });
+const app = createApp({
+  clock: deps.clock,
+  log,
+  uatisInbound: createDbUatisInboundStore(deps),
+  webNfInbound: createDbWebNfInboundStore(deps),
+  publicApi: createPublicApiBackend(deps),
+});
 const port = Number(process.env.PORT ?? 3101);
 
 const server = Bun.serve({ port, fetch: app.fetch });

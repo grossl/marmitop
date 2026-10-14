@@ -27,7 +27,7 @@ import {
   seedRestaurant,
   truncateAll,
 } from "./test-harness";
-import { GLOBAL_TABLES, REALTIME_TABLES, TENANT_TABLES, type TenantTable } from "./types";
+import { GLOBAL_TABLES, REALTIME_COLUMN_GRANTS, REALTIME_TABLES, TENANT_TABLES, type TenantTable } from "./types";
 
 type ReadRole = "member" | "admin" | null;
 type WriteRole = "attendant" | "admin" | null;
@@ -583,13 +583,28 @@ describe("meta: every table is protected", () => {
     expect([...columnGrants]).toEqual([]);
   });
 
-  test("authenticated reads only orders, messages and conversations; anon reads nothing", async () => {
+  test("authenticated reads only the Realtime tables; anon reads nothing", async () => {
     const rows = await db<{ grantee: string; table_name: string }[]>`
       select grantee, table_name from information_schema.role_table_grants
       where table_schema = 'public' and grantee in ('authenticated', 'anon') and privilege_type = 'SELECT'
       order by grantee, table_name
     `;
-    expect([...rows]).toEqual([...REALTIME_TABLES].sort().map((t) => ({ grantee: "authenticated", table_name: t })));
+    const whole = REALTIME_TABLES.filter((t) => !Object.hasOwn(REALTIME_COLUMN_GRANTS, t));
+    expect([...rows]).toEqual([...whole].sort().map((t) => ({ grantee: "authenticated", table_name: t })));
+  });
+
+  test("order_invoices: authenticated reads the status columns only, never request_payload (0017)", async () => {
+    const rows = await db<{ column_name: string }[]>`
+      select column_name from information_schema.column_privileges
+      where table_schema = 'public' and table_name = 'order_invoices' and grantee = 'authenticated'
+        and privilege_type = 'SELECT'
+      order by column_name
+    `;
+    expect(rows.map((r) => r.column_name)).toEqual([...REALTIME_COLUMN_GRANTS.order_invoices].sort());
+    const denied = await errorCode(() =>
+      withUserSession(db, a.adminId, (tx) => tx`select request_payload from public.order_invoices`),
+    );
+    expect(denied).toBe(INSUFFICIENT_PRIVILEGE);
   });
 
   test("app_service holds delete only where 05 'Role rules' allows it (ADR-018)", async () => {

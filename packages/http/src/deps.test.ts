@@ -4,6 +4,7 @@ import { EnvelopeSecretBox, FakeGateway, FakeInvoiceGateway, FixedClock, systemC
 
 import type { ServerConfig } from "./config";
 import { UatisGateway } from "./adapters/uatis-gateway";
+import { WebNfGateway } from "./adapters/web-nf-gateway";
 import { createServiceDeps } from "./deps";
 
 const config = (over: Partial<ServerConfig> = {}): ServerConfig => ({
@@ -33,12 +34,12 @@ describe("createServiceDeps", () => {
     }
   });
 
-  test("without MT_UATIS_FAKE the WhatsApp gateway is UatisGateway (P5); WebNfGateway is P6", async () => {
+  test("without the fake flags the gateways are UatisGateway and WebNfGateway", async () => {
     const deps = createServiceDeps(config({ uatisFake: false, webnfFake: false }));
     try {
       expect(deps.gateways.whatsapp(conn)).toBeInstanceOf(UatisGateway);
       expect(deps.allowPrivateHosts).toBe(true);
-      expect(() => deps.gateways.invoices(conn)).toThrow(/WebNfGateway/);
+      expect(deps.gateways.invoices(conn)).toBeInstanceOf(WebNfGateway);
     } finally {
       await deps.db.end();
     }

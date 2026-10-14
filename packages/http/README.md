@@ -21,10 +21,16 @@ src/
   adapters/
     safe-fetch.ts     the only HTTP client for admin-entered URLs (SSRF guard, 10 s, no redirects)
     uatis-gateway.ts  UatisGateway, the WhatsAppGateway adapter over backend-uatis
+    webhook-sender.ts SafeFetchWebhookSender, the WebhookSender adapter (signed POST)
   services/
     index.ts       re-exports one file per domain
     restaurant-profile.ts   the reference service
     whatsapp/      connection, automatic messages, gateway events, inbound webhook (P5)
+    webhooks/      emitEvent (outbound events in the producer's transaction), worker loaders,
+                   listWebhookDeliveries, redeliverWebhook (P7)
+    billing/       recordUsage: usage_events rows (P7)
+    public-api/    the snake_case use cases behind apps/api routes/public: API-key auth,
+                   rate limit, idempotency, keyset cursor, orders, customers, menu, messages (P7)
   testing/         createTestServiceDeps, userCtx, FakeUatisServer, MemoryUatisInboundStore
                    (tests only: @mt/http/testing)
 ```

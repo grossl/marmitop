@@ -11,6 +11,20 @@ describe("issueInvoiceSchema (FR-120, FR-122)", () => {
     expect(issueInvoiceSchema.parse({ orderId: U, kind: "nfe" }).kind).toBe("nfe");
     expect(issueInvoiceSchema.safeParse({ orderId: U, kind: "nfse" }).success).toBe(false);
   });
+  test("the missing-data form fills CPF/CNPJ and address parts (FR-125, ADR-016)", () => {
+    const parsed = issueInvoiceSchema.parse({
+      orderId: U,
+      fill: { cpfCnpj: "529.982.247-25", cep: "01310-100", uf: "sp", codigoMunicipio: "3550308", numero: "12" },
+    });
+    expect(parsed.fill).toMatchObject({
+      cpfCnpj: "52998224725",
+      cep: "01310100",
+      uf: "SP",
+      codigoMunicipio: "3550308",
+    });
+    expect(issueInvoiceSchema.safeParse({ orderId: U, fill: { cpfCnpj: "111.111.111-11" } }).success).toBe(false);
+    expect(issueInvoiceSchema.safeParse({ orderId: U, fill: { cep: "123" } }).success).toBe(false);
+  });
   test('"CPF na nota" for pickup orders', () => {
     expect(issueInvoiceSchema.parse({ orderId: U, identifyBuyer: true }).identifyBuyer).toBe(true);
   });

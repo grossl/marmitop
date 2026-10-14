@@ -31,3 +31,5 @@ export function userCtx(restaurantId: string, userId: string, role: UserContext[
 
 export { FakeUatisServer, type FakeUatisRow, type FakeUatisScript } from "./fake-uatis-server";
 export { MemoryUatisInboundStore } from "./memory-uatis-inbound-store";
+export { FakeWebNfServer, type FakeWebNfInvoice, type FakeWebNfScript } from "./fake-web-nf-server";
+export { MemoryWebNfInboundStore } from "./memory-web-nf-inbound-store";
