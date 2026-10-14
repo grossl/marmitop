@@ -1,0 +1,775 @@
+openapi: 3.1.0
+info:
+  title: Marmitop API
+  version: "1.0.0"
+  summary: Public API and inbound webhooks for Marmitop restaurants.
+  description: >
+    One HTTP API (apps/api), JSON, versioned under /v1. Integrators call the
+    order, customer, menu, and message routes with an API key. backend-uatis and
+    web-nf call the inbound webhook routes. The dashboard does not call this API
+    (ADR-004). If this file and packages/schemas disagree, the schemas win.
+
+servers:
+  - url: https://api.marmitop.example.com
+    description: Production
+  - url: http://localhost:3101
+    description: Local
+
+tags:
+  - name: Health
+  - name: Orders
+  - name: Customers
+  - name: Menu
+  - name: Messages
+  - name: Inbound webhooks
+    description: Called by backend-uatis and web-nf. Not for integrators.
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /v1/health:
+    get:
+      operationId: getHealth
+      summary: Liveness check
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: The service is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ok] }
+
+  /v1/orders:
+    get:
+      operationId: listOrders
+      summary: List orders
+      tags: [Orders]
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/OrderStatus' } }
+        - { name: source, in: query, schema: { $ref: '#/components/schemas/OrderSource' } }
+        - { name: customer_id, in: query, schema: { type: string, format: uuid } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: q, in: query, description: Order code or customer name., schema: { type: string } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of orders.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, next_cursor]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Order' }
+                  next_cursor: { type: [string, 'null'] }
+        '401': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    post:
+      operationId: createOrder
+      summary: Create an order
+      description: The server computes subtotal, delivery fee, and total. The client sends no prices. The order gets source api.
+      tags: [Orders]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderCreate' }
+      responses:
+        '201':
+          description: Order created.
+          headers:
+            Idempotency-Replayed: { $ref: '#/components/headers/IdempotencyReplayed' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v1/orders/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Order uuid or code (for example ORD-012).
+        schema: { type: string }
+    get:
+      operationId: getOrder
+      summary: Get an order
+      tags: [Orders]
+      responses:
+        '200':
+          description: The order with its status history.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Order'
+                  - type: object
+                    required: [status_history]
+                    properties:
+                      status_history:
+                        type: array
+                        items: { $ref: '#/components/schemas/StatusHistoryEntry' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateOrderStatus
+      summary: Change the status of an order
+      description: Writes order_status_history. A refused move returns invalid_status_transition.
+      tags: [Orders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              additionalProperties: false
+              properties:
+                status: { $ref: '#/components/schemas/OrderStatus' }
+                reason: { type: string, description: Optional, used when status is cancelado. }
+      responses:
+        '200':
+          description: The updated order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v1/customers:
+    get:
+      operationId: listCustomers
+      summary: List customers
+      tags: [Customers]
+      parameters:
+        - { name: q, in: query, description: Name, phone, or email., schema: { type: string } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of customers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, next_cursor]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Customer' }
+                  next_cursor: { type: [string, 'null'] }
+        '401': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    post:
+      operationId: createCustomer
+      summary: Create a customer
+      tags: [Customers]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomerWrite' }
+      responses:
+        '201':
+          description: Customer created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Customer' }
+        '401': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v1/customers/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getCustomer
+      summary: Get a customer
+      tags: [Customers]
+      responses:
+        '200':
+          description: The customer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Customer' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateCustomer
+      summary: Update a customer
+      description: The phone number cannot change.
+      tags: [Customers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomerPatch' }
+      responses:
+        '200':
+          description: The updated customer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Customer' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v1/menu:
+    get:
+      operationId: listMenu
+      summary: List menu items
+      description: Read-only in v1. Fiscal overrides are not exposed.
+      tags: [Menu]
+      parameters:
+        - { name: kind, in: query, schema: { type: string, enum: [meal, drink] } }
+        - { name: available, in: query, schema: { type: boolean } }
+        - { name: weekday, in: query, description: 0 (Sunday) to 6., schema: { type: integer, minimum: 0, maximum: 6 } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of menu items.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, next_cursor]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/MenuItem' }
+                  next_cursor: { type: [string, 'null'] }
+        '401': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v1/messages:
+    post:
+      operationId: sendMessage
+      summary: Send a WhatsApp text to a customer
+      description: >
+        Checks the 24-hour service window (ADR-014) from the customer's last
+        inbound message. Outside the window it returns 422 outside_service_window
+        and stores nothing. Inside the window it inserts a pending message and
+        enqueues delivery. The worker sends it through backend-uatis. A timeout
+        or a 5xx after the request left sets the status to failed with
+        error_code ambiguous, and the worker does not retry (ADR-017).
+      tags: [Messages]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customer_id, body]
+              additionalProperties: false
+              properties:
+                customer_id: { type: string, format: uuid }
+                body: { type: string, minLength: 1, maxLength: 4096 }
+                order_id: { type: [string, 'null'], format: uuid }
+      responses:
+        '201':
+          description: Message accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v1/webhooks/uatis/{restaurant_id}:
+    post:
+      operationId: receiveUatisWebhook
+      summary: Receive a backend-uatis webhook
+      description: >
+        Verifies X-Uatis-Signature (t=unix,v1=hex HMAC-SHA256 of "t.rawBody",
+        5-minute tolerance, constant-time compare). Upserts by message id.
+      tags: [Inbound webhooks]
+      security: []
+      parameters:
+        - { name: restaurant_id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: X-Uatis-Signature, in: header, required: true, schema: { type: string } }
+        - { name: X-Uatis-Event, in: header, required: true, schema: { type: string, enum: [message.created, message.updated, conversation.updated] } }
+        - { name: X-Uatis-Delivery, in: header, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UatisWebhook' }
+      responses:
+        '200': { description: Accepted, including a replay of a known message. }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /v1/webhooks/web-nf/{restaurant_id}:
+    post:
+      operationId: receiveWebNfWebhook
+      summary: Receive a web-nf webhook
+      description: >
+        Verifies X-NF-Signature (same scheme, 5-minute tolerance). Updates
+        order_invoices by external id. An unknown invoice id returns 200.
+      tags: [Inbound webhooks]
+      security: []
+      parameters:
+        - { name: restaurant_id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: X-NF-Signature, in: header, required: true, schema: { type: string } }
+        - name: X-NF-Event
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [invoice.authorized, invoice.rejected, invoice.denied, invoice.failed, invoice.cancelled, event.authorized, event.rejected]
+        - { name: X-NF-Delivery, in: header, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WebNfWebhook' }
+      responses:
+        '200': { description: Accepted. }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+webhooks:
+  marmitopEvent:
+    post:
+      summary: Outbound webhook delivered to the restaurant's URL
+      description: >
+        Headers X-Marmitop-Signature (t=unix,v1=hex HMAC-SHA256 of "t.rawBody"),
+        X-Marmitop-Event, X-Marmitop-Delivery. A 2xx within 10 seconds counts
+        as delivered. Retries at 1 m, 5 m, 30 m, 2 h, 8 h.
+      parameters:
+        - { name: X-Marmitop-Signature, in: header, required: true, schema: { type: string } }
+        - { name: X-Marmitop-Event, in: header, required: true, schema: { type: string, enum: [order.created, order.status_changed, message.received, invoice.updated] } }
+        - { name: X-Marmitop-Delivery, in: header, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OutboundEvent' }
+      responses:
+        '2XX': { description: Delivered. }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      description: API key `mtk_live_<base62>` or `mtk_test_<base62>`. Both reach the same data and the same gateways (ADR-017).
+
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      description: Max 255 characters. Scoped per restaurant. Keys expire after 30 days.
+      schema: { type: string, maxLength: 255 }
+
+  headers:
+    IdempotencyReplayed:
+      description: "`true` when the response replays a stored result."
+      schema: { type: string, enum: ['true'] }
+    X-RateLimit-Limit:
+      description: Requests allowed in the window.
+      schema: { type: integer }
+    X-RateLimit-Remaining:
+      description: Requests left in the window.
+      schema: { type: integer }
+    X-RateLimit-Reset:
+      description: Unix seconds when the window resets.
+      schema: { type: integer }
+
+  responses:
+    Error:
+      description: Error envelope.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    RateLimited:
+      description: Over the rate limit.
+      headers:
+        Retry-After: { schema: { type: integer }, description: Seconds. }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  schemas:
+    ErrorCode:
+      type: string
+      enum:
+        - unauthorized
+        - forbidden
+        - not_found
+        - validation_failed
+        - conflict
+        - idempotency_conflict
+        - rate_limited
+        - signature_invalid
+        - invalid_status_transition
+        - item_unavailable
+        - whatsapp_not_configured
+        - whatsapp_disconnected
+        - outside_service_window
+        - upstream_error
+        - internal_error
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, details]
+          properties:
+            code: { $ref: '#/components/schemas/ErrorCode' }
+            message: { type: string }
+            details:
+              type: array
+              items:
+                type: object
+                required: [path, code, message]
+                properties:
+                  path: { type: string }
+                  code: { type: string }
+                  message: { type: string }
+
+    OrderStatus:
+      type: string
+      enum: [aguardando, confirmado, preparando, pronto, saiu, entregue, cancelado]
+    OrderSource:
+      type: string
+      enum: [counter, phone, whatsapp, api]
+    Fulfillment:
+      type: string
+      enum: [delivery, pickup]
+    PaymentMethod:
+      type: string
+      enum: [pix, dinheiro, cartao_credito, cartao_debito]
+
+    OrderCreate:
+      type: object
+      required: [customer_id, fulfillment, payment_method, items]
+      additionalProperties: false
+      properties:
+        customer_id: { type: string, format: uuid }
+        fulfillment: { $ref: '#/components/schemas/Fulfillment' }
+        cep: { type: [string, 'null'], pattern: '^[0-9]{8}$' }
+        logradouro: { type: [string, 'null'], description: Required when fulfillment is delivery, here or on the customer. }
+        numero: { type: [string, 'null'] }
+        complemento: { type: [string, 'null'] }
+        bairro: { type: [string, 'null'], description: Required when fulfillment is delivery, here or on the customer. }
+        cidade: { type: [string, 'null'] }
+        uf: { type: [string, 'null'], pattern: '^[A-Z]{2}$' }
+        codigo_municipio: { type: [string, 'null'], pattern: '^[0-9]{7}$' }
+        payment_method: { $ref: '#/components/schemas/PaymentMethod' }
+        change_for_cents: { type: [integer, 'null'], minimum: 0, description: Only for dinheiro. At least total_cents. }
+        notes: { type: [string, 'null'] }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [menu_item_id, qty]
+            additionalProperties: false
+            properties:
+              menu_item_id: { type: string, format: uuid }
+              size_id: { type: [string, 'null'], format: uuid }
+              qty: { type: integer, minimum: 1 }
+              notes: { type: [string, 'null'] }
+
+    OrderItem:
+      type: object
+      required: [id, menu_item_id, name, size_name, unit_price_cents, qty, notes]
+      properties:
+        id: { type: string, format: uuid }
+        menu_item_id: { type: string, format: uuid }
+        name: { type: string }
+        size_name: { type: [string, 'null'] }
+        unit_price_cents: { type: integer }
+        qty: { type: integer }
+        notes: { type: [string, 'null'] }
+
+    Order:
+      type: object
+      required: [id, code, status, customer_id, fulfillment, payment_method, subtotal_cents, delivery_fee_cents, total_cents, source, items, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, examples: [ORD-012] }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        customer_id: { type: string, format: uuid }
+        fulfillment: { $ref: '#/components/schemas/Fulfillment' }
+        cep: { type: [string, 'null'] }
+        logradouro: { type: [string, 'null'] }
+        numero: { type: [string, 'null'] }
+        complemento: { type: [string, 'null'] }
+        bairro: { type: [string, 'null'] }
+        cidade: { type: [string, 'null'] }
+        uf: { type: [string, 'null'] }
+        codigo_municipio: { type: [string, 'null'] }
+        payment_method: { $ref: '#/components/schemas/PaymentMethod' }
+        change_for_cents: { type: [integer, 'null'] }
+        notes: { type: [string, 'null'] }
+        subtotal_cents: { type: integer }
+        delivery_fee_cents: { type: integer }
+        total_cents: { type: integer }
+        source: { $ref: '#/components/schemas/OrderSource' }
+        conversation_id: { type: [string, 'null'], format: uuid }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OrderItem' }
+        created_at: { type: string, format: date-time }
+        delivered_at: { type: [string, 'null'], format: date-time }
+
+    StatusHistoryEntry:
+      type: object
+      required: [from_status, to_status, changed_at]
+      properties:
+        from_status: { oneOf: [{ $ref: '#/components/schemas/OrderStatus' }, { type: 'null' }] }
+        to_status: { $ref: '#/components/schemas/OrderStatus' }
+        changed_by: { type: [string, 'null'], format: uuid }
+        changed_at: { type: string, format: date-time }
+
+    CustomerWrite:
+      type: object
+      required: [name, phone]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1 }
+        phone: { type: string, pattern: '^\+[1-9][0-9]{7,14}$', description: E.164. }
+        email: { type: [string, 'null'], format: email }
+        cpf_cnpj: { type: [string, 'null'], description: Digits only. }
+        cep: { type: [string, 'null'], pattern: '^[0-9]{8}$' }
+        logradouro: { type: [string, 'null'] }
+        numero: { type: [string, 'null'] }
+        complemento: { type: [string, 'null'] }
+        bairro: { type: [string, 'null'] }
+        cidade: { type: [string, 'null'] }
+        uf: { type: [string, 'null'], pattern: '^[A-Z]{2}$' }
+        codigo_municipio: { type: [string, 'null'], pattern: '^[0-9]{7}$' }
+        notes: { type: [string, 'null'] }
+    CustomerPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1 }
+        email: { type: [string, 'null'], format: email }
+        cpf_cnpj: { type: [string, 'null'] }
+        cep: { type: [string, 'null'], pattern: '^[0-9]{8}$' }
+        logradouro: { type: [string, 'null'] }
+        numero: { type: [string, 'null'] }
+        complemento: { type: [string, 'null'] }
+        bairro: { type: [string, 'null'] }
+        cidade: { type: [string, 'null'] }
+        uf: { type: [string, 'null'], pattern: '^[A-Z]{2}$' }
+        codigo_municipio: { type: [string, 'null'], pattern: '^[0-9]{7}$' }
+        notes: { type: [string, 'null'] }
+    Customer:
+      allOf:
+        - $ref: '#/components/schemas/CustomerWrite'
+        - type: object
+          required: [id, orders_count, total_spent_cents, created_at]
+          properties:
+            id: { type: string, format: uuid }
+            orders_count: { type: integer }
+            total_spent_cents: { type: integer }
+            created_at: { type: string, format: date-time }
+
+    MenuItem:
+      type: object
+      required: [id, kind, name, category, price_cents, available, popular, available_weekdays, sizes]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [meal, drink] }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        category: { type: string }
+        price_cents: { type: integer }
+        calories: { type: [integer, 'null'] }
+        volume: { type: [string, 'null'] }
+        available: { type: boolean }
+        popular: { type: boolean }
+        available_weekdays:
+          type: array
+          items: { type: integer, minimum: 0, maximum: 6 }
+        image_url: { type: [string, 'null'] }
+        sizes:
+          type: array
+          items:
+            type: object
+            required: [id, name, price_cents, position]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              price_cents: { type: integer }
+              position: { type: integer }
+
+    Message:
+      type: object
+      required: [id, conversation_id, customer_id, direction, body, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        conversation_id: { type: string, format: uuid }
+        customer_id: { type: string, format: uuid }
+        direction: { type: string, enum: [in, out] }
+        body: { type: string }
+        status: { type: string, enum: [pending, sent, delivered, read, failed] }
+        order_id: { type: [string, 'null'], format: uuid }
+        created_at: { type: string, format: date-time }
+
+    UatisWebhook:
+      type: object
+      required: [id, type, created_at, organization_id, data]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [message.created, message.updated, conversation.updated] }
+        created_at: { type: string, format: date-time }
+        organization_id: { type: string, format: uuid }
+        data:
+          type: object
+          properties:
+            message:
+              type: object
+              required: [id, conversation_id, direction, content, status, contact_address, created_at]
+              properties:
+                id: { type: string, format: uuid }
+                conversation_id: { type: string, format: uuid }
+                direction: { type: string, enum: [in, out] }
+                content:
+                  type: object
+                  required: [type]
+                  properties:
+                    type: { type: string, examples: [text] }
+                    text:
+                      type: object
+                      properties:
+                        body: { type: string }
+                status:
+                  type: object
+                  required: [state]
+                  properties:
+                    state: { type: string, examples: [received, pending, sent, delivered, read, failed] }
+                    errors: { type: array, items: {} }
+                contact_address: { type: string, description: E.164. }
+                created_at: { type: string, format: date-time }
+            conversation:
+              type: object
+              properties:
+                id: { type: string, format: uuid }
+                contact_id: { type: string, format: uuid }
+                organization_address: { type: string }
+                extra: { type: object }
+                updated_at: { type: string, format: date-time }
+
+    WebNfWebhook:
+      type: object
+      required: [id, type, created_at, data]
+      properties:
+        id: { type: string, format: uuid }
+        type:
+          type: string
+          enum: [invoice.authorized, invoice.rejected, invoice.denied, invoice.failed, invoice.cancelled, event.authorized, event.rejected]
+        created_at: { type: string, format: date-time }
+        data:
+          type: object
+          properties:
+            invoice:
+              type: object
+              required: [id, kind, status]
+              properties:
+                id: { type: string, format: uuid }
+                kind: { type: string, enum: [nfe, nfse, nfce] }
+                status: { type: string }
+                numero: { type: [integer, 'null'] }
+                chave_acesso: { type: [string, 'null'] }
+                reference: { type: [string, 'null'], description: Marmitop sets it to order_invoices.id. }
+
+    OutboundEvent:
+      type: object
+      required: [id, type, created_at, restaurant_id, data]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [order.created, order.status_changed, message.received, invoice.updated] }
+        created_at: { type: string, format: date-time }
+        restaurant_id: { type: string, format: uuid }
+        data:
+          oneOf:
+            - type: object
+              title: order.created
+              required: [order]
+              properties:
+                order: { $ref: '#/components/schemas/Order' }
+            - type: object
+              title: order.status_changed
+              required: [order_id, code, from_status, to_status, changed_at]
+              properties:
+                order_id: { type: string, format: uuid }
+                code: { type: string }
+                from_status: { $ref: '#/components/schemas/OrderStatus' }
+                to_status: { $ref: '#/components/schemas/OrderStatus' }
+                changed_at: { type: string, format: date-time }
+            - type: object
+              title: message.received
+              required: [message, customer]
+              properties:
+                message:
+                  type: object
+                  properties:
+                    id: { type: string, format: uuid }
+                    conversation_id: { type: string, format: uuid }
+                    customer_id: { type: string, format: uuid }
+                    body: { type: string }
+                    created_at: { type: string, format: date-time }
+                customer:
+                  type: object
+                  properties:
+                    id: { type: string, format: uuid }
+                    name: { type: string }
+                    phone: { type: string }
+            - type: object
+              title: invoice.updated
+              required: [invoice]
+              properties:
+                invoice:
+                  type: object
+                  properties:
+                    id: { type: string, format: uuid }
+                    order_id: { type: string, format: uuid }
+                    kind: { type: string, enum: [nfce, nfe] }
+                    status: { type: string, enum: [queued, processing, authorized, rejected, denied, failed, cancelled] }
+                    numero: { type: [integer, 'null'] }
+                    serie: { type: [integer, 'null'] }
+                    chave_acesso: { type: [string, 'null'] }
+                    error_code: { type: [string, 'null'] }
+                    error_message: { type: [string, 'null'] }
+                    updated_at: { type: string, format: date-time }

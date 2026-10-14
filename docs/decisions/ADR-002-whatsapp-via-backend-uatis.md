@@ -40,3 +40,11 @@ Option 3.
 * Marmitop never holds Meta credentials. The goal's "inbound webhook with signature verification" is met by verifying the `backend-uatis` signature. `backend-uatis` verifies the Meta signature.
 * Tests cover `X-Uatis-Signature` verification (valid, tampered body, stale timestamp, wrong secret).
 * Open item outside this repo: wire customer webhook delivery in the `backend-uatis` worker.
+
+## Amendment 1 — 2026-10-13 (facts found while writing 06.api-spec.md)
+
+* **The poll is required, not a safety net.** The `backend-uatis` worker does not deliver webhooks today, so the reconciliation poll is the only working inbound path.
+* **Poll cursor.** The `backend-uatis` cursor is opaque and does not mean "after message X". The poll reads `GET /v1/messages?direction=in&from=<timestamp>` and stores the newest `created_at` it saw in `integrations_whatsapp.last_sync_cursor`. It overlaps by 60 seconds and relies on the `external_id` upsert for deduplication.
+* **Status mapping.** `backend-uatis` returns `status: {state}`. Marmitop maps `pending|sent|delivered|read|failed` one to one and stores inbound `received` as `delivered`.
+* **Payload.** The inbound text is at `data.message.content.text.body`. v1 stores text only. Other content types get the body `[mídia não suportada]`. Outbound calls send `from_address = phone_number_id`.
+* **24-hour window.** See ADR-014.
