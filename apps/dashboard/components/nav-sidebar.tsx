@@ -1,36 +1,38 @@
 "use client";
 
-import { MessageCircle, ClipboardList, Users, BarChart3, UtensilsCrossed, BookOpen, Boxes, PlusCircle, Settings } from "lucide-react";
+import { MessageCircle, ClipboardList, Users, UtensilsCrossed, BookOpen, Boxes, PlusCircle, Settings, BarChart3, LogOut } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { cn } from "@mt/ui/lib/utils";
-import type { Section } from "@/lib/marmita-data";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@mt/ui/components/tooltip";
 
-interface NavItem {
-  id: Section;
-  label: string;
-  icon: React.ElementType;
-  badge?: number;
-}
+import { logoutAction } from "@/lib/auth-actions";
+import { navItemsFor, type Role, type Section, sectionForPath } from "@/lib/nav";
 
-const navItems: NavItem[] = [
-  { id: "novo-pedido", label: "Novo pedido", icon: PlusCircle },
-  { id: "mensagens",   label: "Mensagens",   icon: MessageCircle },
-  { id: "pedidos",     label: "Pedidos",     icon: ClipboardList },
-  { id: "contatos",    label: "Contatos",    icon: Users },
-  { id: "cardapio",    label: "Cardápio",    icon: BookOpen },
-  { id: "estoque",     label: "Estoque",     icon: Boxes },
-  { id: "relatorios",  label: "Relatórios",  icon: BarChart3 },
-  { id: "configuracoes", label: "Configurações", icon: Settings },
-];
+// FR-002 (logout), FR-005/FR-007 (items by role). The server gates each page
+// too; hiding an item here is a convenience, not the check.
+
+const ICONS: Record<Section, React.ElementType> = {
+  "novo-pedido": PlusCircle,
+  mensagens: MessageCircle,
+  pedidos: ClipboardList,
+  contatos: Users,
+  cardapio: BookOpen,
+  estoque: Boxes,
+  relatorios: BarChart3,
+  configuracoes: Settings,
+};
 
 interface NavSidebarProps {
-  active: Section;
-  onSelect: (section: Section) => void;
+  role: Role;
+  restaurantName: string;
+  userEmail?: string;
   unreadCount?: number;
   newOrdersCount?: number;
 }
 
-export function NavSidebar({ active, onSelect, unreadCount = 0, newOrdersCount = 0 }: NavSidebarProps) {
+export function NavSidebar({ role, restaurantName, userEmail, unreadCount = 0, newOrdersCount = 0 }: NavSidebarProps) {
+  const active = sectionForPath(usePathname());
   const getBadge = (id: Section) => {
     if (id === "mensagens" && unreadCount > 0) return unreadCount;
     if (id === "pedidos" && newOrdersCount > 0) return newOrdersCount;
@@ -44,22 +46,31 @@ export function NavSidebar({ active, onSelect, unreadCount = 0, newOrdersCount =
         aria-label="Navegação principal"
       >
         {/* Logo */}
-        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary mb-5">
-          <UtensilsCrossed className="w-5 h-5 text-primary-foreground" aria-hidden="true" />
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary mb-5" aria-label={`Marmitop — ${restaurantName}`}>
+              <UtensilsCrossed className="w-5 h-5 text-primary-foreground" aria-hidden="true" />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="text-xs">
+            {restaurantName}
+          </TooltipContent>
+        </Tooltip>
 
         {/* Nav items */}
         <div className="flex flex-col gap-1 flex-1 w-full px-2">
-          {navItems.map(({ id, label, icon: Icon }) => {
+          {navItemsFor(role).map(({ id, label, href }) => {
+            const Icon = ICONS[id];
             const badge = getBadge(id);
             const isActive = active === id;
             return (
               <Tooltip key={id}>
                 <TooltipTrigger asChild>
-                  <button
-                    onClick={() => onSelect(id)}
+                  <Link
+                    href={href}
                     aria-label={label}
                     aria-current={isActive ? "page" : undefined}
+                    data-nav-item={id}
                     className={cn(
                       "relative flex items-center justify-center w-full h-10 rounded-lg transition-colors",
                       isActive
@@ -73,7 +84,7 @@ export function NavSidebar({ active, onSelect, unreadCount = 0, newOrdersCount =
                         {badge > 99 ? "99+" : badge}
                       </span>
                     )}
-                  </button>
+                  </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right" className="text-xs">
                   {label}
@@ -82,6 +93,24 @@ export function NavSidebar({ active, onSelect, unreadCount = 0, newOrdersCount =
             );
           })}
         </div>
+
+        {/* Logout */}
+        <form action={logoutAction} className="w-full px-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="submit"
+                aria-label="Sair"
+                className="flex items-center justify-center w-full h-10 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+              >
+                <LogOut className="w-5 h-5 shrink-0" aria-hidden="true" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="text-xs">
+              {userEmail ? `Sair (${userEmail})` : "Sair"}
+            </TooltipContent>
+          </Tooltip>
+        </form>
       </nav>
     </TooltipProvider>
   );

@@ -1,0 +1,82 @@
+// packages/http/src/deps.ts
+//
+// The dependency container every service takes as its first argument
+// (04.architecture.md "Ports and adapters"). apps/dashboard, apps/api, and
+// apps/worker each build one per process from `readServerConfig()`; tests
+// build one around the test database (`@mt/http/testing`).
+
+import {
+  type Clock,
+  EnvelopeSecretBox,
+  FakeGateway,
+  FakeInvoiceGateway,
+  type InvoiceGateway,
+  type SecretBox,
+  systemClock,
+  type WhatsAppGateway,
+} from "@mt/core";
+import { type ContextOptions, createDb, type Db } from "@mt/db";
+
+import type { ServerConfig } from "./config";
+
+/** What a per-restaurant adapter needs. Read from `integrations_*` and `secrets` by the caller. */
+export interface GatewayConnection {
+  readonly baseUrl: string;
+  readonly apiKey: string;
+}
+
+export interface GatewayFactory {
+  whatsapp(conn: GatewayConnection): WhatsAppGateway;
+  invoices(conn: GatewayConnection): InvoiceGateway;
+}
+
+export interface ServiceDeps {
+  readonly db: Db;
+  readonly secretBox: SecretBox;
+  readonly clock: Clock;
+  readonly gateways: GatewayFactory;
+  /**
+   * Passed to every `withRestaurantContext`. Always `{ role: "app_service" }`:
+   * deployments already connect as `app_service`, and a `set local role` to
+   * itself is a no-op; if `DATABASE_URL` ever names a more powerful role, RLS
+   * still applies (defense in depth). Tests connect as the owner and rely on it.
+   */
+  readonly contextOptions: ContextOptions;
+  readonly env: ServerConfig["env"];
+}
+
+export type ServiceDepsOverrides = Partial<Omit<ServiceDeps, "env" | "contextOptions">>;
+
+function gatewaysFor(config: ServerConfig): GatewayFactory {
+  // One fake per process, so a dev "simulate inbound" and the worker's sends
+  // see the same recorded state.
+  const fakeWhatsApp = config.uatisFake ? new FakeGateway() : undefined;
+  const fakeInvoices = config.webnfFake ? new FakeInvoiceGateway() : undefined;
+  return {
+    whatsapp(_conn) {
+      if (fakeWhatsApp) return fakeWhatsApp;
+      throw new Error("UatisGateway is not implemented yet (P5). Set MT_UATIS_FAKE=1.");
+    },
+    invoices(_conn) {
+      if (fakeInvoices) return fakeInvoices;
+      throw new Error("WebNfGateway is not implemented yet (P6). Set MT_WEBNF_FAKE=1.");
+    },
+  };
+}
+
+export function createServiceDeps(config: ServerConfig, overrides: ServiceDepsOverrides = {}): ServiceDeps {
+  return {
+    db: overrides.db ?? createDb(config.databaseUrl),
+    secretBox:
+      overrides.secretBox ??
+      new EnvelopeSecretBox({
+        kek: config.kek,
+        kekVersion: config.kekVersion,
+        ...(config.kekPrevious ? { previous: { kek: config.kekPrevious, kekVersion: config.kekVersion - 1 } } : {}),
+      }),
+    clock: overrides.clock ?? systemClock,
+    gateways: overrides.gateways ?? gatewaysFor(config),
+    contextOptions: { role: "app_service" },
+    env: config.env,
+  };
+}

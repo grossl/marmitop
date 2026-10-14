@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@mt/ui'],
+  transpilePackages: ['@mt/ui', '@mt/http', '@mt/db', '@mt/core', '@mt/schemas'],
   images: {
     unoptimized: true,
   },
