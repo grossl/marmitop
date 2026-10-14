@@ -70,7 +70,7 @@ export const lookupCustomers = defineService({
           ${pattern ? tx`(name ilike ${pattern} or phone ilike ${pattern})` : tx`true`}
           ${ids.length > 0 ? tx`or id in ${tx(ids)}` : tx``}
         )
-      order by (${ids.length > 0 ? tx`id in ${tx(ids)}` : tx`false`}) desc, name
+      order by ${ids.length > 0 ? tx`(id in ${tx(ids)}) desc,` : tx``} name
       limit 30
     `;
     return rows.map(toPicker);

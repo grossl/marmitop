@@ -73,10 +73,17 @@ export const RAISE_EXCEPTION = "P0001";
 let userCounter = 0;
 
 /** Creates an auth.users stand-in row and returns its id. */
+/**
+ * Per-process id mixed into values that are unique across the whole table
+ * (auth email, API key hash). Counters restart in every process, so without it
+ * a second run collides with rows an earlier run left in `mt_test`.
+ */
+const RUN_ID = crypto.randomUUID().slice(0, 8);
+
 export async function createUser(db: Db, label: string): Promise<string> {
   userCounter += 1;
   const [row] = await db<{ id: string }[]>`
-    insert into auth.users (email) values (${`${label}-${userCounter}@example.test`}) returning id
+    insert into auth.users (email) values (${`${label}-${RUN_ID}-${userCounter}@example.test`}) returning id
   `;
   if (row === undefined) throw new Error("failed to create auth.users row");
   return row.id;
@@ -143,8 +150,8 @@ export async function seedRestaurant(db: Db, label: string): Promise<RestaurantF
   const n = fixtureCounter;
   const adminId = await createUser(db, `${label}-admin`);
   const attendantId = await createUser(db, `${label}-attendant`);
-  const apiKeyHash = sha256Hex(`mtk_test_${label}_${n}`);
-  const revokedHash = sha256Hex(`mtk_test_${label}_${n}_revoked`);
+  const apiKeyHash = sha256Hex(`mtk_test_${label}_${RUN_ID}_${n}`);
+  const revokedHash = sha256Hex(`mtk_test_${label}_${RUN_ID}_${n}_revoked`);
 
   return db.begin(async (sql) => {
     const tx = sql as unknown as Tx;
