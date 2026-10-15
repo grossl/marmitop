@@ -82,71 +82,71 @@ const COLUMNS: {
     status: "aguardando",
     label: "Aguardando",
     icon: AlertCircle,
-    accent: "text-yellow-600",
-    badgeClass: "bg-yellow-50 text-yellow-700 border-yellow-200",
-    headerClass: "border-yellow-300 bg-yellow-50",
-    colClass: "border-yellow-200 bg-yellow-50/30",
-    dropClass: "bg-yellow-100/60 border-yellow-300",
+    accent: "text-yellow-600 dark:text-yellow-300",
+    badgeClass: "bg-yellow-50 dark:bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-500/30",
+    headerClass: "border-yellow-300 dark:border-yellow-500/30 bg-yellow-50 dark:bg-yellow-500/15",
+    colClass: "border-yellow-200 dark:border-yellow-500/30 bg-yellow-50/30 dark:bg-yellow-500/15",
+    dropClass: "bg-yellow-100/60 dark:bg-yellow-500/20 border-yellow-300 dark:border-yellow-500/30",
   },
   {
     status: "confirmado",
     label: "Confirmado",
     icon: CheckCircle2,
-    accent: "text-blue-600",
-    badgeClass: "bg-blue-50 text-blue-700 border-blue-200",
-    headerClass: "border-blue-300 bg-blue-50",
-    colClass: "border-blue-200 bg-blue-50/30",
-    dropClass: "bg-blue-100/60 border-blue-300",
+    accent: "text-blue-600 dark:text-blue-300",
+    badgeClass: "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30",
+    headerClass: "border-blue-300 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/15",
+    colClass: "border-blue-200 dark:border-blue-500/30 bg-blue-50/30 dark:bg-blue-500/15",
+    dropClass: "bg-blue-100/60 dark:bg-blue-500/20 border-blue-300 dark:border-blue-500/30",
   },
   {
     status: "preparando",
     label: "Em Preparo",
     icon: UtensilsCrossed,
-    accent: "text-orange-600",
-    badgeClass: "bg-orange-50 text-orange-700 border-orange-200",
-    headerClass: "border-orange-300 bg-orange-50",
-    colClass: "border-orange-200 bg-orange-50/30",
-    dropClass: "bg-orange-100/60 border-orange-300",
+    accent: "text-orange-600 dark:text-orange-300",
+    badgeClass: "bg-orange-50 dark:bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-500/30",
+    headerClass: "border-orange-300 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/15",
+    colClass: "border-orange-200 dark:border-orange-500/30 bg-orange-50/30 dark:bg-orange-500/15",
+    dropClass: "bg-orange-100/60 dark:bg-orange-500/20 border-orange-300 dark:border-orange-500/30",
   },
   {
     status: "pronto",
     label: "Pronto",
     icon: Package,
-    accent: "text-green-600",
-    badgeClass: "bg-green-50 text-green-700 border-green-200",
-    headerClass: "border-green-300 bg-green-50",
-    colClass: "border-green-200 bg-green-50/30",
-    dropClass: "bg-green-100/60 border-green-300",
+    accent: "text-green-600 dark:text-green-300",
+    badgeClass: "bg-green-50 dark:bg-green-500/15 text-green-700 dark:text-green-300 border-green-200 dark:border-green-500/30",
+    headerClass: "border-green-300 dark:border-green-500/30 bg-green-50 dark:bg-green-500/15",
+    colClass: "border-green-200 dark:border-green-500/30 bg-green-50/30 dark:bg-green-500/15",
+    dropClass: "bg-green-100/60 dark:bg-green-500/20 border-green-300 dark:border-green-500/30",
   },
   {
     status: "saiu",
     label: "Saiu para Entrega",
     icon: Bike,
-    accent: "text-purple-600",
-    badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
-    headerClass: "border-purple-300 bg-purple-50",
-    colClass: "border-purple-200 bg-purple-50/30",
-    dropClass: "bg-purple-100/60 border-purple-300",
+    accent: "text-purple-600 dark:text-purple-300",
+    badgeClass: "bg-purple-50 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-500/30",
+    headerClass: "border-purple-300 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-500/15",
+    colClass: "border-purple-200 dark:border-purple-500/30 bg-purple-50/30 dark:bg-purple-500/15",
+    dropClass: "bg-purple-100/60 dark:bg-purple-500/20 border-purple-300 dark:border-purple-500/30",
   },
   {
     status: "entregue",
     label: "Entregue",
     icon: CheckCheck,
-    accent: "text-slate-500",
-    badgeClass: "bg-slate-100 text-slate-600 border-slate-200",
-    headerClass: "border-slate-200 bg-slate-50",
-    colClass: "border-slate-200 bg-slate-50/30",
-    dropClass: "bg-slate-100/60 border-slate-300",
+    accent: "text-slate-500 dark:text-slate-400",
+    badgeClass: "bg-slate-100 dark:bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-500/30",
+    headerClass: "border-slate-200 dark:border-slate-500/30 bg-slate-50 dark:bg-slate-500/15",
+    colClass: "border-slate-200 dark:border-slate-500/30 bg-slate-50/30 dark:bg-slate-500/15",
+    dropClass: "bg-slate-100/60 dark:bg-slate-500/20 border-slate-300 dark:border-slate-500/30",
   },
   {
     status: "cancelado",
     label: "Cancelado",
     icon: XCircle,
-    accent: "text-red-500",
-    badgeClass: "bg-red-50 text-red-700 border-red-200",
-    headerClass: "border-red-200 bg-red-50",
-    colClass: "border-red-200 bg-red-50/30",
-    dropClass: "bg-red-100/60 border-red-300",
+    accent: "text-red-500 dark:text-red-300",
+    badgeClass: "bg-red-50 dark:bg-red-500/15 text-red-700 dark:text-red-300 border-red-200 dark:border-red-500/30",
+    headerClass: "border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/15",
+    colClass: "border-red-200 dark:border-red-500/30 bg-red-50/30 dark:bg-red-500/15",
+    dropClass: "bg-red-100/60 dark:bg-red-500/20 border-red-300 dark:border-red-500/30",
   },
 ];
 
@@ -431,12 +431,12 @@ function PaymentSection({
       <div className="flex items-center gap-2 text-xs">
         <span className="font-semibold uppercase tracking-wide text-muted-foreground">Pagamento</span>
         {paid ? (
-          <span className="inline-flex items-center gap-1 rounded border border-green-200 bg-green-50 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-green-700">
+          <span className="inline-flex items-center gap-1 rounded border border-green-200 dark:border-green-500/30 bg-green-50 dark:bg-green-500/15 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-green-700 dark:text-green-300">
             <CircleCheck className="h-3 w-3" aria-hidden="true" />
             Pago em {formatDateTime(paidAt, timezone)}
           </span>
         ) : (
-          <span className="inline-flex items-center rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-slate-600">
+          <span className="inline-flex items-center rounded border border-slate-200 dark:border-slate-500/30 bg-slate-100 dark:bg-slate-500/15 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-slate-600 dark:text-slate-400">
             Não pago
           </span>
         )}
@@ -770,21 +770,21 @@ export function OrdersPage({
             value={String(kpis.inProgressCount)}
             sub="aguardando + confirmado + preparo"
             icon={Clock}
-            color="bg-amber-100 text-amber-600"
+            color="bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300"
           />
           <KpiCard
             label="Prontos"
             value={String(kpis.readyCount)}
             sub="aguardando retirada/entrega"
             icon={Package}
-            color="bg-green-100 text-green-600"
+            color="bg-green-100 dark:bg-green-500/15 text-green-600 dark:text-green-300"
           />
           <KpiCard
             label="Saiu para entrega"
             value={String(kpis.outForDeliveryCount)}
             sub="a caminho do cliente"
             icon={Bike}
-            color="bg-purple-100 text-purple-600"
+            color="bg-purple-100 dark:bg-purple-500/15 text-purple-600 dark:text-purple-300"
           />
         </div>
 

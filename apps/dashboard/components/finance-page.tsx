@@ -84,10 +84,10 @@ function KpiCard({
 }
 
 const METHOD_CARDS = [
-  { method: "pix", icon: QrCode, color: "bg-teal-100 text-teal-700" },
-  { method: "dinheiro", icon: Banknote, color: "bg-green-100 text-green-700" },
-  { method: "cartao_credito", icon: CreditCard, color: "bg-blue-100 text-blue-700" },
-  { method: "cartao_debito", icon: CreditCard, color: "bg-purple-100 text-purple-700" },
+  { method: "pix", icon: QrCode, color: "bg-teal-100 dark:bg-teal-500/15 text-teal-700 dark:text-teal-300" },
+  { method: "dinheiro", icon: Banknote, color: "bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300" },
+  { method: "cartao_credito", icon: CreditCard, color: "bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300" },
+  { method: "cartao_debito", icon: CreditCard, color: "bg-purple-100 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300" },
 ] as const;
 
 // ─── Customer picker (FR-165) ─────────────────────────────────────────────────
@@ -197,7 +197,7 @@ function BatchResultDialog({
         </DialogHeader>
         <div className="space-y-4 text-sm">
           {counts.issued > 0 && (
-            <p className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-green-800">
+            <p className="rounded-md border border-green-200 dark:border-green-500/30 bg-green-50 dark:bg-green-500/15 px-3 py-2 text-green-800 dark:text-green-300">
               {pluralOrders(counts.issued)} na fila do web-nf. O status da nota atualiza sozinho na lista.
             </p>
           )}
@@ -209,7 +209,7 @@ function BatchResultDialog({
               <ul className="space-y-2">
                 {blocked.map((r) =>
                   r.outcome === "blocked" ? (
-                    <li key={r.orderId} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                    <li key={r.orderId} className="rounded-md border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 px-3 py-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-mono font-semibold">{r.code ?? r.orderId.slice(0, 8)}</span>
                         {r.code && (
@@ -220,11 +220,11 @@ function BatchResultDialog({
                         )}
                       </div>
                       {r.missingFields.length > 0 && (
-                        <p className="mt-1 text-xs text-amber-900">
+                        <p className="mt-1 text-xs text-amber-900 dark:text-amber-300">
                           Faltam: {r.missingFields.map((f) => MISSING_FIELD_LABELS[f] ?? f).join(", ")}
                         </p>
                       )}
-                      <ul className="mt-1 list-disc pl-4 text-xs text-amber-900">
+                      <ul className="mt-1 list-disc pl-4 text-xs text-amber-900 dark:text-amber-300">
                         {r.problems.map((p, i) => (
                           <li key={i}>{p.message}</li>
                         ))}
@@ -430,7 +430,7 @@ export function FinancePage({
             value={String(totals.count)}
             sub="no filtro atual"
             icon={ShoppingBag}
-            color="bg-amber-100 text-amber-600"
+            color="bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300"
           />
           <KpiCard
             label="Total bruto"

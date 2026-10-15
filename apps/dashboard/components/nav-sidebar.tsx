@@ -1,11 +1,14 @@
 "use client";
 
-import { MessageCircle, ClipboardList, Users, UtensilsCrossed, BookOpen, Boxes, PlusCircle, Settings, BarChart3, LogOut, Wallet } from "lucide-react";
+import { MessageCircle, ClipboardList, Users, UtensilsCrossed, BookOpen, Boxes, PlusCircle, Settings, BarChart3, LogOut, Wallet, Sun, Moon, Monitor } from "lucide-react";
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@mt/ui/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@mt/ui/components/tooltip";
 
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@mt/ui/components/dropdown-menu";
 import { logoutAction } from "@/lib/auth-actions";
 import { navItemsFor, type Role, type Section, sectionForPath } from "@/lib/nav";
 
@@ -30,6 +33,38 @@ interface NavSidebarProps {
   userEmail?: string;
   unreadCount?: number;
   newOrdersCount?: number;
+}
+
+// ADR-022: per-browser theme preference. Render a neutral icon until mounted
+// so the server and first client render match.
+function ThemeSwitch() {
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const Icon = !mounted || theme === "system" || !theme ? Monitor : theme === "dark" ? Moon : Sun;
+  return (
+    <div className="w-full px-2">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="Tema"
+            data-theme-switch
+            className="flex items-center justify-center w-full h-10 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+          >
+            <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="end">
+          <DropdownMenuRadioGroup value={mounted ? (theme ?? "system") : "system"} onValueChange={setTheme}>
+            <DropdownMenuRadioItem value="light"><Sun className="w-4 h-4" aria-hidden="true" /> Claro</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="dark"><Moon className="w-4 h-4" aria-hidden="true" /> Escuro</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="system"><Monitor className="w-4 h-4" aria-hidden="true" /> Sistema</DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
 }
 
 export function NavSidebar({ role, restaurantName, userEmail, unreadCount = 0, newOrdersCount = 0 }: NavSidebarProps) {
@@ -94,6 +129,8 @@ export function NavSidebar({ role, restaurantName, userEmail, unreadCount = 0, n
             );
           })}
         </div>
+
+        <ThemeSwitch />
 
         {/* Logout */}
         <form action={logoutAction} className="w-full px-2">

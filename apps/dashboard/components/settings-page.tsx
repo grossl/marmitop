@@ -153,7 +153,7 @@ function Field({ label, error, className, children }: { label: string; error?: s
       <Label>{label}</Label>
       {children}
       {error && (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-red-600 dark:text-red-300">
           {error}
         </p>
       )}
@@ -220,14 +220,14 @@ function StatusBadge({ status, lastError }: { status: "disconnected" | "connecte
       <span
         className={cn(
           "rounded-full px-2 py-1 font-semibold",
-          status === "connected" && "bg-green-100 text-green-700",
-          status === "error" && "bg-red-100 text-red-700",
+          status === "connected" && "bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300",
+          status === "error" && "bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300",
           status === "disconnected" && "bg-muted text-muted-foreground",
         )}
       >
         {label}
       </span>
-      {lastError && <span className="text-red-600">{lastError}</span>}
+      {lastError && <span className="text-red-600 dark:text-red-300">{lastError}</span>}
     </div>
   );
 }
@@ -243,11 +243,11 @@ function ShownOnce({ title, value, onClose }: { title: string; value: string; on
     }
   }
   return (
-    <div className="rounded-lg border border-amber-300 bg-amber-50 p-4" role="status">
-      <p className="text-sm font-semibold text-amber-900">{title}</p>
-      <p className="mt-1 text-xs text-amber-800">Copie agora. Este valor não será exibido novamente.</p>
+    <div className="rounded-lg border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 p-4" role="status">
+      <p className="text-sm font-semibold text-amber-900 dark:text-amber-300">{title}</p>
+      <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">Copie agora. Este valor não será exibido novamente.</p>
       <div className="mt-3 flex items-center gap-2">
-        <code className="min-w-0 flex-1 break-all rounded bg-white px-2 py-1.5 text-xs text-foreground">{value}</code>
+        <code className="min-w-0 flex-1 break-all rounded bg-card px-2 py-1.5 text-xs text-foreground">{value}</code>
         <Button type="button" variant="outline" size="sm" className="gap-1" onClick={copy}>
           <Copy className="h-3.5 w-3.5" />
           Copiar
@@ -462,7 +462,7 @@ function HoursSettings({ settings }: { settings: SettingsView }) {
                     <Switch checked={value.enabled} onCheckedChange={(enabled) => update(weekday, { enabled })} aria-label={name} />
                     <span className="text-sm font-medium">{name}</span>
                   </div>
-                  <span className={cn("text-xs", value.enabled ? "text-green-600" : "text-muted-foreground")}>
+                  <span className={cn("text-xs", value.enabled ? "text-green-600 dark:text-green-300" : "text-muted-foreground")}>
                     {value.enabled ? "Aberto" : "Fechado"}
                   </span>
                   <Input
@@ -481,7 +481,7 @@ function HoursSettings({ settings }: { settings: SettingsView }) {
                   />
                 </div>
                 {error && (
-                  <p role="alert" className="mt-1 px-1 text-xs text-red-600">
+                  <p role="alert" className="mt-1 px-1 text-xs text-red-600 dark:text-red-300">
                     {name}: {error}
                   </p>
                 )}
@@ -552,7 +552,7 @@ function AutomaticMessageCard({ message }: { message: SettingsView["automaticMes
         <Switch checked={enabled} onCheckedChange={setEnabled} aria-label={copy.title} />
       </div>
       <Textarea value={body} onChange={(e) => setBody(e.target.value)} className="mt-3 min-h-20 text-sm" aria-label={`Texto: ${copy.title}`} />
-      {section.errors.body && <p role="alert" className="mt-1 text-xs text-red-600">{section.errors.body}</p>}
+      {section.errors.body && <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-300">{section.errors.body}</p>}
       {message.kind === "order_received" && (
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <Field label="Modelo do WhatsApp (opcional)" error={section.errors.templateName}>
@@ -727,7 +727,7 @@ function WebhookCard({ state }: { state: SettingsView["integrations"]["webhook"]
                 </label>
               ))}
             </div>
-            {section.errors.events && <p role="alert" className="text-xs text-red-600">{section.errors.events}</p>}
+            {section.errors.events && <p role="alert" className="text-xs text-red-600 dark:text-red-300">{section.errors.events}</p>}
           </div>
           <ToggleRow title="Webhook ativo" description="Desative para pausar os envios sem apagar a configuração." checked={enabled} onChange={setEnabled} />
           {state && (

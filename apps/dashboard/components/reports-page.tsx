@@ -90,10 +90,10 @@ export function ReportsPage({
 
   // Top items bar chart color
   const barColors = [
-    "oklch(0.6 0.18 40)",
+    "var(--primary)",
     "oklch(0.65 0.16 45)",
     "oklch(0.7 0.14 50)",
-    "oklch(0.72 0.12 55)",
+    "var(--chart-5)",
     "oklch(0.74 0.10 58)",
     "oklch(0.76 0.08 60)",
     "oklch(0.78 0.06 62)",
@@ -134,7 +134,7 @@ export function ReportsPage({
               {p.label}
             </Link>
           ))}
-          {periodError && <span role="alert" className="text-red-600">{periodError}</span>}
+          {periodError && <span role="alert" className="text-red-600 dark:text-red-300">{periodError}</span>}
         </div>
         {/* KPI row */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -150,21 +150,21 @@ export function ReportsPage({
             value={String(summary.orderCount)}
             sub="no período"
             icon={ShoppingBag}
-            iconClass="bg-amber-100 text-amber-600"
+            iconClass="bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300"
           />
           <KpiCard
             label="Ticket médio"
             value={formatBRL(summary.averageTicketCents)}
             sub="por pedido"
             icon={TrendingUp}
-            iconClass="bg-green-100 text-green-600"
+            iconClass="bg-green-100 dark:bg-green-500/15 text-green-600 dark:text-green-300"
           />
           <KpiCard
             label="Clientes ativos"
             value={String(summary.activeCustomers)}
             sub="com pedido entregue no período"
             icon={Users}
-            iconClass="bg-blue-100 text-blue-600"
+            iconClass="bg-blue-100 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300"
           />
         </div>
 
@@ -182,8 +182,8 @@ export function ReportsPage({
                   className={cn(
                     "text-xs font-semibold px-2 py-1 rounded-full",
                     isGrowthPositive
-                      ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-700"
+                      ? "bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300"
+                      : "bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300"
                   )}
                 >
                   {isGrowthPositive ? "+" : ""}{growth.toLocaleString("pt-BR", { minimumFractionDigits: 1 })}% vs mês ant.
@@ -192,23 +192,23 @@ export function ReportsPage({
             </div>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={monthlyData} barSize={28}>
-                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.88 0.015 55)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis
                   dataKey="month"
-                  tick={{ fontSize: 12, fill: "oklch(0.5 0.02 50)" }}
+                  tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fontSize: 11, fill: "oklch(0.5 0.02 50)" }}
+                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v) => `R$${(v / 1000).toFixed(1)}k`}
                   width={52}
                 />
                 <Tooltip content={<RevenueTooltip />} />
-                <Bar dataKey="revenue" fill="oklch(0.6 0.18 40)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="orders" fill="oklch(0.72 0.12 55)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="revenue" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="orders" fill="var(--chart-5)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
             <div className="flex items-center gap-4 mt-2 justify-center">
@@ -217,7 +217,7 @@ export function ReportsPage({
                 Faturamento
               </div>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <div className="w-3 h-3 rounded-sm" style={{ background: "oklch(0.72 0.12 55)" }} />
+                <div className="w-3 h-3 rounded-sm" style={{ background: "var(--chart-5)" }} />
                 Pedidos
               </div>
             </div>
@@ -231,16 +231,16 @@ export function ReportsPage({
             </div>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={dailyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.88 0.015 55)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis
                   dataKey="day"
-                  tick={{ fontSize: 10, fill: "oklch(0.5 0.02 50)" }}
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
                   axisLine={false}
                   tickLine={false}
                   interval={2}
                 />
                 <YAxis
-                  tick={{ fontSize: 11, fill: "oklch(0.5 0.02 50)" }}
+                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                   axisLine={false}
                   tickLine={false}
                   width={28}
@@ -249,9 +249,9 @@ export function ReportsPage({
                 <Line
                   type="monotone"
                   dataKey="orders"
-                  stroke="oklch(0.6 0.18 40)"
+                  stroke="var(--primary)"
                   strokeWidth={2.5}
-                  dot={{ r: 3, fill: "oklch(0.6 0.18 40)" }}
+                  dot={{ r: 3, fill: "var(--primary)" }}
                   activeDot={{ r: 5 }}
                 />
               </LineChart>

@@ -92,11 +92,11 @@ export function invoiceBadge(status: string, kind?: string): { label: string; to
 }
 
 export const INVOICE_TONE_CLASSES: Record<InvoiceTone, string> = {
-  green: "bg-green-50 text-green-700 border-green-200",
-  blue: "bg-blue-50 text-blue-700 border-blue-200",
-  red: "bg-red-50 text-red-700 border-red-200",
-  amber: "bg-amber-50 text-amber-700 border-amber-200",
-  grey: "bg-slate-100 text-slate-600 border-slate-200",
+  green: "bg-green-50 dark:bg-green-500/15 text-green-700 dark:text-green-300 border-green-200 dark:border-green-500/30",
+  blue: "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30",
+  red: "bg-red-50 dark:bg-red-500/15 text-red-700 dark:text-red-300 border-red-200 dark:border-red-500/30",
+  amber: "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30",
+  grey: "bg-slate-100 dark:bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-500/30",
 };
 
 export const isInvoicePending = (status: string) => PENDING_INVOICE.has(status);

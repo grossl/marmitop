@@ -286,7 +286,7 @@ function MenuItemCard({
             <Pencil className="w-3.5 h-3.5" />
           </button>
           <button onClick={onDelete} title="Remover"
-            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-destructive transition-colors">
+            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-destructive transition-colors">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -351,7 +351,7 @@ function DrinkItemCard({
             <Pencil className="w-3.5 h-3.5" />
           </button>
           <button onClick={onDelete}
-            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-destructive transition-colors">
+            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-destructive transition-colors">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>

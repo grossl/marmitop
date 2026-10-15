@@ -217,7 +217,7 @@ export function InvoicePanel({
             )}
           </dl>
           {latest.errorText && (
-            <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-red-700">
+            <p role="alert" className="rounded-md border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/15 px-2 py-1.5 text-red-700 dark:text-red-300">
               {latest.errorText}
             </p>
           )}
@@ -298,7 +298,7 @@ export function InvoicePanel({
           {otherProblems.length > 0 && (
             <ul
               role="alert"
-              className="list-disc space-y-0.5 rounded-md border border-amber-200 bg-amber-50 py-1.5 pl-5 pr-2 text-amber-800"
+              className="list-disc space-y-0.5 rounded-md border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 py-1.5 pl-5 pr-2 text-amber-800 dark:text-amber-300"
             >
               {[...new Set(otherProblems.map((p) => p.message))].map((m) => (
                 <li key={m}>{m}</li>
@@ -396,7 +396,7 @@ function CancelInvoiceDialog({
           <DialogDescription>O cancelamento é enviado à SEFAZ e não pode ser desfeito.</DialogDescription>
         </DialogHeader>
         {warning && (
-          <p role="alert" className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
+          <p role="alert" className="rounded-md border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 px-2 py-1.5 text-xs text-amber-800 dark:text-amber-300">
             {warning}
           </p>
         )}
@@ -406,7 +406,7 @@ function CancelInvoiceDialog({
           maxLength={255}
           onChange={(e) => setReason(e.target.value)}
         />
-        <p className={cn("text-xs", length < MIN_JUSTIFICATIVA ? "text-muted-foreground" : "text-green-700")}>
+        <p className={cn("text-xs", length < MIN_JUSTIFICATIVA ? "text-muted-foreground" : "text-green-700 dark:text-green-300")}>
           {length}/{MIN_JUSTIFICATIVA} caracteres no mínimo
         </p>
         <DialogFooter>
