@@ -58,8 +58,8 @@ export const UUID_FAMILY = {
  */
 export const DEV_KEK_BASE64 = Buffer.from(Array.from({ length: 32 }, (_, i) => i)).toString("base64");
 
-/** Password of every seeded Supabase Auth user. */
-export const DEV_USER_PASSWORD = "marmitop-dev-123";
+/** Password of every seeded Supabase Auth user. Same default login in every sibling project. */
+export const DEV_USER_PASSWORD = "qweqwe";
 
 /** Login password the seed attaches to `app_service` (nologin by default, 05.data-model.md). */
 export const DEV_APP_SERVICE_PASSWORD = "marmitop-dev-app-service";
@@ -153,9 +153,9 @@ function user(
   };
 }
 
-/** Emails use the reserved `.test` TLD, which never resolves. */
+/** `qwe@qwe.com` is the shared default login across Marmitop, web-nf, and backend-uatis. The rest use the reserved `.test` TLD. */
 export const USERS = {
-  casaAdmin: user("casaAdmin", 1, "admin@marmitadacasa.test", "Carla Mendes", RESTAURANTS.casa, "admin"),
+  casaAdmin: user("casaAdmin", 1, "qwe@qwe.com", "Carla Mendes", RESTAURANTS.casa, "admin"),
   casaAttendant: user("casaAttendant", 2, "atendente@marmitadacasa.test", "Diego Rocha", RESTAURANTS.casa, "attendant"),
   minasAdmin: user("minasAdmin", 3, "admin@sabordeminas.test", "Helena Prado", RESTAURANTS.minas, "admin"),
   minasAttendant: user("minasAttendant", 4, "atendente@sabordeminas.test", "Igor Lima", RESTAURANTS.minas, "attendant"),

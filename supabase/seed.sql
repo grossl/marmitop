@@ -11,8 +11,8 @@
 -- Committed on purpose. None of these values opens anything outside a
 -- developer's machine. Do not copy them into a deployed environment.
 --
--- Dashboard sign-in (http://localhost:3100). Password for every user: marmitop-dev-123
---   admin@marmitadacasa.test       admin     Marmita da Casa
+-- Dashboard sign-in (http://localhost:3100). Password for every user: qweqwe
+--   qwe@qwe.com                    admin     Marmita da Casa
 --   atendente@marmitadacasa.test   attendant Marmita da Casa
 --   admin@sabordeminas.test        admin     Sabor de Minas
 --   atendente@sabordeminas.test    attendant Sabor de Minas
@@ -55,15 +55,15 @@ alter role app_service with login password 'marmitop-dev-app-service';
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change, email_change_token_new, email_change_token_current, phone_change, phone_change_token, reauthentication_token
 ) values
-  ('00000000-0000-0000-0000-000000000000', 'aaaa0001-0000-4000-8000-000000000001', 'authenticated', 'authenticated', 'admin@marmitadacasa.test', extensions.crypt('marmitop-dev-123', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"full_name":"Carla Mendes"}'::jsonb, now(), now(), '', '', '', '', '', '', '', ''),
-  ('00000000-0000-0000-0000-000000000000', 'aaaa0001-0000-4000-8000-000000000002', 'authenticated', 'authenticated', 'atendente@marmitadacasa.test', extensions.crypt('marmitop-dev-123', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"full_name":"Diego Rocha"}'::jsonb, now(), now(), '', '', '', '', '', '', '', ''),
-  ('00000000-0000-0000-0000-000000000000', 'aaaa0001-0000-4000-8000-000000000003', 'authenticated', 'authenticated', 'admin@sabordeminas.test', extensions.crypt('marmitop-dev-123', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"full_name":"Helena Prado"}'::jsonb, now(), now(), '', '', '', '', '', '', '', ''),
-  ('00000000-0000-0000-0000-000000000000', 'aaaa0001-0000-4000-8000-000000000004', 'authenticated', 'authenticated', 'atendente@sabordeminas.test', extensions.crypt('marmitop-dev-123', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"full_name":"Igor Lima"}'::jsonb, now(), now(), '', '', '', '', '', '', '', '');
+  ('00000000-0000-0000-0000-000000000000', 'aaaa0001-0000-4000-8000-000000000001', 'authenticated', 'authenticated', 'qwe@qwe.com', extensions.crypt('qweqwe', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"full_name":"Carla Mendes"}'::jsonb, now(), now(), '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', 'aaaa0001-0000-4000-8000-000000000002', 'authenticated', 'authenticated', 'atendente@marmitadacasa.test', extensions.crypt('qweqwe', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"full_name":"Diego Rocha"}'::jsonb, now(), now(), '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', 'aaaa0001-0000-4000-8000-000000000003', 'authenticated', 'authenticated', 'admin@sabordeminas.test', extensions.crypt('qweqwe', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"full_name":"Helena Prado"}'::jsonb, now(), now(), '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', 'aaaa0001-0000-4000-8000-000000000004', 'authenticated', 'authenticated', 'atendente@sabordeminas.test', extensions.crypt('qweqwe', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"full_name":"Igor Lima"}'::jsonb, now(), now(), '', '', '', '', '', '', '', '');
 
 insert into auth.identities (
   id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at
 ) values
-  ('aaaa0002-0000-4000-8000-000000000001', 'aaaa0001-0000-4000-8000-000000000001', 'aaaa0001-0000-4000-8000-000000000001', 'email', '{"email":"admin@marmitadacasa.test","email_verified":true,"phone_verified":false,"sub":"aaaa0001-0000-4000-8000-000000000001"}'::jsonb, now(), now(), now()),
+  ('aaaa0002-0000-4000-8000-000000000001', 'aaaa0001-0000-4000-8000-000000000001', 'aaaa0001-0000-4000-8000-000000000001', 'email', '{"email":"qwe@qwe.com","email_verified":true,"phone_verified":false,"sub":"aaaa0001-0000-4000-8000-000000000001"}'::jsonb, now(), now(), now()),
   ('aaaa0002-0000-4000-8000-000000000002', 'aaaa0001-0000-4000-8000-000000000002', 'aaaa0001-0000-4000-8000-000000000002', 'email', '{"email":"atendente@marmitadacasa.test","email_verified":true,"phone_verified":false,"sub":"aaaa0001-0000-4000-8000-000000000002"}'::jsonb, now(), now(), now()),
   ('aaaa0002-0000-4000-8000-000000000003', 'aaaa0001-0000-4000-8000-000000000003', 'aaaa0001-0000-4000-8000-000000000003', 'email', '{"email":"admin@sabordeminas.test","email_verified":true,"phone_verified":false,"sub":"aaaa0001-0000-4000-8000-000000000003"}'::jsonb, now(), now(), now()),
   ('aaaa0002-0000-4000-8000-000000000004', 'aaaa0001-0000-4000-8000-000000000004', 'aaaa0001-0000-4000-8000-000000000004', 'email', '{"email":"atendente@sabordeminas.test","email_verified":true,"phone_verified":false,"sub":"aaaa0001-0000-4000-8000-000000000004"}'::jsonb, now(), now(), now());
