@@ -71,3 +71,50 @@ export function deliveryStatusLabel(status: DeliveryStatus): string {
 export function canRedeliver(status: DeliveryStatus): boolean {
   return status === "delivered" || status === "exhausted";
 }
+
+// ─── backend-uatis webhook panel (ADR-021, ADR-023; FR-172, FR-178) ───────────
+
+export type UatisMode = "push" | "pull";
+export type PublicUrlReason =
+  | "missing"
+  | "invalid_url"
+  | "not_https"
+  | "userinfo_not_allowed"
+  | "port_not_allowed"
+  | "query_not_allowed"
+  | "private_host";
+
+export function uatisModeLabel(mode: UatisMode): string {
+  return mode === "push" ? "Push" : "Pull";
+}
+
+export function uatisModeExplanation(mode: UatisMode): string {
+  return mode === "push"
+    ? "O backend-uatis envia cada evento para o Marmitop assim que ele acontece. A cada 5 minutos o Marmitop também lê o feed de eventos para recuperar algum envio perdido."
+    : "O Marmitop busca os eventos no backend-uatis a cada poucos segundos, sem URL pública e sem túnel. É o modo usado em desenvolvimento local.";
+}
+
+const PUBLIC_URL_REASONS: Record<PublicUrlReason, string> = {
+  missing: "não está definida",
+  invalid_url: "não é uma URL válida",
+  not_https: "não usa https",
+  userinfo_not_allowed: "contém usuário ou senha",
+  port_not_allowed: "usa uma porta diferente de 443",
+  query_not_allowed: "contém query ou fragmento",
+  private_host: "aponta para localhost ou para um endereço privado",
+};
+
+export function publicUrlReasonText(reason: PublicUrlReason): string {
+  return PUBLIC_URL_REASONS[reason];
+}
+
+export function uatisNextModeText(status: {
+  nextMode: UatisMode;
+  publicUrl: { ok: boolean; url: string | null; reason: PublicUrlReason | null };
+}): string {
+  const name = status.publicUrl.url ? `MT_PUBLIC_URL (${status.publicUrl.url})` : "MT_PUBLIC_URL";
+  const why = status.publicUrl.ok
+    ? "é uma URL pública https"
+    : publicUrlReasonText(status.publicUrl.reason ?? "missing");
+  return `Ao ativar, o modo será ${uatisModeLabel(status.nextMode)}: ${name} ${why}.`;
+}

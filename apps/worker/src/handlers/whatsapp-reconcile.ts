@@ -1,6 +1,8 @@
-// mt_sync op whatsapp_reconcile: the reconciliation poll (FR-107, FR-108;
-// ADR-002 Amendment 1). pg_cron enqueues one job per connected restaurant every
-// 30 seconds (`mt.enqueue_whatsapp_sync`).
+// mt_sync op whatsapp_reconcile: the timestamp poll (FR-107, FR-108;
+// ADR-002 Amendment 1). pg_cron enqueues one job every 30 seconds per connected
+// restaurant without a registered backend-uatis webhook (`mt.enqueue_whatsapp_sync`,
+// migration 0019). The event-feed job (`uatis_feed_pull`, ADR-023) calls
+// `runTimestampPoll` as its fallback when the feed answers 404.
 //
 //   from   = last_sync_cursor − 60 s (or now − 24 h on the first poll)
 //   read   = GET /v1/messages?direction=in&from=… every page (newest first)
@@ -17,7 +19,7 @@ import { QUEUES } from "@mt/db";
 import type { GatewayConnection } from "@mt/http";
 import { type SyncJob, syncJobSchema } from "@mt/schemas";
 
-import type { JobHandler, Logger } from "../framework/types";
+import type { JobHandler, JobOutcome, Logger } from "../framework/types";
 
 export const OVERLAP_MS = 60_000;
 export const FIRST_POLL_LOOKBACK_MS = 24 * 3600_000;
@@ -47,15 +49,13 @@ export interface ReconcileHandlerDeps {
   readonly pageSize?: number;
 }
 
-function pollErrorMessage(code: string): string {
+export function pollErrorMessage(code: string): string {
   if (code === "unauthorized" || code === "forbidden") return "A chave de API foi recusada pelo backend-uatis.";
   if (code === "host_not_allowed") return "Endereço do backend-uatis não permitido.";
   return "A leitura de mensagens do backend-uatis falhou.";
 }
 
 export function createWhatsAppReconcileHandler(deps: ReconcileHandlerDeps): JobHandler<SyncJob> {
-  const { store } = deps;
-  const pageSize = deps.pageSize ?? 100;
   return {
     name: "whatsapp.reconcile",
     queue: QUEUES.sync,
@@ -66,60 +66,70 @@ export function createWhatsAppReconcileHandler(deps: ReconcileHandlerDeps): JobH
     // Up to MAX_PAGES reads at 10 s each, plus the writes.
     visibilityTimeoutSeconds: 300,
 
-    async run({ payload }) {
-      const conn = await store.loadConnection(payload.restaurantId);
-      if (conn === null || conn.status !== "connected") return { kind: "ok" };
-
-      const now = deps.clock.now();
-      const from = conn.lastSyncCursor
-        ? new Date(conn.lastSyncCursor.getTime() - OVERLAP_MS)
-        : new Date(now.getTime() - FIRST_POLL_LOOKBACK_MS);
-      const gateway = deps.gatewayFor({ baseUrl: conn.baseUrl, apiKey: conn.apiKey });
-
-      const seen: GatewayMessage[] = [];
-      try {
-        let cursor: string | null = null;
-        let pages = 0;
-        do {
-          const page = await gateway.listMessages({ direction: "in", from, cursor, limit: pageSize });
-          seen.push(...page.items);
-          cursor = page.nextCursor;
-          pages++;
-        } while (cursor !== null && pages < MAX_PAGES);
-        if (cursor !== null) {
-          deps.log.warn("reconcile page cap reached; older messages in this window are skipped", {
-            restaurantId: payload.restaurantId,
-            pages,
-          });
-        }
-      } catch (error) {
-        if (!(error instanceof GatewayError)) throw error;
-        const httpStatus = error.failure.kind === "http" ? error.failure.status : undefined;
-        const c = classifyUpstreamFailure(error.failure);
-        if (c.failure === "transient") {
-          return {
-            kind: "retry",
-            errorCode: c.errorCode,
-            ...(httpStatus !== undefined ? { httpStatus } : {}),
-            ...(error.retryAfterMs !== undefined ? { retryAfterMs: error.retryAfterMs } : {}),
-          };
-        }
-        await store.markError(payload.restaurantId, pollErrorMessage(c.errorCode));
-        return { kind: "fail", errorCode: c.errorCode, ...(httpStatus !== undefined ? { httpStatus } : {}) };
-      }
-
-      const ordered = [...new Map(seen.map((m) => [m.externalId, m])).values()].sort(
-        (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.externalId.localeCompare(b.externalId),
-      );
-      let newest: Date | null = null;
-      for (const m of ordered) {
-        await store.applyMessage(payload.restaurantId, m);
-        if (newest === null || m.createdAt > newest) newest = m.createdAt;
-      }
-      const previous = conn.lastSyncCursor;
-      const cursor = newest && (!previous || newest > previous) ? newest : previous;
-      await store.advanceCursor(payload.restaurantId, cursor, now);
-      return { kind: "ok" };
-    },
+    run: ({ payload }) => runTimestampPoll(deps, payload.restaurantId),
   };
+}
+
+/** One timestamp poll for one restaurant. Shared by `whatsapp_reconcile` and the feed fallback. */
+export async function runTimestampPoll(deps: ReconcileHandlerDeps, restaurantId: string): Promise<JobOutcome> {
+  const { store } = deps;
+  const pageSize = deps.pageSize ?? 100;
+  const conn = await store.loadConnection(restaurantId);
+  if (conn === null || conn.status !== "connected") return { kind: "ok" };
+
+  const now = deps.clock.now();
+  const from = conn.lastSyncCursor
+    ? new Date(conn.lastSyncCursor.getTime() - OVERLAP_MS)
+    : new Date(now.getTime() - FIRST_POLL_LOOKBACK_MS);
+  const gateway = deps.gatewayFor({ baseUrl: conn.baseUrl, apiKey: conn.apiKey });
+
+  const seen: GatewayMessage[] = [];
+  try {
+    let cursor: string | null = null;
+    let pages = 0;
+    do {
+      const page = await gateway.listMessages({ direction: "in", from, cursor, limit: pageSize });
+      seen.push(...page.items);
+      cursor = page.nextCursor;
+      pages++;
+    } while (cursor !== null && pages < MAX_PAGES);
+    if (cursor !== null) {
+      deps.log.warn("reconcile page cap reached; older messages in this window are skipped", { restaurantId, pages });
+    }
+  } catch (error) {
+    if (!(error instanceof GatewayError)) throw error;
+    return gatewayFailure(error, (message) => store.markError(restaurantId, message));
+  }
+
+  const ordered = [...new Map(seen.map((m) => [m.externalId, m])).values()].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.externalId.localeCompare(b.externalId),
+  );
+  let newest: Date | null = null;
+  for (const m of ordered) {
+    await store.applyMessage(restaurantId, m);
+    if (newest === null || m.createdAt > newest) newest = m.createdAt;
+  }
+  const previous = conn.lastSyncCursor;
+  const cursor = newest && (!previous || newest > previous) ? newest : previous;
+  await store.advanceCursor(restaurantId, cursor, now);
+  return { kind: "ok" };
+}
+
+/** A transient failure retries; a permanent one sets the integration to `error` with allow-listed text. */
+export async function gatewayFailure(
+  error: GatewayError,
+  markError: (message: string) => Promise<void>,
+): Promise<JobOutcome> {
+  const httpStatus = error.failure.kind === "http" ? error.failure.status : undefined;
+  const c = classifyUpstreamFailure(error.failure);
+  if (c.failure === "transient") {
+    return {
+      kind: "retry",
+      errorCode: c.errorCode,
+      ...(httpStatus !== undefined ? { httpStatus } : {}),
+      ...(error.retryAfterMs !== undefined ? { retryAfterMs: error.retryAfterMs } : {}),
+    };
+  }
+  await markError(pollErrorMessage(c.errorCode));
+  return { kind: "fail", errorCode: c.errorCode, ...(httpStatus !== undefined ? { httpStatus } : {}) };
 }

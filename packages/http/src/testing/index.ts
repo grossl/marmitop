@@ -20,6 +20,8 @@ export function createTestServiceDeps(db: Db, overrides: ServiceDepsOverrides = 
       webnfFake: true,
       env: "test",
       allowPrivateHosts: true,
+      publicUrl: undefined,
+      uatisPullSeconds: 3,
     },
     { db, secretBox: new FakeSecretBox(), clock: new FixedClock("2026-10-13T15:00:00Z"), ...overrides },
   );
@@ -29,7 +31,14 @@ export function userCtx(restaurantId: string, userId: string, role: UserContext[
   return { restaurantId, userId, role, actorType: "user" };
 }
 
-export { FakeUatisServer, type FakeUatisRow, type FakeUatisScript } from "./fake-uatis-server";
+export {
+  FakeUatisServer,
+  type FakeUatisDelivery,
+  type FakeUatisRow,
+  type FakeUatisScript,
+  type FakeUatisWebhook,
+  uatisWebhookBody,
+} from "./fake-uatis-server";
 export { MemoryUatisInboundStore } from "./memory-uatis-inbound-store";
 export { FakeWebNfServer, type FakeWebNfInvoice, type FakeWebNfScript } from "./fake-web-nf-server";
 export { MemoryWebNfInboundStore } from "./memory-web-nf-inbound-store";

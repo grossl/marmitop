@@ -2,6 +2,7 @@
 // against UatisGateway (with a stub server in packages/http).
 
 import { describe, expect, test } from "bun:test";
+import { GatewayError } from "../ports/gateway-error";
 import type { WhatsAppGateway } from "../ports/whatsapp-gateway";
 
 export interface WhatsAppGatewayHarness {
@@ -112,6 +113,141 @@ export function whatsappGatewayContract(name: string, create: () => Promise<What
         const r = await gateway.testConnection();
         expect(typeof r.ok).toBe("boolean");
         if (!r.ok) expect(r.error.length).toBeGreaterThan(0);
+      });
+    });
+
+    // ADR-021, FR-170, FR-173, FR-178: webhook management.
+    test("getOrganization returns the API key's organization id", async () => {
+      await withHarness(async ({ gateway }) => {
+        const org = await gateway.getOrganization();
+        expect(org.id.length).toBeGreaterThan(0);
+      });
+    });
+
+    test("createWebhook returns an id and a signing secret once", async () => {
+      await withHarness(async ({ gateway }) => {
+        const hook = await gateway.createWebhook({
+          mode: "push",
+          url: "https://mt.example.com/v1/webhooks/uatis/r1",
+          events: ["message.created", "message.updated"],
+          description: "Marmitop",
+        });
+        expect(hook.id.length).toBeGreaterThan(0);
+        expect(hook.mode).toBe("push");
+        expect(hook.secret?.length ?? 0).toBeGreaterThan(0);
+        expect(hook.url).toBe("https://mt.example.com/v1/webhooks/uatis/r1");
+        expect([...hook.events].sort()).toEqual(["message.created", "message.updated"]);
+        expect(hook.status).toBe("active");
+      });
+    });
+
+    test("deleteWebhook removes a webhook and answers false for an unknown one", async () => {
+      await withHarness(async ({ gateway }) => {
+        const hook = await gateway.createWebhook({
+          mode: "push",
+          url: "https://mt.example.com/v1/webhooks/uatis/r1",
+          events: ["message.created"],
+          description: null,
+        });
+        expect(await gateway.deleteWebhook(hook.id)).toEqual({ deleted: true });
+        expect(await gateway.deleteWebhook(hook.id)).toEqual({ deleted: false });
+      });
+    });
+
+    test("listWebhookDeliveries returns attempts for a known webhook", async () => {
+      await withHarness(async ({ gateway }) => {
+        const hook = await gateway.createWebhook({
+          mode: "push",
+          url: "https://mt.example.com/v1/webhooks/uatis/r1",
+          events: ["message.created"],
+          description: null,
+        });
+        const attempts = await gateway.listWebhookDeliveries(hook.id, { limit: 5 });
+        expect(Array.isArray(attempts)).toBe(true);
+        expect(attempts.length).toBeLessThanOrEqual(5);
+        for (const a of attempts) {
+          expect(typeof a.id).toBe("string");
+          expect(typeof a.eventType).toBe("string");
+          expect(["pending", "delivered", "failed", "exhausted"]).toContain(a.status);
+          expect(a.createdAt).toBeInstanceOf(Date);
+        }
+      });
+    });
+
+    // ADR-023: pull webhooks and the event feed.
+    test("a pull webhook has no url and no secret", async () => {
+      await withHarness(async ({ gateway }) => {
+        const hook = await gateway.createWebhook({
+          mode: "pull",
+          url: null,
+          events: ["message.created", "message.updated"],
+          description: "Marmitop",
+        });
+        expect(hook.mode).toBe("pull");
+        expect(hook.url).toBeNull();
+        expect(hook.secret).toBeNull();
+      });
+    });
+
+    test("the event feed returns an inbound message as a message.created event, then nothing after its cursor", async () => {
+      await withHarness(async ({ gateway, injectInbound }) => {
+        if (!injectInbound) return;
+        const hook = await gateway.createWebhook({
+          mode: "pull",
+          url: null,
+          events: ["message.created", "message.updated"],
+          description: null,
+        });
+        await injectInbound("+5511988887777", "Oi pelo feed");
+        const page = await gateway.listWebhookEvents(hook.id, { after: null, limit: 50 });
+        const event = page.events.find((e) => {
+          const data = (e.event as { data?: { message?: { content?: { text?: unknown } } } }).data;
+          return data?.message?.content?.text === "Oi pelo feed";
+        });
+        expect(event).toBeDefined();
+        expect((event?.event as { type?: string }).type).toBe("message.created");
+        expect(typeof event?.cursor).toBe("string");
+        const last = page.events.at(-1);
+        // backend-uatis: next_cursor is the last event's cursor, and with no new events it echoes `after`.
+        expect(page.nextCursor).toBe(last?.cursor ?? null);
+        const after = await gateway.listWebhookEvents(hook.id, { after: last?.cursor ?? null, limit: 50 });
+        expect(after.events).toEqual([]);
+        expect(after.nextCursor).toBe(last?.cursor ?? null);
+      });
+    });
+
+    test("getWebhook returns the mode and null for an unknown id", async () => {
+      await withHarness(async ({ gateway }) => {
+        const hook = await gateway.createWebhook({ mode: "pull", url: null, events: ["message.created"], description: null });
+        expect(await gateway.getWebhook(hook.id)).toMatchObject({ id: hook.id, mode: "pull", url: null });
+        expect(await gateway.getWebhook("00000000-0000-4000-8000-000000000000")).toBeNull();
+      });
+    });
+
+    test("an empty feed with no cursor has a null next cursor", async () => {
+      await withHarness(async ({ gateway }) => {
+        const hook = await gateway.createWebhook({ mode: "pull", url: null, events: ["message.created"], description: null });
+        expect(await gateway.listWebhookEvents(hook.id, { after: null, limit: 5 })).toEqual({ events: [], nextCursor: null });
+      });
+    });
+
+    test("listWebhookEvents for an unknown webhook throws a 404 GatewayError", async () => {
+      await withHarness(async ({ gateway }) => {
+        const error = await gateway
+          .listWebhookEvents("00000000-0000-4000-8000-000000000000", { after: null, limit: 5 })
+          .then(() => null, (e: unknown) => e);
+        expect(error).toBeInstanceOf(GatewayError);
+        expect((error as GatewayError).failure).toMatchObject({ kind: "http", status: 404 });
+      });
+    });
+
+    test("listWebhookDeliveries for an unknown webhook throws a 404 GatewayError", async () => {
+      await withHarness(async ({ gateway }) => {
+        const error = await gateway
+          .listWebhookDeliveries("00000000-0000-4000-8000-000000000000", { limit: 5 })
+          .then(() => null, (e: unknown) => e);
+        expect(error).toBeInstanceOf(GatewayError);
+        expect((error as GatewayError).failure).toMatchObject({ kind: "http", status: 404 });
       });
     });
 

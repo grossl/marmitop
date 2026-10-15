@@ -124,6 +124,8 @@ export interface RestaurantFixture {
   webhookDeliveryId: string;
   idempotencyKey: string;
   jobAttemptId: string;
+  /** `uatis_event_receipts.event_id` (migration 0019). */
+  uatisEventId: string;
   auditLogId: string;
   usageEventId: string;
   adminCtx: RestaurantContext;
@@ -321,6 +323,10 @@ export async function seedRestaurant(db: Db, label: string): Promise<RestaurantF
         values (${rid}, 'mt_outbound_messages', 'message', ${message.id}, 1, 'ok') returning id`,
       "job_attempts",
     );
+    const uatisEventId = crypto.randomUUID();
+    await tx`
+      insert into public.uatis_event_receipts (restaurant_id, event_id, event_type, source)
+      values (${rid}, ${uatisEventId}, 'message.created', 'push')`;
     const audit = await one(
       tx<{ id: string }[]>`
         insert into public.audit_logs (restaurant_id, actor_type, actor_id, action, entity_type, entity_id)
@@ -360,6 +366,7 @@ export async function seedRestaurant(db: Db, label: string): Promise<RestaurantF
       webhookDeliveryId: delivery.id,
       idempotencyKey,
       jobAttemptId: attempt.id,
+      uatisEventId,
       auditLogId: audit.id,
       usageEventId: usage.id,
       adminCtx: { restaurantId: rid, actorType: "user", userId: adminId },

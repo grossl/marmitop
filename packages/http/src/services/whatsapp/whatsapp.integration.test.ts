@@ -373,6 +373,6 @@ describe("a disconnected integration stops webhooks (FR-118)", () => {
     });
     await disconnectWhatsApp(deps, ctx, undefined);
     const store = createDbUatisInboundStore(deps);
-    expect(await store.loadSecret(c.restaurantId)).toBeNull();
+    expect(await store.loadVerification(c.restaurantId)).toBeNull();
   });
 });

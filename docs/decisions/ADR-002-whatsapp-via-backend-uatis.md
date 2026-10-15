@@ -57,3 +57,7 @@ Option 3.
 * **Connection test.** `testConnection` is `GET /v1/messages?limit=1`: one authenticated read. `GET /v1/health` needs no key, so it proves nothing.
 * **Outbound echoes.** A `message.created` with `direction: "out"` and an unknown id is ignored. The id of a Marmitop send is stored only after `POST /v1/messages` returns, so the echo can arrive first.
 * **Webhook for an unknown restaurant.** It answers the same `401` as a bad signature (FR-118 updated), so the route is not an oracle for restaurant ids.
+
+## Amendment 3 — 2026-10-14 (backend-uatis delivers webhooks)
+
+* backend-uatis commit `c887ef0` (its ADR-009) delivers customer webhooks. [ADR-021](ADR-021-uatis-webhook-registration.md) registers them from Settings, and [ADR-023](ADR-023-uatis-event-feed-push-and-pull.md) adds the event feed: a `push` webhook when `MT_PUBLIC_URL` is public, a `pull` webhook read every 3 seconds otherwise. A restaurant with a registered webhook reads the feed instead of the timestamp poll. The timestamp poll from Amendment 1 stays for restaurants without a webhook and as the fallback when the feed answers 404.

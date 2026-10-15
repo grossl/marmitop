@@ -9,7 +9,7 @@
 //        own sends only after POST /v1/messages returns, so an echo can arrive
 //        first; storing it would duplicate the message (06.api-spec.md).
 
-import { type GatewayMessage, type MessageStatus, nextMessageStatus } from "@mt/core";
+import { type GatewayMessage, type MessageFailure, type MessageStatus, nextMessageStatus } from "@mt/core";
 import type { Tx } from "@mt/db";
 
 import type { ServiceDeps } from "../../deps";
@@ -29,12 +29,16 @@ export type ApplyResult =
   | { readonly action: "unchanged" }
   | { readonly action: "ignored"; readonly reason: "no_phone" | "unknown_outbound" | "not_found" };
 
-/** FR-106: moves `messages.status` forward by `external_id`. Never backward. */
+/**
+ * FR-106: moves `messages.status` forward by `external_id`. Never backward. A move to `failed`
+ * stores the WhatsApp error when the event carried one (FR-177).
+ */
 export async function applyStatusUpdate(
   tx: Tx,
   restaurantId: string,
   externalId: string,
   incoming: MessageStatus | null,
+  failure: MessageFailure | null = null,
 ): Promise<ApplyResult> {
   const [row] = await tx<{ id: string; status: MessageStatus }[]>`
     select id, status from public.messages
@@ -44,10 +48,19 @@ export async function applyStatusUpdate(
   if (row === undefined) return { action: "ignored", reason: "not_found" };
   const next = nextMessageStatus(row.status, incoming);
   if (next === row.status) return { action: "unchanged" };
-  await tx`
-    update public.messages set status = ${next}
-    where id = ${row.id} and restaurant_id = ${restaurantId} and status = ${row.status}
-  `;
+  if (next === "failed") {
+    await tx`
+      update public.messages set status = 'failed',
+        error_code = ${failure?.code ?? "whatsapp_failed"},
+        error_message = ${failure?.message ?? null}
+      where id = ${row.id} and restaurant_id = ${restaurantId} and status = ${row.status}
+    `;
+  } else {
+    await tx`
+      update public.messages set status = ${next}
+      where id = ${row.id} and restaurant_id = ${restaurantId} and status = ${row.status}
+    `;
+  }
   return { action: "status_updated", status: next };
 }
 
@@ -61,7 +74,9 @@ export async function applyGatewayMessage(
   const [known] = await tx<{ id: string }[]>`
     select id from public.messages where restaurant_id = ${restaurantId} and external_id = ${message.externalId}
   `;
-  if (known !== undefined) return applyStatusUpdate(tx, restaurantId, message.externalId, message.status);
+  if (known !== undefined) {
+    return applyStatusUpdate(tx, restaurantId, message.externalId, message.status, message.failure ?? null);
+  }
   if (message.direction === "out") return { action: "ignored", reason: "unknown_outbound" };
   if (message.contactAddress === null || !E164.test(message.contactAddress)) {
     return { action: "ignored", reason: "no_phone" };

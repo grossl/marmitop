@@ -44,6 +44,7 @@ describe("parseUatisWebhookEvent", () => {
     expect(e).toEqual({
       type: "message.created",
       deliveryId: "delivery-uuid",
+      organizationId: "org-1",
       occurredAt: new Date("2026-10-13T12:00:00Z"),
       message: {
         externalId: "msg-1",
@@ -55,6 +56,7 @@ describe("parseUatisWebhookEvent", () => {
         status: "delivered",
         contactAddress: "+5511999999999",
         createdAt: new Date("2026-10-13T12:00:00Z"),
+        failure: null,
       },
     });
   });
@@ -80,12 +82,13 @@ describe("parseUatisWebhookEvent", () => {
         created_at: "2026-10-13T12:00:00Z",
         data: { conversation: { id: "c" } },
       }),
-    ).toEqual({ type: "conversation.updated" });
+    ).toEqual({ type: "conversation.updated", organizationId: null });
   });
   test("an unknown event type is accepted and ignored", () => {
     expect(parseUatisWebhookEvent({ id: "x", type: "template.updated", data: {} })).toEqual({
       type: "ignored",
       eventType: "template.updated",
+      organizationId: null,
     });
   });
   test("a malformed payload is a validation error", () => {

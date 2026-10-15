@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Check, Clock3, Copy, CreditCard, KeyRound, Link2, MessageSquareText, Receipt, Save, Settings2 } from "lucide-react";
-import type { ApiKeyListItem, PlanAndUsage, SettingsView, WebhookDeliveryView } from "@mt/http";
+import type { ApiKeyListItem, PlanAndUsage, SettingsView, UatisWebhookStatus, WebhookDeliveryView } from "@mt/http";
 import { Button } from "@mt/ui/components/button";
 import { Input } from "@mt/ui/components/input";
 import { Label } from "@mt/ui/components/label";
@@ -17,6 +17,9 @@ import {
   deliveryStatusLabel,
   formatBRL,
   parseBRLToCents,
+  uatisModeExplanation,
+  uatisModeLabel,
+  uatisNextModeText,
   usagePercent,
   WEEKDAY_NAMES,
   WEEKDAY_ORDER,
@@ -24,7 +27,9 @@ import {
 import {
   connectWhatsAppAction,
   createApiKeyAction,
+  disableUatisWebhookAction,
   disconnectWhatsAppAction,
+  enableUatisWebhookAction,
   redeliverWebhookAction,
   revokeApiKeyAction,
   rotateWebhookSecretAction,
@@ -54,10 +59,12 @@ export function SettingsPage({
   settings,
   plan,
   deliveries = [],
+  uatisWebhook = null,
 }: {
   settings: SettingsView;
   plan: PlanAndUsage;
   deliveries?: WebhookDeliveryView[];
+  uatisWebhook?: UatisWebhookStatus | null;
 }) {
   const [activeTab, setActiveTab] = useState<TabId>("restaurant");
 
@@ -100,7 +107,9 @@ export function SettingsPage({
             {activeTab === "restaurant" && <RestaurantSettings settings={settings} />}
             {activeTab === "hours" && <HoursSettings settings={settings} />}
             {activeTab === "messages" && <AutomationSettings settings={settings} />}
-            {activeTab === "integrations" && <IntegrationSettings settings={settings} deliveries={deliveries} />}
+            {activeTab === "integrations" && (
+              <IntegrationSettings settings={settings} deliveries={deliveries} uatisWebhook={uatisWebhook} />
+            )}
             {activeTab === "fiscal" && <FiscalSettings settings={settings} />}
             {activeTab === "plan" && <PlanSettings plan={plan} />}
           </div>
@@ -575,10 +584,19 @@ function AutomaticMessageCard({ message }: { message: SettingsView["automaticMes
 
 // ─── WhatsApp, webhook e API (FR-085..FR-089, FR-094) ─────────────────────────
 
-function IntegrationSettings({ settings, deliveries }: { settings: SettingsView; deliveries: WebhookDeliveryView[] }) {
+function IntegrationSettings({
+  settings,
+  deliveries,
+  uatisWebhook,
+}: {
+  settings: SettingsView;
+  deliveries: WebhookDeliveryView[];
+  uatisWebhook: UatisWebhookStatus | null;
+}) {
   return (
     <div className="space-y-5">
       <WhatsAppCard state={settings.integrations.whatsapp} />
+      {settings.integrations.whatsapp && <UatisWebhookPanel status={uatisWebhook} />}
       <WebhookCard state={settings.integrations.webhook} />
       {settings.integrations.webhook && <WebhookDeliveriesCard deliveries={deliveries} />}
       <ApiKeysCard keys={settings.integrations.apiKeys} />
@@ -630,7 +648,7 @@ function WhatsAppCard({ state }: { state: SettingsView["integrations"]["whatsapp
             </Field>
             <SecretField label="Chave de API" state={state?.apiKey} value={form.apiKey} onChange={set("apiKey")} error={section.errors.apiKey} />
             <SecretField
-              label="Segredo do webhook"
+              label="Segredo do webhook (opcional)"
               state={state?.webhookSecret}
               value={form.webhookSecret}
               onChange={set("webhookSecret")}
@@ -677,6 +695,134 @@ function WhatsAppCard({ state }: { state: SettingsView["integrations"]["whatsapp
         </div>
       </Card>
     </form>
+  );
+}
+
+const UATIS_EVENT_LABELS: Record<string, string> = {
+  "message.created": "Mensagem criada",
+  "message.updated": "Mensagem atualizada",
+  "conversation.updated": "Conversa atualizada",
+};
+
+/** FR-170..FR-173, FR-178 (ADR-021, ADR-023): the backend-uatis webhook, push or pull. */
+function UatisWebhookPanel({ status }: { status: UatisWebhookStatus | null }) {
+  const section = useSection();
+  if (status === null) {
+    return (
+      <Card title="Webhook do backend-uatis">
+        <p className="text-sm text-muted-foreground">Não foi possível ler o estado do webhook.</p>
+      </Card>
+    );
+  }
+  const active = status.state === "active";
+  return (
+    <Card
+      title="Webhook do backend-uatis"
+      description="Recebe as mensagens e as confirmações de entrega e leitura do WhatsApp em poucos segundos."
+    >
+      <div className="space-y-4" data-testid="uatis-webhook-panel">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span
+            className={cn(
+              "rounded-full px-2 py-1 text-xs font-semibold",
+              active ? "bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300" : "bg-muted text-muted-foreground",
+            )}
+          >
+            {active ? "Ativo" : "Não registrado"}
+          </span>
+          {active && status.mode && (
+            <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
+              {uatisModeLabel(status.mode)}
+            </span>
+          )}
+          <span className="text-muted-foreground">
+            Último recebimento por push: {status.lastWebhookAt ? formatWhen(status.lastWebhookAt) : "nenhum"}
+            {" · "}
+            Última leitura: {status.lastSyncedAt ? formatWhen(status.lastSyncedAt) : "nenhuma"}
+          </span>
+        </div>
+        {active && status.mode ? (
+          <p className="text-sm text-muted-foreground">{uatisModeExplanation(status.mode)}</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Sem webhook, o Marmitop consulta as mensagens recebidas a cada 30 segundos e não recebe as confirmações de entrega e leitura.
+          </p>
+        )}
+        <p className="text-sm text-muted-foreground">{uatisNextModeText(status)}</p>
+        {active && (
+          <div>
+            <Label>Últimas entregas no backend-uatis</Label>
+            {status.deliveriesError ? (
+              <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">{status.deliveriesError}</p>
+            ) : !status.deliveries || status.deliveries.length === 0 ? (
+              <p className="mt-1 text-sm text-muted-foreground">Nenhuma entrega ainda.</p>
+            ) : (
+              <div className="mt-1 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                      <th className="py-2 pr-3 font-medium">Evento</th>
+                      <th className="py-2 pr-3 font-medium">Status</th>
+                      <th className="py-2 pr-3 font-medium">HTTP</th>
+                      <th className="py-2 pr-3 font-medium">Tentativa</th>
+                      <th className="py-2 font-medium">Criada em</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {status.deliveries.map((d) => (
+                      <tr key={d.id} className="border-b border-border last:border-0">
+                        <td className="py-2 pr-3">{UATIS_EVENT_LABELS[d.eventType] ?? d.eventType}</td>
+                        <td className="py-2 pr-3">{deliveryStatusLabel(d.status)}</td>
+                        <td className="py-2 pr-3">{d.httpStatus ?? "—"}</td>
+                        <td className="py-2 pr-3">{d.attemptNo}</td>
+                        <td className="py-2">{formatWhen(d.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+        <div className="flex flex-wrap justify-end gap-2">
+          {active && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={section.pending}
+              onClick={() => {
+                if (window.confirm("Desativar o webhook? O Marmitop volta a consultar as mensagens a cada 30 segundos.")) {
+                  section.run(
+                    () => disableUatisWebhookAction(undefined),
+                    (r) => (r.ok ? "Webhook desativado." : null),
+                    (r) => {
+                      if (!r.ok) toast.error(r.error);
+                    },
+                  );
+                }
+              }}
+            >
+              Desativar webhook
+            </Button>
+          )}
+          <Button
+            type="button"
+            disabled={section.pending}
+            onClick={() =>
+              section.run(
+                () => enableUatisWebhookAction(undefined),
+                (r) => (r.ok ? `Webhook ativado (${uatisModeLabel(r.mode)}).` : null),
+                (r) => {
+                  if (!r.ok) toast.error(r.error);
+                },
+              )
+            }
+          >
+            {active ? "Registrar novamente" : "Ativar webhook"}
+          </Button>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -951,7 +1097,7 @@ function FiscalSettings({ settings }: { settings: SettingsView }) {
             </Field>
             <SecretField label="Chave de API" state={state?.apiKey} value={form.apiKey} onChange={set("apiKey")} error={section.errors.apiKey} />
             <SecretField
-              label="Segredo do webhook"
+              label="Segredo do webhook (opcional)"
               state={state?.webhookSecret}
               value={form.webhookSecret}
               onChange={set("webhookSecret")}

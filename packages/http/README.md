@@ -25,13 +25,15 @@ src/
   services/
     index.ts       re-exports one file per domain
     restaurant-profile.ts   the reference service
-    whatsapp/      connection, automatic messages, gateway events, inbound webhook (P5)
+    whatsapp/      connection, automatic messages, gateway events, inbound webhook (P5),
+                   uatis-events: applyUatisEvent, the one handler for pushed and pulled events (P10, ADR-023)
     webhooks/      emitEvent (outbound events in the producer's transaction), worker loaders,
                    listWebhookDeliveries, redeliverWebhook (P7)
     billing/       recordUsage: usage_events rows (P7)
     public-api/    the snake_case use cases behind apps/api routes/public: API-key auth,
                    rate limit, idempotency, keyset cursor, orders, customers, menu, messages (P7)
-  testing/         createTestServiceDeps, userCtx, FakeUatisServer, MemoryUatisInboundStore
+  testing/         createTestServiceDeps, userCtx, FakeUatisServer (webhooks, event feed), uatisWebhookBody,
+                   MemoryUatisInboundStore
                    (tests only: @mt/http/testing)
 ```
 

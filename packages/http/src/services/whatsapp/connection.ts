@@ -26,7 +26,8 @@ export function systemCtx(restaurantId: string): SystemContext {
 interface Row {
   base_url: string;
   api_key_secret_id: string;
-  webhook_secret_id: string;
+  webhook_secret_id: string | null;
+  uatis_organization_id: string | null;
   phone_number_id: string;
   status: WhatsAppStatus;
   last_sync_cursor: Date | null;
@@ -34,7 +35,8 @@ interface Row {
 
 async function loadRow(tx: Tx, restaurantId: string): Promise<Row | undefined> {
   const [row] = await tx<Row[]>`
-    select base_url, api_key_secret_id, webhook_secret_id, phone_number_id, status, last_sync_cursor
+    select base_url, api_key_secret_id, webhook_secret_id, uatis_organization_id, phone_number_id, status,
+           last_sync_cursor
     from public.integrations_whatsapp where restaurant_id = ${restaurantId}
   `;
   return row;
@@ -59,13 +61,18 @@ export async function loadWhatsAppConnection(
 }
 
 /**
- * The webhook signing secret for `POST /v1/webhooks/uatis/{restaurant_id}`, or null
- * when there is no integration row or the admin disconnected it (FR-118). An
- * `error` status still accepts webhooks: a failed connection test must not drop
- * customer messages.
+ * The webhook signing secret and the stored organization for `POST /v1/webhooks/uatis/{restaurant_id}`,
+ * or null when there is no integration row, the admin disconnected it, or no secret is configured
+ * (a pull webhook needs none) (FR-118, FR-175). An `error` status still accepts webhooks: a failed
+ * connection test must not drop customer messages.
  */
-export async function loadUatisWebhookSecret(tx: Tx, deps: ServiceDeps, restaurantId: string): Promise<string | null> {
+export async function loadUatisWebhookVerification(
+  tx: Tx,
+  deps: ServiceDeps,
+  restaurantId: string,
+): Promise<{ secret: string; organizationId: string | null } | null> {
   const row = await loadRow(tx, restaurantId);
-  if (row === undefined || row.status === "disconnected") return null;
-  return openSecret(tx, deps, systemCtx(restaurantId), row.webhook_secret_id, "uatis_webhook_secret");
+  if (row === undefined || row.status === "disconnected" || row.webhook_secret_id === null) return null;
+  const secret = await openSecret(tx, deps, systemCtx(restaurantId), row.webhook_secret_id, "uatis_webhook_secret");
+  return { secret, organizationId: row.uatis_organization_id };
 }

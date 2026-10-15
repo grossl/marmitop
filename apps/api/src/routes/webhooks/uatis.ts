@@ -1,4 +1,4 @@
-// POST /v1/webhooks/uatis/{restaurant_id} (FR-102..FR-106, FR-118, FR-119).
+// POST /v1/webhooks/uatis/{restaurant_id} (FR-102..FR-106, FR-118, FR-119, FR-175, FR-176; ADR-023).
 // Thin: the raw bytes go to `receiveUatisWebhook` in @mt/http, which verifies
 // before it parses (07.security.md).
 
@@ -16,6 +16,7 @@ export function uatisWebhookRoutes(deps: ApiDeps): Hono {
     const result = await receiveUatisWebhook(deps.uatisInbound, {
       restaurantId,
       signatureHeader: c.req.header(SIGNATURE_HEADERS.uatis),
+      deliveryHeader: c.req.header("X-Uatis-Delivery"),
       // Over the cap: an oversized marker so the service answers 413 without the bytes.
       rawBody: raw ?? new Uint8Array(MAX_WEBHOOK_BODY_BYTES + 1),
       now: deps.clock.now(),

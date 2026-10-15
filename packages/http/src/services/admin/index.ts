@@ -4,3 +4,4 @@ export * from "./integrations";
 export * from "./plan";
 export * from "./reports";
 export * from "./settings";
+export * from "./uatis-webhook";

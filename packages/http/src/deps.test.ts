@@ -16,6 +16,8 @@ const config = (over: Partial<ServerConfig> = {}): ServerConfig => ({
   webnfFake: true,
   env: "test",
   allowPrivateHosts: true,
+  publicUrl: undefined,
+  uatisPullSeconds: 3,
   ...over,
 });
 

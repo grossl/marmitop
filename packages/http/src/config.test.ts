@@ -80,4 +80,22 @@ describe("readServerConfig", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.missing).toEqual(["MT_ALLOW_PRIVATE_HOSTS"]);
   });
+
+  // covers FR-172, FR-174 (ADR-021, ADR-023)
+  test("reads MT_PUBLIC_URL as given and MT_UATIS_PULL_SECONDS with default 3", () => {
+    const base = { DATABASE_URL: "postgres://x", MT_KEK: KEK };
+    const a = readServerConfig({ ...base, MT_PUBLIC_URL: " https://api.example.com " });
+    expect(a.ok && a.config.publicUrl).toBe("https://api.example.com");
+    expect(a.ok && a.config.uatisPullSeconds).toBe(3);
+    const b = readServerConfig({ ...base, MT_UATIS_PULL_SECONDS: "5" });
+    expect(b.ok && b.config.publicUrl).toBeUndefined();
+    expect(b.ok && b.config.uatisPullSeconds).toBe(5);
+  });
+
+  test("refuses an MT_UATIS_PULL_SECONDS outside 1..60", () => {
+    for (const v of ["0", "61", "2.5", "x"]) {
+      const r = readServerConfig({ DATABASE_URL: "postgres://x", MT_KEK: KEK, MT_UATIS_PULL_SECONDS: v });
+      expect(r.ok ? [] : r.missing).toEqual(["MT_UATIS_PULL_SECONDS"]);
+    }
+  });
 });

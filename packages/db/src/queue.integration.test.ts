@@ -138,6 +138,103 @@ describe("scheduled functions", () => {
     await db`update public.integrations_whatsapp set status = 'connected' where restaurant_id = ${b.restaurantId}`;
   });
 
+  // covers FR-174 (ADR-023): restaurants with a registered webhook read the event feed; the
+  // timestamp poll covers the rest.
+  describe("event feed cadence", () => {
+    const setA = (mode: "push" | "pull" | null, syncedAgo: string | null) => db`
+      update public.integrations_whatsapp set
+        uatis_webhook_id = ${mode === null ? null : "11111111-1111-4111-8111-111111111111"},
+        uatis_webhook_mode = ${mode},
+        last_synced_at = case when ${syncedAgo}::text is null then null else now() - ${syncedAgo}::interval end
+      where restaurant_id = ${a.restaurantId}
+    `;
+    const queued = async () => {
+      const rows = await db<{ id: string; op: string }[]>`
+        select message ->> 'restaurantId' as id, message ->> 'op' as op from pgmq.q_mt_sync order by msg_id`;
+      return rows.map((r) => `${r.op}:${r.id === a.restaurantId ? "a" : "b"}`);
+    };
+    const feedPulls = (seconds: number) => db`select mt.enqueue_uatis_feed_pulls(${seconds}::int)`;
+
+    beforeEach(async () => {
+      await db`update public.integrations_whatsapp set status = 'disconnected' where restaurant_id = ${b.restaurantId}`;
+    });
+    afterAll(async () => {
+      await setA(null, null);
+      await db`update public.integrations_whatsapp set status = 'connected' where restaurant_id = ${b.restaurantId}`;
+    });
+
+    const polledAgo = (ago: string | null) => db`
+      update public.integrations_whatsapp set
+        last_polled_at = case when ${ago}::text is null then null else now() - ${ago}::interval end
+      where restaurant_id = ${a.restaurantId}`;
+
+    test("push mode: the timestamp poll skips the restaurant", async () => {
+      await setA("push", null);
+      await polledAgo("1 hour");
+      await db`select mt.enqueue_whatsapp_sync()`;
+      expect(await queued()).toEqual([]);
+    });
+
+    test("pull mode: the timestamp poll still runs every 10 minutes as a safety net", async () => {
+      await setA("pull", null);
+      await polledAgo("1 minute");
+      await db`select mt.enqueue_whatsapp_sync()`;
+      expect(await queued()).toEqual([]);
+      await polledAgo("11 minutes");
+      await db`select mt.enqueue_whatsapp_sync()`;
+      expect(await queued()).toEqual(["whatsapp_reconcile:a"]);
+    });
+
+    test("pull mode: read 4 seconds ago with pull_seconds 3 enqueues one feed pull, and not twice", async () => {
+      await setA("pull", "4 seconds");
+      await feedPulls(3);
+      await feedPulls(3);
+      expect(await queued()).toEqual(["uatis_feed_pull:a"]);
+    });
+
+    test("pull mode: read 1 second ago enqueues nothing", async () => {
+      await setA("pull", "1 second");
+      await feedPulls(3);
+      expect(await queued()).toEqual([]);
+    });
+
+    test("push mode: read 1 minute ago enqueues nothing; 6 minutes ago enqueues one", async () => {
+      await setA("push", "1 minute");
+      await feedPulls(3);
+      expect(await queued()).toEqual([]);
+      await setA("push", "6 minutes");
+      await feedPulls(3);
+      expect(await queued()).toEqual(["uatis_feed_pull:a"]);
+    });
+
+    test("never read: enqueues one", async () => {
+      await setA("push", null);
+      await feedPulls(3);
+      expect(await queued()).toEqual(["uatis_feed_pull:a"]);
+    });
+
+    test("no webhook: no feed pull, and the timestamp poll runs", async () => {
+      await setA(null, null);
+      await feedPulls(3);
+      await db`select mt.enqueue_whatsapp_sync()`;
+      expect(await queued()).toEqual(["whatsapp_reconcile:a"]);
+    });
+
+    test("app_service may call mt.enqueue_uatis_feed_pulls (the worker timer)", async () => {
+      await setA("pull", null);
+      await withoutContext(db, (tx) => tx`select mt.enqueue_uatis_feed_pulls(3)`, "app_service");
+      expect(await queued()).toEqual(["uatis_feed_pull:a"]);
+    });
+
+    test("the mode check: a webhook id needs a mode", async () => {
+      const code = await errorCode(
+        () => db`update public.integrations_whatsapp set uatis_webhook_id = gen_random_uuid(), uatis_webhook_mode = null
+                 where restaurant_id = ${a.restaurantId}`,
+      );
+      expect(code).toBe("23514");
+    });
+  });
+
   test("mt.enqueue_invoice_polls enqueues invoices in flight for over a minute", async () => {
     // set_updated_at would overwrite a backdated updated_at, so it is paused for this one update.
     await db.begin(async (tx) => {

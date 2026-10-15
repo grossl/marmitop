@@ -6,3 +6,4 @@ export * from "./automatic";
 export * from "./connection";
 export * from "./gateway-events";
 export * from "./inbound-webhook";
+export * from "./uatis-events";

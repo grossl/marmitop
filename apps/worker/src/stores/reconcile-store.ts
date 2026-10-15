@@ -29,7 +29,8 @@ export class DbReconcileStore implements ReconcileStore {
       (tx) => tx`
       update public.integrations_whatsapp set
         last_sync_cursor = coalesce(${cursor}::timestamptz, last_sync_cursor),
-        last_synced_at = ${syncedAt}
+        last_synced_at = ${syncedAt},
+        last_polled_at = ${syncedAt}
       where restaurant_id = ${restaurantId}
     `,
     );

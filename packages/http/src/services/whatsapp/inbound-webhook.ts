@@ -1,18 +1,21 @@
-// POST /v1/webhooks/uatis/{restaurant_id} (FR-102..FR-106, FR-118, FR-119;
-// 06.api-spec.md, 07.security.md "Inbound webhook verification").
+// POST /v1/webhooks/uatis/{restaurant_id} (FR-102..FR-106, FR-118, FR-119, FR-175, FR-176;
+// 06.api-spec.md, 07.security.md "Inbound webhook verification"; ADR-021, ADR-023).
 //
 // `receiveUatisWebhook` is the whole route minus HTTP plumbing. Order:
 //
 //   1. body over 256 KB                → 413 (before any lookup)
-//   2. load the secret (uuid check, integration row, not disconnected)
+//   2. load the secret and the stored organization (uuid check, integration row, not
+//      disconnected, a secret configured)
 //   3. verify X-Uatis-Signature: 5-minute tolerance, HMAC over "t.body",
 //      constant-time compare. An unknown restaurant verifies against a dummy
 //      secret, so every failure costs the same and answers the same 401 body
 //      (no oracle, FR-118)
 //   4. rate limit per restaurant (after the signature, so unsigned traffic
 //      cannot spend a restaurant's budget)
-//   5. parse JSON and the event (422 with field paths)
-//   6. apply: upsert by external_id, automatic messages, in one transaction
+//   5. parse JSON (422); `organization_id` must match the stored organization, else the
+//      same 401 (FR-175); parse the event (422 with field paths)
+//   6. accept: `applyUatisEvent` (receipt dedupe by event id, then upsert by external_id and
+//      automatic messages) and `last_webhook_at`, in one transaction (FR-176)
 //
 // The store is a port: `createDbUatisInboundStore` in production, a memory
 // store in the api tests.
@@ -31,9 +34,14 @@ import { type Db, withoutContext, withRestaurantContext } from "@mt/db";
 
 import type { ServiceDeps } from "../../deps";
 import { mapError } from "../../errors";
-import { loadUatisWebhookSecret, systemCtx } from "./connection";
-import { type ApplyResult, applyGatewayMessage } from "./gateway-events";
+import { loadUatisWebhookVerification, systemCtx } from "./connection";
 import { toDbContext } from "../../context";
+import {
+  applyUatisEvent,
+  type UatisEventResult,
+  uatisEventId,
+  uatisOrganizationAllowed,
+} from "./uatis-events";
 
 /** 06.api-spec.md "Rate limits": inbound webhook routes get 300 per minute per restaurant. */
 export const WEBHOOK_RATE_LIMIT_PER_MINUTE = 300;
@@ -51,11 +59,23 @@ export interface RateDecision {
   readonly count: number;
 }
 
+export interface UatisWebhookVerification {
+  /** The unsealed webhook secret. */
+  readonly secret: string;
+  /** `uatis_organization_id`; null skips the organization check (FR-175). */
+  readonly organizationId: string | null;
+}
+
 export interface UatisInboundStore {
-  /** The unsealed webhook secret, or null: unknown restaurant, no integration, or disconnected. */
-  loadSecret(restaurantId: string): Promise<string | null>;
+  /** Null: unknown restaurant, no integration, disconnected, or no secret configured. */
+  loadVerification(restaurantId: string): Promise<UatisWebhookVerification | null>;
   hit(restaurantId: string, now: Date): Promise<RateDecision>;
-  apply(restaurantId: string, event: Extract<UatisWebhookEvent, { message: unknown }>): Promise<ApplyResult>;
+  /** One transaction: `applyUatisEvent` and `last_webhook_at = receivedAt` (FR-176). */
+  accept(
+    restaurantId: string,
+    event: UatisWebhookEvent,
+    meta: { readonly eventId: string | null; readonly receivedAt: Date },
+  ): Promise<UatisEventResult>;
 }
 
 export interface WebhookReply {
@@ -69,6 +89,8 @@ export interface WebhookReply {
 export interface ReceiveInput {
   readonly restaurantId: string;
   readonly signatureHeader: string | null | undefined;
+  /** `X-Uatis-Delivery`; the dedupe key when the body has no usable `id`. */
+  readonly deliveryHeader?: string | null | undefined;
   readonly rawBody: Uint8Array;
   readonly now: Date;
 }
@@ -84,14 +106,14 @@ export async function receiveUatisWebhook(store: UatisInboundStore, input: Recei
     return reply(new AppError("signature_invalid", "Webhook signature is invalid.", { httpStatus: 413 }));
   }
   try {
-    const secret = UUID.test(input.restaurantId) ? await store.loadSecret(input.restaurantId) : null;
+    const verification = UUID.test(input.restaurantId) ? await store.loadVerification(input.restaurantId) : null;
     const check = verifyUatisSignature({
       headers: { "X-Uatis-Signature": input.signatureHeader ?? undefined },
       rawBody: input.rawBody,
-      secret: secret ?? DUMMY_SECRET,
+      secret: verification?.secret ?? DUMMY_SECRET,
       now: input.now,
     });
-    if (secret === null || !check.ok) return reply(SIGNATURE_INVALID());
+    if (verification === null || !check.ok) return reply(SIGNATURE_INVALID());
 
     const rate = await store.hit(input.restaurantId, input.now);
     if (!rate.allowed) {
@@ -106,10 +128,17 @@ export async function receiveUatisWebhook(store: UatisInboundStore, input: Recei
     } catch {
       return reply(new AppError("validation_failed", "The webhook body is not JSON."));
     }
+    const organizationId =
+      typeof json === "object" && json !== null && typeof (json as { organization_id?: unknown }).organization_id === "string"
+        ? ((json as { organization_id: string }).organization_id as string)
+        : null;
+    if (!uatisOrganizationAllowed(verification.organizationId, organizationId)) return reply(SIGNATURE_INVALID());
+
     const event = parseUatisWebhookEvent(json);
-    if (event.type === "message.created" || event.type === "message.updated") {
-      await store.apply(input.restaurantId, event);
-    }
+    await store.accept(input.restaurantId, event, {
+      eventId: uatisEventId(event, input.deliveryHeader),
+      receivedAt: input.now,
+    });
     return { status: 200, body: { received: true } };
   } catch (error) {
     const mapped = mapError(error);
@@ -143,14 +172,22 @@ export async function hitRateCounter(
   return { allowed: count <= limit, retryAfterSeconds, count };
 }
 
-/** The production store: secrets from `secrets`, rows through `applyGatewayMessage`. */
+/** The production store: secrets from `secrets`, events through `applyUatisEvent`. */
 export function createDbUatisInboundStore(deps: ServiceDeps): UatisInboundStore {
   const inContext = <T>(restaurantId: string, fn: Parameters<typeof withRestaurantContext<T>>[2]) =>
     withRestaurantContext(deps.db, toDbContext(systemCtx(restaurantId)), fn, deps.contextOptions);
   return {
-    loadSecret: (restaurantId) => inContext(restaurantId, (tx) => loadUatisWebhookSecret(tx, deps, restaurantId)),
+    loadVerification: (restaurantId) =>
+      inContext(restaurantId, (tx) => loadUatisWebhookVerification(tx, deps, restaurantId)),
     hit: (restaurantId, now) => hitRateCounter(deps.db, restaurantId, "webhook", WEBHOOK_RATE_LIMIT_PER_MINUTE, now),
-    apply: (restaurantId, event) =>
-      inContext(restaurantId, (tx) => applyGatewayMessage(tx, deps, restaurantId, event.message)),
+    accept: (restaurantId, event, meta) =>
+      inContext(restaurantId, async (tx) => {
+        const result = await applyUatisEvent(tx, deps, restaurantId, event, { eventId: meta.eventId, source: "push" });
+        await tx`
+          update public.integrations_whatsapp set last_webhook_at = ${meta.receivedAt}
+          where restaurant_id = ${restaurantId}
+        `;
+        return result;
+      }),
   };
 }

@@ -5,7 +5,9 @@ import {
   connectWhatsAppInput,
   createApiKey,
   createApiKeyInput,
+  disableUatisWebhook,
   disconnectWhatsApp,
+  enableUatisWebhook,
   getPlanAndUsage,
   getRestaurantProfile,
   getSettings,
@@ -91,6 +93,18 @@ export const testWhatsAppConnectionAction = adminAction(
 export const disconnectWhatsAppAction = adminAction(
   { name: "settings.disconnectWhatsApp", input: none },
   ({ deps, ctx }) => saved(disconnectWhatsApp(deps, ctx, undefined)),
+);
+
+/** FR-170..FR-172 (ADR-021, ADR-023): push when MT_PUBLIC_URL is public, pull otherwise. */
+export const enableUatisWebhookAction = adminAction(
+  { name: "settings.enableUatisWebhook", input: none },
+  ({ deps, ctx }) => saved(enableUatisWebhook(deps, ctx, undefined)),
+);
+
+/** FR-173. */
+export const disableUatisWebhookAction = adminAction(
+  { name: "settings.disableUatisWebhook", input: none },
+  ({ deps, ctx }) => saved(disableUatisWebhook(deps, ctx, undefined)),
 );
 
 export const saveWebhookEndpointAction = adminAction(

@@ -1,4 +1,4 @@
-import { getPlanAndUsage, getSettings, listWebhookDeliveries } from "@mt/http";
+import { getPlanAndUsage, getSettings, getUatisWebhookStatus, listWebhookDeliveries } from "@mt/http";
 import type { Metadata } from "next";
 
 import { SettingsPage } from "@/components/settings-page";
@@ -17,9 +17,13 @@ export default async function SettingsRoute() {
     getPlanAndUsage(deps, ctx, undefined),
     listWebhookDeliveries(deps, ctx, undefined),
   ]);
+  // FR-178: never throws on a gateway failure; null only when WhatsApp is not configured.
+  const uatisWebhook = settings.integrations.whatsapp
+    ? await getUatisWebhookStatus(deps, ctx, undefined).catch(() => null)
+    : null;
   return (
     <div className="flex-1 overflow-hidden">
-      <SettingsPage settings={settings} plan={plan} deliveries={deliveries} />
+      <SettingsPage settings={settings} plan={plan} deliveries={deliveries} uatisWebhook={uatisWebhook} />
     </div>
   );
 }

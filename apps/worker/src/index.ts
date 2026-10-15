@@ -3,6 +3,9 @@
 
 import { createServiceDeps, readServerConfig } from "@mt/http";
 
+import { withoutContext } from "@mt/db";
+
+import { FeedPullTimer } from "./feed-timer";
 import { createLogger } from "./framework/logger";
 import { PgmqQueueClient } from "./framework/pgmq-client";
 import { QueueWorker } from "./framework/worker";
@@ -38,14 +41,26 @@ const server = Bun.serve({
       ? healthResponse(worker.health())
       : new Response("not found", { status: 404 }),
 });
+// ADR-023, FR-174: enqueue event-feed reads every MT_UATIS_PULL_SECONDS.
+const feedTimer = new FeedPullTimer({
+  pullSeconds: config.uatisPullSeconds,
+  enqueue: (seconds) =>
+    withoutContext(deps.db, async (tx) => {
+      const [row] = await tx<{ n: number }[]>`select mt.enqueue_uatis_feed_pulls(${seconds}::int) as n`;
+      return row?.n ?? 0;
+    }),
+  log,
+});
 worker.start();
-log.info("worker health listening", { port: server.port });
+feedTimer.start();
+log.info("worker health listening", { port: server.port, uatisPullSeconds: config.uatisPullSeconds });
 
 let stopping = false;
 async function shutdown(signal: string) {
   if (stopping) return;
   stopping = true;
   log.info("worker stopping", { signal });
+  await feedTimer.stop();
   await worker.stop();
   await server.stop();
   await deps.db.end({ timeout: 5 });

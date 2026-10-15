@@ -48,6 +48,8 @@ export interface ServiceDeps {
   readonly env: ServerConfig["env"];
   /** `MT_ALLOW_PRIVATE_HOSTS=1` (ADR-017 #5). URL checks and `safeFetch` read it. */
   readonly allowPrivateHosts: boolean;
+  /** `MT_PUBLIC_URL` as configured (ADR-021, ADR-023). Picks push or pull in `enableUatisWebhook`. */
+  readonly publicUrl: string | undefined;
 }
 
 export type ServiceDepsOverrides = Partial<Omit<ServiceDeps, "env" | "contextOptions" | "allowPrivateHosts">>;
@@ -86,5 +88,6 @@ export function createServiceDeps(config: ServerConfig, overrides: ServiceDepsOv
     contextOptions: { role: "app_service" },
     env: config.env,
     allowPrivateHosts: config.allowPrivateHosts,
+    publicUrl: "publicUrl" in overrides ? overrides.publicUrl : config.publicUrl,
   };
 }

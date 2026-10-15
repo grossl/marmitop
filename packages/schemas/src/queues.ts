@@ -42,10 +42,19 @@ export const syncJobSchema = z.object({
   attempt: jobAttemptSchema,
 });
 
+/** mt_sync op `uatis_feed_pull`: read the backend-uatis event feed (ADR-023, FR-174). */
+export const uatisFeedPullJobSchema = z.object({
+  v: z.literal(1),
+  restaurantId: uuidSchema,
+  op: z.literal("uatis_feed_pull"),
+  attempt: jobAttemptSchema,
+});
+
 export type OutboundMessageJob = z.infer<typeof outboundMessageJobSchema>;
 export type WebhookDeliveryJob = z.infer<typeof webhookDeliveryJobSchema>;
 export type InvoiceJob = z.infer<typeof invoiceJobSchema>;
 export type SyncJob = z.infer<typeof syncJobSchema>;
+export type UatisFeedPullJob = z.infer<typeof uatisFeedPullJobSchema>;
 
 /** The body of every outbound webhook delivery (06.api-spec.md "Outbound webhooks"). */
 export const webhookEnvelopeSchema = z.object({

@@ -22,17 +22,34 @@ export interface GatewayMessage {
   /** E.164 when it can be normalized; the raw value otherwise; null when absent. */
   readonly contactAddress: string | null;
   readonly createdAt: Date;
+  /**
+   * Set when `status` is `failed` (FR-177): `error_code` and `error_message` for the row.
+   * Absent or null otherwise.
+   */
+  readonly failure?: MessageFailure | null;
 }
 
+export interface MessageFailure {
+  /** `whatsapp_<Meta code>` from `status.errors[0].code`, or `whatsapp_failed`. */
+  readonly code: string;
+  /** `errors[0].title` or `.message`, at most 200 characters. */
+  readonly message: string | null;
+}
+
+/**
+ * `organization_id` is the backend-uatis organization that sent the event; the receiver compares
+ * it with the one stored at registration (FR-175, ADR-021). Null when the body has none.
+ */
 export type UatisWebhookEvent =
   | {
       readonly type: "message.created" | "message.updated";
       readonly deliveryId: string | null;
       readonly occurredAt: Date | null;
+      readonly organizationId: string | null;
       readonly message: GatewayMessage;
     }
-  | { readonly type: "conversation.updated" }
-  | { readonly type: "ignored"; readonly eventType: string };
+  | { readonly type: "conversation.updated"; readonly organizationId: string | null }
+  | { readonly type: "ignored"; readonly eventType: string; readonly organizationId: string | null };
 
 function invalid(path: string, message: string): AppError {
   return new AppError("validation_failed", "The webhook payload is invalid.", {
@@ -71,6 +88,19 @@ function mapStatus(status: unknown): MessageStatus | null {
   return typeof state === "string" ? (STATES[state] ?? null) : null;
 }
 
+/** `messages.error_message` holds at most 200 characters (05.data-model.md). */
+const ERROR_MESSAGE_MAX = 200;
+
+/** FR-177: the first entry of `status.errors` when the state maps to `failed`. */
+function mapFailure(status: unknown): MessageFailure | null {
+  if (mapStatus(status) !== "failed" || !isRecord(status)) return null;
+  const first = Array.isArray(status.errors) ? status.errors[0] : undefined;
+  const error = isRecord(first) ? first : {};
+  const code = typeof error.code === "number" && Number.isInteger(error.code) ? `whatsapp_${error.code}` : "whatsapp_failed";
+  const text = str(error.title) ?? str(error.message);
+  return { code, message: text === null ? null : text.slice(0, ERROR_MESSAGE_MAX) };
+}
+
 /** `messages.body` holds 1-4096 characters (05.data-model.md). */
 export const MESSAGE_BODY_MAX = 4096;
 
@@ -105,6 +135,7 @@ export function mapUatisMessage(raw: unknown): GatewayMessage {
     status: mapStatus(raw.status),
     contactAddress: address ? (normalizePhoneE164(address) ?? address) : null,
     createdAt: date(raw.created_at, "message.created_at"),
+    failure: mapFailure(raw.status),
   };
 }
 
@@ -122,16 +153,20 @@ export function parseUatisWebhookEvent(body: unknown): UatisWebhookEvent {
   if (!isRecord(body)) throw invalid("", "Expected a JSON object.");
   const type = str(body.type);
   if (!type) throw invalid("type", "Missing event type.");
-  if (type === "conversation.updated") return { type: "conversation.updated" };
-  if (type !== "message.created" && type !== "message.updated") return { type: "ignored", eventType: type };
+  const organizationId = str(body.organization_id);
+  if (type === "conversation.updated") return { type: "conversation.updated", organizationId };
+  if (type !== "message.created" && type !== "message.updated") return { type: "ignored", eventType: type, organizationId };
   const data = body.data;
   if (!isRecord(data) || !isRecord(data.message)) throw invalid("data.message", "Missing message.");
+  // Agent tool traffic never reaches a customer (ADR-002 Amendment 2).
+  if (data.message.direction === "internal") return { type: "ignored", eventType: type, organizationId };
   const message = mapUatisMessage(data.message);
   const createdAt = str(body.created_at);
   const occurred = createdAt ? new Date(createdAt) : null;
   return {
     type,
     deliveryId: str(body.id),
+    organizationId,
     occurredAt: occurred && !Number.isNaN(occurred.getTime()) ? occurred : null,
     message,
   };

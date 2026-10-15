@@ -13,21 +13,26 @@ import {
   createInvoicePollHandler,
 } from "./handlers/invoice-jobs";
 import { createOutboundMessageHandler } from "./handlers/outbound-message";
+import { createUatisFeedHandler } from "./handlers/uatis-feed";
 import { createWhatsAppReconcileHandler } from "./handlers/whatsapp-reconcile";
 import { createWebhookDeliveryHandler } from "./handlers/webhook-delivery";
 import { DbInvoiceJobStore } from "./stores/invoice-store";
+import { DbFeedStore } from "./stores/feed-store";
 import { DbOutboundStore } from "./stores/outbound-store";
 import { DbReconcileStore } from "./stores/reconcile-store";
 import { DbWebhookDeliveryStore } from "./stores/webhook-delivery-store";
 
 export function buildRegistry(deps: ServiceDeps, log: Logger): HandlerRegistry {
   const gatewayFor = deps.gateways.whatsapp.bind(deps.gateways);
+  const reconcileStore = new DbReconcileStore(deps);
   const invoiceDeps = { store: new DbInvoiceJobStore(deps), gatewayFor: deps.gateways.invoices.bind(deps.gateways) };
   return (
     new HandlerRegistry()
       .register(createOutboundMessageHandler({ store: new DbOutboundStore(deps), gatewayFor }))
+      .register(createWhatsAppReconcileHandler({ store: reconcileStore, gatewayFor, clock: deps.clock, log }))
+      // P10: mt_sync uatis_feed_pull, the backend-uatis event feed (ADR-023)
       .register(
-        createWhatsAppReconcileHandler({ store: new DbReconcileStore(deps), gatewayFor, clock: deps.clock, log }),
+        createUatisFeedHandler({ store: new DbFeedStore(deps), reconcileStore, gatewayFor, clock: deps.clock, log }),
       )
       // P6: mt_invoice_jobs issue | poll | cancel (ADR-003)
       .register(createInvoiceIssueHandler(invoiceDeps))

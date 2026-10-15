@@ -399,6 +399,20 @@ const SPECS: TableSpec[] = [
       values (${f.restaurantId}, 'mt_sync', 'sync', 1, 'ok')`,
   },
   {
+    table: "uatis_event_receipts",
+    tenantColumn: "restaurant_id",
+    pkColumn: "event_id",
+    pk: (f) => f.uatisEventId,
+    select: "admin",
+    insert: "admin",
+    update: null,
+    delete: "admin",
+    updateSet: "source = 'pull'",
+    insertRow: (tx, f) => tx`
+      insert into public.uatis_event_receipts (restaurant_id, event_id, event_type, source)
+      values (${f.restaurantId}, ${crypto.randomUUID()}, 'message.created', 'pull')`,
+  },
+  {
     table: "audit_logs",
     tenantColumn: "restaurant_id",
     pkColumn: "id",

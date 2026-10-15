@@ -26,6 +26,14 @@ export interface ServerConfig {
    * (local development only, ADR-017 #5). Refused when `MT_ENV` is production.
    */
   readonly allowPrivateHosts: boolean;
+  /**
+   * `MT_PUBLIC_URL`: the public base URL of apps/api. "Ativar webhook" registers a push webhook
+   * when it is public https on port 443, and a pull webhook otherwise (ADR-021, ADR-023, FR-172).
+   * Kept as given; `checkPublicBaseUrl` decides. Undefined when unset.
+   */
+  readonly publicUrl: string | undefined;
+  /** `MT_UATIS_PULL_SECONDS`, 1..60, default 3: the event-feed cadence in pull mode (FR-174). */
+  readonly uatisPullSeconds: number;
 }
 
 export type ConfigResult =
@@ -61,6 +69,11 @@ export function readServerConfig(env_: Env = process.env): ConfigResult {
   const env = readEnvName(env_.MT_ENV);
   const allowPrivateHosts = env_.MT_ALLOW_PRIVATE_HOSTS === "1";
   if (allowPrivateHosts && env === "production") missing.push("MT_ALLOW_PRIVATE_HOSTS");
+  const pullRaw = env_.MT_UATIS_PULL_SECONDS;
+  const uatisPullSeconds = pullRaw === undefined || pullRaw === "" ? 3 : Number(pullRaw);
+  if (!Number.isInteger(uatisPullSeconds) || uatisPullSeconds < 1 || uatisPullSeconds > 60) {
+    missing.push("MT_UATIS_PULL_SECONDS");
+  }
   if (missing.length > 0 || !databaseUrl || !kek) return { ok: false, missing };
 
   return {
@@ -74,6 +87,8 @@ export function readServerConfig(env_: Env = process.env): ConfigResult {
       webnfFake: env_.MT_WEBNF_FAKE === "1",
       env,
       allowPrivateHosts,
+      publicUrl: env_.MT_PUBLIC_URL?.trim() || undefined,
+      uatisPullSeconds,
     },
   };
 }

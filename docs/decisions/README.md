@@ -1,11 +1,11 @@
 # Architecture decision records
 
-ADR-014 to ADR-017 amend earlier ADRs. When two ADRs conflict, the newest wins. ADR-002 has an Amendment 1 for facts found while writing the API spec.
+ADR-014 to ADR-017 amend earlier ADRs. When two ADRs conflict, the newest wins. ADR-002 has an Amendment 1 for facts found while writing the API spec, and ADR-021 amends ADR-002 again (Amendment 3).
 
 | ADR | Title | Decision |
 |---|---|---|
 | [001](ADR-001-monorepo-layout.md) | Monorepo layout | Bun workspaces and Turborepo with `apps/dashboard`, `apps/api`, `apps/worker`, and shared `packages/`. No `generation-api`. |
-| [002](ADR-002-whatsapp-via-backend-uatis.md) | WhatsApp channel through backend-uatis | Send and receive through `backend-uatis`, with its webhooks and a 30-second reconciliation poll. The poll is required because its webhooks are not delivered yet. |
+| [002](ADR-002-whatsapp-via-backend-uatis.md) | WhatsApp channel through backend-uatis | Send and receive through `backend-uatis`, with its webhooks and a 30-second reconciliation poll. The poll was required while its webhooks were not delivered (Amendment 1); ADR-021 makes the webhook the main path. |
 | [003](ADR-003-invoices-via-web-nf.md) | Invoices through web-nf | Issue NFC-e and NF-e through `web-nf`. No NFSe in v1. |
 | [004](ADR-004-dashboard-data-access.md) | Dashboard data access | The dashboard reads and writes through server-side services on `app_service`. The browser uses Supabase for Auth and Realtime only. |
 | [005](ADR-005-auth-tenancy-roles.md) | Auth, tenancy, and roles | Supabase Auth, one restaurant per tenant with RLS, and two roles: `admin` and `attendant`. |
@@ -24,3 +24,5 @@ ADR-014 to ADR-017 amend earlier ADRs. When two ADRs conflict, the newest wins. 
 | [018](ADR-018-tenant-composite-fks.md) | Tenant composite foreign keys, no deletes, API key use | Child keys carry `restaurant_id` into the parent. Orders, messages, conversations, customers, and history rows are never deleted; menu and stock items are archived. `mt.touch_api_key` records key use. |
 | [019](ADR-019-english-paths.md) | English names for routes, folders, and files | Routes, folders, file names, and identifiers use English (`/new-order`, `menu-page.tsx`). UI text stays pt-BR; fiscal and legal terms stay Portuguese. |
 | [020](ADR-020-finance-page-and-payment-status.md) | Finance page and payment status | `orders.paid_at` marks an order paid; `entregue` sets it when empty; staff mark it, only admin clears it. `/finance` lists paid orders with filters and totals and issues invoices one by one or in a batch. |
+| [021](ADR-021-uatis-webhook-registration.md) | Register and use backend-uatis webhooks | Settings registers the backend-uatis webhook through its API, seals the returned secret, and checks `organization_id` on receipt. Amended by ADR-023 for the poll cadence and the public-URL rule. |
+| [023](ADR-023-uatis-event-feed-push-and-pull.md) | One backend-uatis event log, read by push or pull | A webhook is `push` when `MT_PUBLIC_URL` is public, `pull` otherwise; the worker reads the cursor feed every 3 seconds (pull) or 5 minutes (push). One handler for both, deduplicated by event id. No tunnel. |

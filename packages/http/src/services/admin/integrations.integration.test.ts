@@ -132,7 +132,8 @@ describe("connectWhatsApp", () => {
       phoneNumberId: "x",
     }).catch((e) => e);
     expect(code(e2)).toBe("validation_failed");
-    expect((e2 as AppError).details?.map((d) => d.path)).toEqual(expect.arrayContaining(["apiKey", "webhookSecret"]));
+    // FR-085 (ADR-021, ADR-023): only the API key is required; "Ativar webhook" stores the webhook secret.
+    expect((e2 as AppError).details?.map((d) => d.path)).toEqual(["apiKey"]);
 
     const e3 = await connectWhatsApp(deps, admin(), { ...input, baseUrl: "ftp://x" }).catch((e) => e);
     expect(code(e3)).toBe("validation_failed");

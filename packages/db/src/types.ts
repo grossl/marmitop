@@ -159,13 +159,32 @@ export interface IntegrationWhatsappRow {
   restaurant_id: string;
   base_url: string;
   api_key_secret_id: string;
-  webhook_secret_id: string;
+  /** Nullable since migration 0019 (ADR-021). */
+  webhook_secret_id: string | null;
   phone_number_id: string;
   status: IntegrationStatus;
   last_error: string | null;
   last_sync_cursor: Date | null;
   last_synced_at: Date | null;
+  /** Migration 0019 (ADR-021, FR-170, FR-175, FR-176). */
+  uatis_webhook_id: string | null;
+  /** ADR-023. Null exactly when `uatis_webhook_id` is null. */
+  uatis_webhook_mode: "push" | "pull" | null;
+  uatis_organization_id: string | null;
+  uatis_feed_cursor: string | null;
+  last_webhook_at: Date | null;
+  /** Last timestamp poll (migration 0019, ADR-023). */
+  last_polled_at: Date | null;
   updated_at: Date;
+}
+
+/** `uatis_event_receipts` (migration 0019, ADR-023). */
+export interface UatisEventReceiptRow {
+  restaurant_id: string;
+  event_id: string;
+  event_type: string;
+  source: "push" | "pull";
+  received_at: Date;
 }
 
 export interface IntegrationFiscalRow {
@@ -547,6 +566,7 @@ export interface Tables {
   job_attempts: JobAttemptRow;
   audit_logs: AuditLogRow;
   usage_events: UsageEventRow;
+  uatis_event_receipts: UatisEventReceiptRow;
 }
 
 export type TableName = keyof Tables;
@@ -584,6 +604,7 @@ export const TENANT_TABLES = [
   "job_attempts",
   "audit_logs",
   "usage_events",
+  "uatis_event_receipts",
 ] as const satisfies readonly TableName[];
 
 export type TenantTable = (typeof TENANT_TABLES)[number];

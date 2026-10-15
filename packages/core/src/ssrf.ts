@@ -129,3 +129,52 @@ export function checkOutboundUrl(input: string, options: UrlCheckOptions): UrlCh
   }
   return { ok: true, url: input };
 }
+
+// ---------------------------------------------------------------------------
+// MT_PUBLIC_URL for the backend-uatis webhook (ADR-021, FR-172)
+// ---------------------------------------------------------------------------
+
+export type PublicUrlRejection =
+  | "missing"
+  | "invalid_url"
+  | "not_https"
+  | "userinfo_not_allowed"
+  | "port_not_allowed"
+  | "query_not_allowed"
+  | "private_host";
+
+export type PublicUrlCheck =
+  | { readonly ok: true; readonly url: string }
+  | { readonly ok: false; readonly reason: PublicUrlRejection };
+
+/**
+ * The backend-uatis worker delivers only to `http`/`https` on the default port and refuses
+ * private, loopback, and link-local targets, with no development override. Marmitop asks for
+ * more: `https` only. `MT_ALLOW_PRIVATE_HOSTS` deliberately plays no part here. A hostname
+ * that resolves to a private address passes this text check; backend-uatis then records
+ * `ssrf_blocked` on the delivery, which Settings shows.
+ */
+export function checkPublicBaseUrl(input: string | undefined | null): PublicUrlCheck {
+  const text = input?.trim() ?? "";
+  if (text === "") return { ok: false, reason: "missing" };
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return { ok: false, reason: "invalid_url" };
+  }
+  if (url.protocol !== "https:") return { ok: false, reason: "not_https" };
+  if (url.username !== "" || url.password !== "") return { ok: false, reason: "userinfo_not_allowed" };
+  if (url.port !== "") return { ok: false, reason: "port_not_allowed" };
+  if (url.search !== "" || url.hash !== "" || text.includes("?") || text.includes("#")) {
+    return { ok: false, reason: "query_not_allowed" };
+  }
+  const literal = checkOutboundUrl(text, { allowPrivateHosts: false });
+  if (!literal.ok) return { ok: false, reason: "private_host" };
+  return { ok: true, url: `${url.origin}${url.pathname.replace(/\/+$/, "")}` };
+}
+
+/** `MT_PUBLIC_URL + /v1/webhooks/uatis/{restaurant_id}` (ADR-021). `base` is a checked URL. */
+export function uatisWebhookTargetUrl(base: string, restaurantId: string): string {
+  return `${base.replace(/\/+$/, "")}/v1/webhooks/uatis/${restaurantId}`;
+}

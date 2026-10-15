@@ -10,6 +10,10 @@ import {
   formatDayLabel,
   formatMonthLabel,
   parseBRLToCents,
+  publicUrlReasonText,
+  uatisModeExplanation,
+  uatisModeLabel,
+  uatisNextModeText,
   usagePercent,
 } from "./admin-format";
 
@@ -65,5 +69,41 @@ describe("webhook deliveries", () => {
     expect(canRedeliver("exhausted")).toBe(true);
     expect(canRedeliver("pending")).toBe(false);
     expect(canRedeliver("failed")).toBe(false);
+  });
+});
+
+// covers FR-172, FR-178 (ADR-021, ADR-023): the WhatsApp webhook panel text.
+describe("uatis webhook text", () => {
+  test("mode labels and explanations", () => {
+    expect(uatisModeLabel("push")).toBe("Push");
+    expect(uatisModeLabel("pull")).toBe("Pull");
+    expect(uatisModeExplanation("push")).toContain("envia cada evento");
+    expect(uatisModeExplanation("pull")).toContain("sem URL pública");
+  });
+
+  test("the next mode says why", () => {
+    expect(uatisNextModeText({ nextMode: "push", publicUrl: { ok: true, url: "https://api.example.com", reason: null } })).toBe(
+      "Ao ativar, o modo será Push: MT_PUBLIC_URL (https://api.example.com) é uma URL pública https.",
+    );
+    expect(
+      uatisNextModeText({ nextMode: "pull", publicUrl: { ok: false, url: "http://localhost:3101", reason: "not_https" } }),
+    ).toBe("Ao ativar, o modo será Pull: MT_PUBLIC_URL (http://localhost:3101) não usa https.");
+    expect(uatisNextModeText({ nextMode: "pull", publicUrl: { ok: false, url: null, reason: "missing" } })).toBe(
+      "Ao ativar, o modo será Pull: MT_PUBLIC_URL não está definida.",
+    );
+  });
+
+  test("every public URL reason has pt-BR text", () => {
+    for (const reason of [
+      "missing",
+      "invalid_url",
+      "not_https",
+      "userinfo_not_allowed",
+      "port_not_allowed",
+      "query_not_allowed",
+      "private_host",
+    ] as const) {
+      expect(publicUrlReasonText(reason).length).toBeGreaterThan(5);
+    }
   });
 });

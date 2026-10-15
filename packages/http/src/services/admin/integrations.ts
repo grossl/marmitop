@@ -102,7 +102,7 @@ export interface IntegrationsState {
 interface WhatsAppRow {
   base_url: string;
   api_key_secret_id: string;
-  webhook_secret_id: string;
+  webhook_secret_id: string | null;
   phone_number_id: string;
   status: IntegrationStatus;
   last_error: string | null;
@@ -162,7 +162,7 @@ export async function loadIntegrationsState(tx: Tx, ctx: ServiceContext): Promis
     fi?.webhook_secret_id ?? null,
     hook?.secret_id ?? null,
   ]);
-  const state = (id: string | undefined) => (id === undefined ? NO_SECRET : (states.get(id) ?? NO_SECRET));
+  const state = (id: string | null | undefined) => (id == null ? NO_SECRET : (states.get(id) ?? NO_SECRET));
   return {
     whatsapp: wa
       ? {
@@ -264,24 +264,23 @@ export const connectWhatsApp = defineService({
   input: connectWhatsAppInput,
   run: async ({ tx, deps, ctx, input: raw }): Promise<ConnectionResult> => {
     const input = parseOrThrow(makeUpdateWhatsAppSchema(urlRules(deps)), raw);
-    const [existing] = await tx<{ api_key_secret_id: string; webhook_secret_id: string }[]>`
+    const [existing] = await tx<{ api_key_secret_id: string; webhook_secret_id: string | null }[]>`
       select api_key_secret_id, webhook_secret_id from public.integrations_whatsapp
       where restaurant_id = ${ctx.restaurantId} for update
     `;
-    if (existing === undefined) {
-      if (input.apiKey === undefined) throw missingField("apiKey", "Informe a chave de API.");
-      if (input.webhookSecret === undefined) throw missingField("webhookSecret", "Informe o segredo do webhook.");
-    }
+    // The webhook secret is optional (FR-085): "Ativar webhook" stores one for push, and a pull
+    // webhook needs none (ADR-021, ADR-023).
+    if (existing === undefined && input.apiKey === undefined) throw missingField("apiKey", "Informe a chave de API.");
 
     const oldIds: { id: string; kind: "uatis_api_key" | "uatis_webhook_secret" }[] = [];
     let apiKeyId = existing?.api_key_secret_id ?? "";
-    let webhookId = existing?.webhook_secret_id ?? "";
+    let webhookId: string | null = existing?.webhook_secret_id ?? null;
     if (input.apiKey !== undefined) {
       if (existing) oldIds.push({ id: existing.api_key_secret_id, kind: "uatis_api_key" });
       apiKeyId = (await storeSecret(tx, deps, ctx, "uatis_api_key", input.apiKey)).id;
     }
     if (input.webhookSecret !== undefined) {
-      if (existing) oldIds.push({ id: existing.webhook_secret_id, kind: "uatis_webhook_secret" });
+      if (existing?.webhook_secret_id) oldIds.push({ id: existing.webhook_secret_id, kind: "uatis_webhook_secret" });
       webhookId = (await storeSecret(tx, deps, ctx, "uatis_webhook_secret", input.webhookSecret)).id;
     }
 
@@ -337,13 +336,13 @@ export const disconnectWhatsApp = defineService({
   minRole: "admin",
   input: z.undefined(),
   run: async ({ tx, ctx }): Promise<{ disconnected: boolean }> => {
-    const [row] = await tx<{ api_key_secret_id: string; webhook_secret_id: string }[]>`
+    const [row] = await tx<{ api_key_secret_id: string; webhook_secret_id: string | null }[]>`
       delete from public.integrations_whatsapp where restaurant_id = ${ctx.restaurantId}
       returning api_key_secret_id, webhook_secret_id
     `;
     if (row === undefined) return { disconnected: false };
     await deleteSecret(tx, ctx, row.api_key_secret_id, "uatis_api_key");
-    await deleteSecret(tx, ctx, row.webhook_secret_id, "uatis_webhook_secret");
+    if (row.webhook_secret_id) await deleteSecret(tx, ctx, row.webhook_secret_id, "uatis_webhook_secret");
     await writeAudit(tx, ctx, {
       action: "integration.whatsapp.disconnect",
       entityType: "integrations_whatsapp",

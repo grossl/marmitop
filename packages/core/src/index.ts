@@ -10,7 +10,7 @@ export { NullBillingProvider, RecordingBillingProvider } from "./billing/billing
 export * from "./br-documents";
 export * from "./business-hours";
 export * from "./errors";
-export type { RecordedCall, ScriptedSend, SimulateInbound } from "./fakes/fake-gateway";
+export type { FakeWebhook, ManagementMethod, RecordedCall, ScriptedSend, SimulateInbound } from "./fakes/fake-gateway";
 export { FakeGateway } from "./fakes/fake-gateway";
 export type { InvoiceCall, ScriptedCreate } from "./fakes/fake-invoice-gateway";
 export { FakeInvoiceGateway } from "./fakes/fake-invoice-gateway";

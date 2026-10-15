@@ -81,7 +81,7 @@ async function main(): Promise<void> {
 
     console.log("2. platform wiring");
     const jobs = await owner<{ n: number }[]>`select count(*)::int as n from cron.job where jobname like 'mt\\_%'`;
-    check(jobs[0]?.n === 10, `10 pg_cron jobs scheduled (got ${jobs[0]?.n})`);
+    check(jobs[0]?.n === 11, `11 pg_cron jobs scheduled (got ${jobs[0]?.n})`);
     const published = await owner<{ tablename: string }[]>`
       select tablename from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' order by 1`;
     check(

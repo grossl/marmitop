@@ -24,13 +24,16 @@ describe("connectWhatsApp (FR-085)", () => {
   test("accepts the connection fields", () => {
     expect(makeConnectWhatsAppSchema(prod).safeParse(body).success).toBe(true);
   });
-  test("all four fields are required", () => {
-    for (const key of Object.keys(body)) {
+  // FR-085 (ADR-021, ADR-023): "Ativar webhook" stores the secret, so it is optional.
+  test("the webhook secret is optional; the other three fields are required", () => {
+    const { webhookSecret: _w, ...noSecret } = body;
+    expect(makeConnectWhatsAppSchema(prod).safeParse(noSecret).success).toBe(true);
+    for (const key of Object.keys(noSecret)) {
       const { [key]: _omit, ...rest } = body as Record<string, string>;
       expect(makeConnectWhatsAppSchema(prod).safeParse(rest).success).toBe(false);
     }
   });
-  test("production blocks http, user info, and private hosts (NFR-014)", () => {
+  test("production blocks http, user info, and private hosts (NFR-014, FR-179)", () => {
     const s = makeConnectWhatsAppSchema(prod);
     for (const baseUrl of [
       "http://uatis.example.com",

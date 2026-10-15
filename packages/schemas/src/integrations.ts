@@ -48,9 +48,9 @@ function whatsappShape(rules: UrlRules) {
   };
 }
 
-/** `connectWhatsApp` (FR-085). */
+/** `connectWhatsApp` (FR-085). The webhook secret is optional: "Ativar webhook" stores it (ADR-021, ADR-023). */
 export function makeConnectWhatsAppSchema(rules: UrlRules) {
-  return z.object(whatsappShape(rules));
+  return z.object(whatsappShape(rules)).partial({ webhookSecret: true });
 }
 
 /** Edit form: a secret left out keeps the stored one. */

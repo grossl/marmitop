@@ -325,7 +325,8 @@ paths:
       summary: Receive a backend-uatis webhook
       description: >
         Verifies X-Uatis-Signature (t=unix,v1=hex HMAC-SHA256 of "t.rawBody",
-        5-minute tolerance, constant-time compare). Upserts by message id.
+        5-minute tolerance, constant-time compare), then organization_id against
+        the organization stored at registration (ADR-021). Upserts by message id.
       tags: [Inbound webhooks]
       security: []
       parameters:
@@ -693,23 +694,31 @@ components:
               properties:
                 id: { type: string, format: uuid }
                 conversation_id: { type: string, format: uuid }
-                direction: { type: string, enum: [in, out] }
+                direction: { type: string, enum: [in, out, internal] }
                 content:
                   type: object
-                  required: [type]
+                  description: "{} for a status-only row. Text: { version: '1', type: text, kind: text, text: <string> }."
                   properties:
-                    type: { type: string, examples: [text] }
+                    version: { type: string }
+                    type: { type: string, examples: [text, file, data] }
+                    kind: { type: string }
                     text:
-                      type: object
-                      properties:
-                        body: { type: string }
+                      description: A string in practice; the documented { body } form is also read.
                 status:
                   type: object
-                  required: [state]
+                  required: [state, errors]
                   properties:
-                    state: { type: string, examples: [received, pending, sent, delivered, read, failed] }
-                    errors: { type: array, items: {} }
-                contact_address: { type: string, description: E.164. }
+                    state: { type: string, examples: [received, pending, accepted, sent, delivered, read, failed] }
+                    errors:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          code: { type: [integer, 'null'] }
+                          title: { type: [string, 'null'] }
+                          message: { type: [string, 'null'] }
+                          details: { type: [string, 'null'] }
+                contact_address: { type: [string, 'null'], description: "Digits without +, for example 5511999999999. Normalized to E.164." }
                 created_at: { type: string, format: date-time }
             conversation:
               type: object
