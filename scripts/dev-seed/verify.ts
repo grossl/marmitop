@@ -6,7 +6,8 @@
 // `bun run seed:verify`. Exits 1 on the first failed check group.
 //
 // Checks:
-//   1. row counts per restaurant match the generator (owner connection);
+//   1. row counts per restaurant match the generator, and the operational
+//      tables are empty (ADR-024) (owner connection);
 //   2. platform wiring: pg_cron jobs, the Realtime publication, the bucket;
 //   3. the app_service DATABASE_URL logs in, and RLS scopes it to one restaurant;
 //   4. a seeded secret decrypts under the dev MT_KEK;
@@ -67,13 +68,6 @@ async function main(): Promise<void> {
         check(rows[0]?.n === count, `${restaurant.name}: ${table} = ${count} (got ${rows[0]?.n})`);
       }
     }
-    // ADR-020: every entregue order carries paid_at (Finance page), and no cancelled one is paid.
-    const unpaid = await owner<{ n: number }[]>`
-      select count(*)::int as n from public.orders where status = 'entregue' and paid_at is null`;
-    check(unpaid[0]?.n === 0, `every entregue order has paid_at (unpaid: ${unpaid[0]?.n})`);
-    const paidCancelled = await owner<{ n: number }[]>`
-      select count(*)::int as n from public.orders where status = 'cancelado' and paid_at is not null`;
-    check(paidCancelled[0]?.n === 0, `no cancelled order carries paid_at (got ${paidCancelled[0]?.n})`);
     const users = await owner<
       { n: number }[]
     >`select count(*)::int as n from auth.users where id = any(${USER_LIST.map((u) => u.id)})`;
@@ -104,23 +98,25 @@ async function main(): Promise<void> {
       service,
       { restaurantId: casa.id, actorType: "user", userId: USERS.casaAdmin.id },
       (tx) => tx<{ restaurant_id: string; n: number }[]>`
-        select restaurant_id, count(*)::int as n from public.orders group by 1`,
+        select restaurant_id, count(*)::int as n from public.business_hours group by 1`,
     );
     check(
-      seen.length === 1 && seen[0]?.restaurant_id === casa.id && seen[0]?.n === expected[casa.id]?.orders,
-      `${casa.name} admin sees only its own ${expected[casa.id]?.orders} orders`,
+      seen.length === 1 && seen[0]?.restaurant_id === casa.id && seen[0]?.n === expected[casa.id]?.business_hours,
+      `${casa.name} admin sees only its own ${expected[casa.id]?.business_hours} business hours`,
     );
     const crossed = await withRestaurantContext(
       service,
       { restaurantId: minas.id, actorType: "user", userId: USERS.casaAdmin.id },
-      (tx) => tx<{ n: number }[]>`select count(*)::int as n from public.orders`,
+      (tx) => tx<{ n: number }[]>`select count(*)::int as n from public.business_hours`,
     );
-    check(crossed[0]?.n === 0, `${casa.name} admin pointed at ${minas.name} sees zero orders`);
-    const closed = await service.begin((tx) => tx<{ n: number }[]>`select count(*)::int as n from public.orders`);
-    check(closed[0]?.n === 0, "no restaurant context sees zero orders (fail closed)");
+    check(crossed[0]?.n === 0, `${casa.name} admin pointed at ${minas.name} sees zero business hours`);
+    const closed = await service.begin(
+      (tx) => tx<{ n: number }[]>`select count(*)::int as n from public.business_hours`,
+    );
+    check(closed[0]?.n === 0, "no restaurant context sees zero business hours (fail closed)");
 
     console.log("4. secrets decrypt under the dev MT_KEK");
-    const secret = SECRETS.casaUatisKey;
+    const secret = SECRETS.casaWebnfKey;
     const [row] = await owner<{ ciphertext: Uint8Array; iv: Uint8Array; wrapped_key: Uint8Array }[]>`
       select ciphertext, iv, wrapped_key from public.secrets where id = ${secret.id}`;
     let plaintext = "";

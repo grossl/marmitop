@@ -122,8 +122,11 @@ export function buildEnvFiles(env: StackEnv, jwks: string): readonly EnvFileSpec
     `SUPABASE_URL=${env.apiUrl}`,
     "MT_ENV=development",
     "MT_LOG_LEVEL=info",
-    "MT_UATIS_FAKE=1",
-    "MT_WEBNF_FAKE=1",
+    // ADR-024: the apps talk to the real local backend-uatis and web-nf. Set 1 to
+    // fall back to the in-process fakes (ADR-017).
+    "MT_UATIS_FAKE=0",
+    "MT_WEBNF_FAKE=0",
+    // The sibling stacks listen on http://127.0.0.1, which the SSRF guard blocks otherwise.
     "MT_ALLOW_PRIVATE_HOSTS=1",
   ];
   const jwt = [

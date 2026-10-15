@@ -1,6 +1,6 @@
 // packages/db/src/dev-seed.test.ts
 //
-// covers FR-009, NFR-010
+// covers FR-009, NFR-010, ADR-024
 //
 // Unit tests for the local-stack tooling in scripts/ (11.operations.md "Local
 // development"). They live here because scripts/ is not a workspace; this
@@ -14,9 +14,15 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 import { EnvelopeSecretBox, parseKek } from "@mt/core";
-import { DEV_KEK_BASE64, RESTAURANTS, SECRET_LIST, USER_LIST } from "../../../scripts/dev-seed/constants";
+import {
+  DEV_KEK_BASE64,
+  LOCAL_WEBNF_BASE_URL,
+  RESTAURANTS,
+  SECRET_LIST,
+  USER_LIST,
+} from "../../../scripts/dev-seed/constants";
 import { open, sealDeterministic } from "../../../scripts/dev-seed/envelope";
-import { OUTPUT, renderSeed, seedCounts } from "../../../scripts/dev-seed/generate";
+import { EMPTY_TABLES, OUTPUT, renderSeed, seedCounts } from "../../../scripts/dev-seed/generate";
 import { buildEnvFiles, extractStackEnv } from "../../../scripts/local-dev";
 
 describe("seed generator", () => {
@@ -31,11 +37,21 @@ describe("seed generator", () => {
     }
   });
 
-  test("the demo restaurant has six months of orders and today's board", () => {
-    const counts = seedCounts()[RESTAURANTS.casa.id];
-    expect(counts?.orders).toBeGreaterThan(900);
-    expect(counts?.customers).toBeGreaterThanOrEqual(8);
-    expect(counts?.menu_item_sizes).toBeGreaterThan(0);
+  test("accounts and configuration only: every operational table starts empty (ADR-024)", () => {
+    for (const restaurant of Object.values(RESTAURANTS)) {
+      const counts = seedCounts()[restaurant.id];
+      for (const table of EMPTY_TABLES) expect(counts?.[table]).toBe(0);
+      expect(counts?.business_hours).toBe(7);
+    }
+    const sql = renderSeed();
+    for (const table of EMPTY_TABLES) expect(sql).not.toContain(`insert into public.${table} `);
+  });
+
+  test("Marmita da Casa points at the local web-nf, never at a fake; WhatsApp is not seeded (ADR-024)", () => {
+    const sql = renderSeed();
+    expect(sql).toContain(LOCAL_WEBNF_BASE_URL);
+    expect(sql).not.toContain("127.0.0.1:4010");
+    expect(sql).not.toContain("127.0.0.1:4020");
   });
 });
 

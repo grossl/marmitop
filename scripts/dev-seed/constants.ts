@@ -32,20 +32,6 @@ export const UUID_FAMILY = {
   autoMessage: "bbbb0004",
   secret: "cccc0001",
   apiKey: "cccc0002",
-  webhookEndpoint: "cccc0003",
-  customer: "dddd0001",
-  conversation: "dddd0002",
-  message: "dddd0003",
-  menuItem: "eeee0001",
-  menuSize: "eeee0002",
-  order: "ffff0001",
-  orderItem: "ffff0002",
-  invoice: "ffff0003",
-  stockItem: "abcd0001",
-  stockMovement: "abcd0002",
-  auditLog: "ac1d0001",
-  usageEvent: "ace50001",
-  jobAttempt: "a77e0001",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -186,29 +172,23 @@ function secret(n: number, restaurant: SeedRestaurant, kind: SecretKind, plainte
 }
 
 /**
- * The integrations point at the fakes (MT_UATIS_FAKE=1, MT_WEBNF_FAKE=1), so
- * these values only need to round-trip through the secret store.
+ * Marmita da Casa connects to the real local web-nf (ADR-024) with the seeded
+ * dev key and webhook secret of ACME Comércio de Roupas (homologação), read
+ * from web-nf/supabase/seed.sql.
+ *
+ * No restaurant gets a seeded WhatsApp integration. backend-uatis accepts only
+ * hashed `obk_` keys, and its seed has none, so the admin creates one in
+ * backend-uatis and saves it in Configurações → WhatsApp (11.operations.md).
  */
 export const SECRETS = {
-  casaUatisKey: secret(1, RESTAURANTS.casa, "uatis_api_key", "obk_test_casa_dev_000000000000000000000001"),
-  casaUatisWebhook: secret(2, RESTAURANTS.casa, "uatis_webhook_secret", "whsec_casa_uatis_dev_0000000000000000000002"),
-  casaWebnfKey: secret(3, RESTAURANTS.casa, "webnf_api_key", "nfk_test_casa_dev_000000000000000000000003"),
-  casaWebnfWebhook: secret(4, RESTAURANTS.casa, "webnf_webhook_secret", "whsec_casa_webnf_dev_0000000000000000000004"),
-  casaOutbound: secret(5, RESTAURANTS.casa, "outbound_webhook_secret", "whsec_casa_outbound_dev_000000000000000005"),
-  minasUatisKey: secret(6, RESTAURANTS.minas, "uatis_api_key", "obk_test_minas_dev_00000000000000000000006"),
-  minasUatisWebhook: secret(
-    7,
-    RESTAURANTS.minas,
-    "uatis_webhook_secret",
-    "whsec_minas_uatis_dev_000000000000000000007",
-  ),
+  casaWebnfKey: secret(1, RESTAURANTS.casa, "webnf_api_key", "nfk_test_I1DI5LWQAgPssC05WoLd9yrOpCu2ao55F"),
+  casaWebnfWebhook: secret(2, RESTAURANTS.casa, "webnf_webhook_secret", "acme-dev-webhook-secret"),
 } as const;
 
 export const SECRET_LIST: readonly SeedSecret[] = Object.values(SECRETS);
 
-/** Base URLs of the local fakes. Nothing listens there unless a developer starts a stub. */
-export const FAKE_UATIS_BASE_URL = "http://127.0.0.1:4010";
-export const FAKE_WEBNF_BASE_URL = "http://127.0.0.1:4020";
+/** The web-nf generation API on its ADR-001 port. */
+export const LOCAL_WEBNF_BASE_URL = "http://127.0.0.1:3002";
 
 // ---------------------------------------------------------------------------
 // Public API keys (ADR-009: `mtk_test_<base62>`, SHA-256 hash stored)
