@@ -39,7 +39,7 @@ Option 3.
 
 **No seeded WhatsApp integration.** `backend-uatis` accepts only `obk_` keys, which it stores as hashes. Its seed has one key, `1234567890`, an older row with no hash and no prefix. `backend-uatis` reads that value as a session token and answers `400` ("Session callers must send X-Org-Id"). No seeded key can authenticate, so the seed connects no WhatsApp integration. To connect one:
 
-1. Sign in to the `backend-uatis` dashboard (`http://localhost:3300`, `qwe@qwe.com`) and create an `obk_test_` key with role `admin`.
+1. The local `backend-uatis` apps use its cloud Supabase project, where the real WhatsApp numbers, users, and messages live. Sign in to its dashboard (`http://localhost:3300`) with your cloud user, open the organization that owns the number, and create an API key with role `admin`.
 2. In Marmitop, Configurações → WhatsApp, save `http://127.0.0.1:3301`, that key, and the `phone_number_id`, then press "Ativar webhook".
 
 The `admin` role covers sends, the poll, and the webhook. Sabor de Minas has no integration of either kind, so its admin tests the Configurações screens from zero.
