@@ -71,7 +71,7 @@ bun run --cwd packages/core test           # one workspace
 ```
 
 Local ports (ADR-001): dashboard 3100, api 3101, worker health 8181, Supabase
-API/DB/Studio 54421/54422/54423. They avoid the sibling projects' ports.
+API/DB/Studio 54421/54422/54423. Siblings: web-nf 3000–3002 + 8080, backend-uatis 3300–3301 (full map in ADR-001).
 
 Test naming: `*.test.ts` (unit), `*.integration.test.ts` (needs a database).
 

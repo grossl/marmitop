@@ -1,7 +1,7 @@
 // Manual suite against a local backend-uatis (10.testing.md "backend-uatis (obk_test_)").
 // Gate: UATIS_E2E=1. Not part of `bun test`.
 //
-//   UATIS_E2E=1 UATIS_E2E_BASE_URL=http://localhost:3001 UATIS_E2E_API_KEY=obk_test_… \
+//   UATIS_E2E=1 UATIS_E2E_BASE_URL=http://localhost:3301 UATIS_E2E_API_KEY=obk_test_… \
 //   UATIS_E2E_PHONE_NUMBER_ID=<line> UATIS_E2E_TO=+55… MT_ALLOW_PRIVATE_HOSTS=1 \
 //   bun apps/worker/e2e-uatis/send-and-poll.ts
 //

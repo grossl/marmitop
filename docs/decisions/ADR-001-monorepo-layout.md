@@ -34,14 +34,15 @@ Option 2. The current UI moves to `apps/dashboard` without visual change. The pa
 | `supabase/` | `config.toml`, numbered migrations, `seed.sql`. |
 | `scripts/` | Local stack bootstrap and seed. |
 
-Local ports do not collide with the sibling projects, which use 3000–3002, 5532x, and 5632x:
+Each project on this machine owns a fixed port block, so all three run side by side. Every dev and start script passes its port explicitly; no app falls back to a framework default.
 
-| Service | Port |
-|---|---|
-| dashboard | 3100 |
-| api | 3101 |
-| worker health | 8181 |
-| Supabase API / DB / Studio | 54421 / 54422 / 54423 |
+| Project | dashboard | api | other | Supabase API / DB / Studio |
+|---|---|---|---|---|
+| Marmitop | 3100 | 3101 | worker health 8181 | 54421 / 54422 / 54423 |
+| web-nf | 3000 | 3001 | generation-api 3002, worker 8080 | 55321 / 55322 / 55323 |
+| backend-uatis | 3300 | 3301 | — | 56321 / 56322 / 56323 |
+
+backend-uatis moved from 3000/3001 to 3300/3301 on 2026-10-15, because it collided with web-nf.
 
 Rule from web-nf: an app never imports another app. Shared code goes to `packages/*`.
 
