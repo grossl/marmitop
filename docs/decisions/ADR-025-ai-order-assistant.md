@@ -1,60 +1,85 @@
 # ADR-025 — AI order assistant on WhatsApp
 
-**Status:** accepted · 2026-10-17
+**Status:** accepted · 2026-10-17 · revised 2026-10-17 (owner review: narrow scope, cheapest model, usage limit with pay-by-usage)
 
 ## Question
 
-The owner wants an AI to talk with customers on WhatsApp, read what they ask for, match it to the menu, collect the fulfillment (`delivery` or `pickup`), the address, and the payment method, and create the order in Marmitop. 01.briefing.md lists "Chatbot or AI replies" as out of scope for v1. Where does the AI run, how does it act on Marmitop data, and which safeguards does it need?
+The owner wants an AI to talk with customers on WhatsApp, take the order from the menu, ask "Retirada ou Entrega?", ask for the address when the answer is Entrega, and create the order in Marmitop. 01.briefing.md lists "Chatbot or AI replies" as out of scope for v1. Where does the AI run, which model does it use, what does it ask, and how is its use limited and charged?
 
 Facts found on 2026-10-17:
 
 * Inbound messages reach Marmitop through one function, `ingestInboundMessage` (`packages/http/src/services/messaging/ingest-inbound.ts`). The webhook, the event feed (ADR-023), the poll (ADR-002), and the dev simulator all call it. `runInboundAutomation` runs after it in the same transaction.
 * `createOrderInTx` (`packages/http/src/services/orders/create-order.ts`) is the one code path for order creation. It loads prices, computes the total with core, applies the address rules, writes the first history row, sends `order_received`, records usage, and emits `order.created`.
-* Outbound messages go through the `mt_outbound_messages` queue and the worker (ADR-007).
-* backend-uatis has its own agent runtime (`agent-client` Edge Function). It calls an external agent over `chat_completions` or `a2a`, or runs a lightweight agent with MCP, SQL, and HTTP tools. Its agent writes the reply straight into backend-uatis `messages`.
-* backend-uatis can transcribe audio and read images (`media-preprocessor`, Gemini). Marmitop stores non-text messages as `[mídia não suportada]` (ADR-002 Amendment 1).
+* `orders.payment_method` is `not null`. Invoices read it (08.fiscal-mapping.md, `pagamentos[]`).
+* backend-uatis has its own agent runtime (`agent-client`). Its agent writes replies straight into backend-uatis `messages`, outside the Marmitop inbox.
+* `plans` holds monthly limits for orders, messages, and invoices. `usage_events` meters them. Nothing charges in v1 (ADR-008), and limits do not block (FR-155).
+* Claude Haiku 5.5 (`claude-haiku-5-5`) costs $0.10 per million input tokens and $0.50 per million output tokens for prompts up to 100K tokens. It supports tool use, adaptive thinking, effort `low`, and prompt caching from 512 tokens. It has no server-side refusal fallback.
 
-## Options
+## Decision 1 — Where the AI runs
 
-1. **Use the backend-uatis agent.** Configure an AI agent in backend-uatis with HTTP tools that call the Marmitop public API (`/v1/orders`, a new menu route).
-2. **Marmitop is an external agent for backend-uatis.** Marmitop exposes a `chat_completions` endpoint. backend-uatis `agent-client` calls it on every inbound message and sends the reply.
-3. **The Marmitop worker runs the agent.** A new queue `mt_ai_turns` gets one job per inbound burst. The worker calls the Claude Messages API with Marmitop tools, runs the tools in-process against the database under RLS, and sends the reply through the existing outbound path.
-4. **Extraction only.** No conversation. The AI reads the chat and fills a draft order. An attendant reviews it in the dashboard and sends every reply.
+Options:
 
-## Tradeoffs
+1. **The backend-uatis agent**, with HTTP tools that call the Marmitop public API.
+2. **Marmitop as an external agent** that backend-uatis calls over `chat_completions`.
+3. **The Marmitop worker** runs a Claude tool loop per inbound burst.
+4. **Extraction only.** The AI fills a draft order and an attendant sends every reply.
 
-| | 1. uatis agent | 2. Marmitop as external agent | 3. Marmitop worker | 4. Extraction only |
+| | 1. uatis agent | 2. external agent | 3. Marmitop worker | 4. extraction |
 |---|---|---|---|---|
 | Talks with the customer | yes | yes | yes | no |
-| Prices and totals from server code | through the public API | yes | yes | yes |
-| Human takeover in the Marmitop inbox | no: uatis replies on its own | partial: uatis sends | yes | n/a |
-| Cart state across turns | no store | yes | yes | yes |
-| Tests with a fake model | hard: logic lives in uatis | medium | easy: a port with a fake | easy |
-| Changes to backend-uatis | agent config per restaurant | agent config, sync HTTP in its request path | none | none |
-| Failure blast radius | uatis and Marmitop | a slow Marmitop blocks uatis | Marmitop worker only | none |
+| Human takeover in the Marmitop inbox | no | partial | yes | n/a |
+| Order and price rules in one place | no | yes | yes | yes |
+| Tests with a fake model | hard | medium | easy | easy |
+| Changes or config in backend-uatis | yes | yes, sync call in its path | none | none |
 
-Option 1 puts the order logic and the system prompt in a project we must not modify, and its replies skip the Marmitop inbox rules (pause, audit, automatic messages). Option 2 couples backend-uatis uptime to a long synchronous call. Option 4 is the safest, but it does not do what the owner asked: talk with the customer. Option 3 keeps every rule in one place and reuses the inbound, outbound, and order paths that already pass their tests.
+Choice: **option 3**. It reuses the inbound, outbound, and order paths that already pass their tests, keeps every rule in Marmitop, and changes nothing in backend-uatis. Option 1 puts the logic in a project we must not modify. Option 4 does not talk with the customer. Claude Managed Agents was also checked: our tools must run host-side under RLS anyway, so it adds sessions and gives nothing.
 
-Claude Managed Agents was also checked. Its loop and sandbox run at Anthropic. Our tools must read and write the tenant database under RLS, so they would run host-side anyway. It adds a session per conversation and gives nothing that a plain tool loop does not.
+## Decision 2 — What the AI asks
 
-## Recommendation and choice
+The AI asks for three things only:
 
-Option 3. The design details are in [12.ai-order-assistant.md](../12.ai-order-assistant.md). The main rules:
+1. the items (with size and quantity, and a short item note such as "sem cebola");
+2. the fulfillment: "Retirada" (`pickup`) or "Entrega" (`delivery`);
+3. for Entrega, the address: `logradouro`, `numero`, `bairro`, and `complemento` when the customer gives one. `cidade`, `uf`, and `codigo_municipio` default to the restaurant's values (FR-034).
 
-* **Port.** `AssistantModel` in `packages/core/src/ports` has two adapters: `AnthropicAssistantModel` (Claude Messages API, `@anthropic-ai/sdk`) and `ScriptedAssistantModel` (tests and local development). NFR-061 applies.
-* **Model.** `claude-opus-5-5` with adaptive thinking and effort `low`. `MT_AI_MODEL` and `MT_AI_EFFORT` override them. The request enables server-side refusal fallbacks (`fallbacks: "default"`). The system prompt and the menu block use prompt caching.
-* **Loop.** A manual tool loop, not the SDK Tool Runner. The worker records each step in `ai_runs`, caps the loop at 8 model calls, and stops on any stop reason it does not expect.
-* **The model never computes money.** Tools return prices and totals that `computeOrderTotal` produced. The order summary that the customer confirms is a server-rendered message, not model text.
-* **Two-step order placement.** `send_order_summary` sends the server-rendered summary and records the cart version. `place_order` succeeds only when the cart has not changed since that summary and the customer sent a message after it. The model decides whether that message is a "yes".
-* **Tenant scope comes from the job, never from the model.** No tool takes a `restaurant_id`, `customer_id`, or `conversation_id`. The worker runs every tool inside `mt.set_context` for the job's restaurant.
-* **Human first.** An attendant's reply pauses the AI for that conversation. The `handoff_to_human` tool pauses it too. Orders follow FR-029: they start as `aguardando` unless "Aceitar pedidos automaticamente" is on, so staff still accept each order on the board by default.
+The AI does not ask for the payment method, change, or order notes. It does not answer order-status questions.
+
+**Payment method.** `orders.payment_method` becomes nullable. Null means "A definir". Staff set it in the order detail. The invoice pre-check (FR-125) asks for it before "Emitir NF". Other options were a fake enum value `a_definir` (wrong data in reports and the fiscal mapping) and a per-restaurant default (silently wrong when the customer pays another way). Null is the honest value.
+
+**Confirmation.** The order is created after one short confirmation. When the three items are complete, the server sends a summary (items, total, Retirada or the address) and the customer answers "sim". The model never writes the summary and never computes money. This adds one message per order and prevents orders the customer did not mean. The FR-029 initial status still applies: orders start as `aguardando` unless "Aceitar pedidos automaticamente" is on.
+
+## Decision 3 — Model
+
+Choice: **`claude-haiku-5-5`** with adaptive thinking and effort `low`. `MT_AI_MODEL` and `MT_AI_EFFORT` override them.
+
+The task is narrow: match short pt-BR messages to a menu list and fill three fields through tools. Haiku 5.5 fits that task and is the cheapest current Claude model. Estimate per AI reply: about 6,000 cached prompt tokens, 2,000 new input tokens, and 300 output tokens, which is about $0.0005. An order takes 3 to 5 replies, so about $0.002 per order. The eval suite (FR-199) is the gate: if Haiku 5.5 fails it, the next step is `claude-sonnet-5-5` ($2 / $10), not a larger prompt.
+
+Haiku 5.5 has no server-side refusal fallback. A `refusal` stop pauses the conversation for a human (FR-191).
+
+## Decision 4 — Usage limit and pay by usage
+
+* The meter is the **AI reply**: one turn that called the model. Each one writes a `usage_events` row with kind `ai.reply`. A turn that a guard stops before the model call does not count.
+* Each plan has `included_ai_replies_month`. Seed values: Free 300, Pro 3,000. The owner sets the real numbers in `plans`.
+* Each plan has `ai_overage_price_cents` per 100 extra replies. Seed value: 500 (R$ 5,00 per 100 replies). The owner sets the real price.
+* When a restaurant uses its included replies, the assistant stops and pauses new conversations with reason `quota`, unless the admin turned on "Continuar e pagar pelo uso" (`ai_settings.allow_overage`). With overage on, the assistant continues, and Settings → Plano shows the extra replies and the amount due.
+* `ai_settings.monthly_hard_cap` (default 20,000 replies) stops the assistant in every case. It protects the restaurant and Marmitop from a loop or an attack.
+* Collection stays out of v1 (ADR-008). The overage amount is shown and recorded. A billing provider can charge it later without a change to the meter.
+
+This makes the AI quota the one plan limit that blocks. FR-155 gets that exception.
+
+## Rules that follow from these decisions
+
+* **Port.** `AssistantModel` in `packages/core/src/ports` has two adapters: `AnthropicAssistantModel` (`@anthropic-ai/sdk`) and `ScriptedAssistantModel` (tests and local development). NFR-061 applies.
+* **Loop.** A manual tool loop in the worker, capped at 6 model calls per turn.
+* **Tenant scope comes from the job.** No tool takes a restaurant, customer, or conversation id. Every tool runs in `withRestaurantContext` for the job's restaurant.
+* **Human first.** An attendant's reply pauses the AI for that conversation. `handoff_to_human` pauses it too.
 * **Off by default.** Each restaurant turns the assistant on in Configurações → Atendente IA.
 
 ## Consequences
 
-* 01.briefing.md moves "Chatbot or AI replies" out of the out-of-scope list. The "Regras de resposta" toggles stay out of the UI. The Atendente IA card replaces them.
-* New requirements FR-180 to FR-199 in 02.requirements.md. New phase P10 in 09.plan.md.
-* New migration: `ai_settings`, `ai_carts`, `ai_runs`, conversation AI state, `messages.ai_run_id`, `orders.ai_run_id`, and the `mt_ai_turns` queue.
-* `ANTHROPIC_API_KEY` is a worker secret. It is never logged and never stored in the database (ADR-012 applies to any later per-restaurant key).
-* Each AI turn costs money. `ai_runs` records tokens per run, and `ai_settings.daily_run_cap` bounds the spend per restaurant.
-* Audio and image messages stay unsupported. Brazilian customers often send audio, so audio transcription is the first follow-up (see 12.ai-order-assistant.md, "Later").
+* 01.briefing.md drops "Chatbot or AI replies" from the out-of-scope list.
+* New requirements FR-180 to FR-199. FR-152, FR-153, FR-154, and FR-155 change for the AI meter. New phase P10.
+* Migration 0020: `ai_settings`, `ai_carts`, `ai_runs`, conversation AI state, `messages.ai_run_id`, `orders.ai_run_id`, nullable `orders.payment_method`, the `ai.reply` usage kind, the plan AI columns, and the `mt_ai_turns` queue.
+* Every place that reads `payment_method` handles null: the board card, the order detail, finance, reports, the public API (`payment_method: null`), outbound webhooks, and the invoice pre-check.
+* `ANTHROPIC_API_KEY` is a worker secret. It is never logged and never stored in the database.
+* Audio and image messages stay unsupported. The owner does not need them.
