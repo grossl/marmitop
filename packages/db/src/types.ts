@@ -59,11 +59,26 @@ export type StockMovementKind = "in" | "out" | "adjust";
 export type ApiKeyEnvironment = "live" | "test";
 export type WebhookEvent = "order.created" | "order.status_changed" | "message.received" | "invoice.updated";
 export type WebhookDeliveryStatus = "pending" | "delivered" | "failed" | "exhausted";
-export type JobQueue = "mt_outbound_messages" | "mt_webhook_deliveries" | "mt_invoice_jobs" | "mt_sync";
-export type JobSubjectType = "message" | "webhook_delivery" | "order_invoice" | "sync";
+export type JobQueue = "mt_outbound_messages" | "mt_webhook_deliveries" | "mt_invoice_jobs" | "mt_sync" | "mt_ai_turns";
+export type JobSubjectType = "message" | "webhook_delivery" | "order_invoice" | "sync" | "ai_turn";
 export type JobOutcome = "ok" | "transient_error" | "permanent_error";
-export type UsageEventKind = "order.created" | "message.sent" | "invoice.issued";
+export type UsageEventKind = "order.created" | "message.sent" | "invoice.issued" | "ai.reply";
 export type RateClass = "read" | "write" | "webhook";
+export type AiMode = "auto" | "paused";
+export type AiPauseReason =
+  | "attendant"
+  | "manual"
+  | "customer_request"
+  | "complaint"
+  | "order_change"
+  | "status_question"
+  | "unsupported_media"
+  | "unclear"
+  | "other"
+  | "model"
+  | "stale"
+  | "quota"
+  | "cap";
 
 /** Weekday 0–6, 0 = Sunday, as `extract(dow from ...)`. */
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -79,6 +94,10 @@ export interface PlanRow {
   included_messages_month: number;
   included_invoices_month: number;
   price_display: string;
+  /** AI replies included each month (FR-194, migration 0020). */
+  included_ai_replies_month: number;
+  /** Overage price per 100 AI replies, in cents (FR-194). */
+  ai_overage_price_cents: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -273,6 +292,13 @@ export interface ConversationRow {
   unread_count: number;
   last_inbound_at: Date | null;
   closed_notice_sent_at: Date | null;
+  /** AI assistant state (FR-182, FR-189, FR-190, migration 0020). */
+  ai_mode: AiMode;
+  ai_paused_at: Date | null;
+  ai_pause_reason: AiPauseReason | null;
+  ai_pause_note: string | null;
+  /** The turn claim that keeps two AI jobs off one conversation. */
+  ai_turn_claimed_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -294,6 +320,8 @@ export interface MessageRow {
   send_claimed_at: Date | null;
   error_code: string | null;
   error_message: string | null;
+  /** The AI run that wrote this reply (FR-192, migration 0020). */
+  ai_run_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -350,7 +378,8 @@ export interface OrderRow extends AddressColumns {
   customer_id: string;
   status: OrderStatus;
   fulfillment: Fulfillment;
-  payment_method: PaymentMethod;
+  /** Null = "A definir": the AI assistant never asks for it (FR-188, migration 0020). */
+  payment_method: PaymentMethod | null;
   change_for_cents: number | null;
   notes: string | null;
   subtotal_cents: number;
@@ -368,6 +397,8 @@ export interface OrderRow extends AddressColumns {
   /** ADR-020: set on `entregue` when null, or by "Marcar como pago". Paid = set and not `cancelado`. */
   paid_at: Date | null;
   paid_by: string | null;
+  /** The AI run that placed this order (FR-193, migration 0020). */
+  ai_run_id: string | null;
 }
 
 export interface OrderItemRow {
@@ -532,6 +563,73 @@ export interface UsageEventRow {
 }
 
 // ---------------------------------------------------------------------------
+// AI order assistant (migration 0020, 12.ai-order-assistant.md)
+// ---------------------------------------------------------------------------
+
+export interface AiSettingsRow {
+  restaurant_id: string;
+  enabled: boolean;
+  persona_name: string;
+  extra_instructions: string | null;
+  auto_resume_minutes: number;
+  allow_overage: boolean;
+  monthly_hard_cap: number;
+  updated_at: Date;
+}
+
+export interface AiCartRow {
+  id: string;
+  restaurant_id: string;
+  conversation_id: string;
+  status: "open" | "placed" | "abandoned";
+  items: { menu_item_id: string; size_id: string | null; quantity: number; notes: string | null }[];
+  fulfillment: "delivery" | "pickup" | null;
+  customer_name: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  version: number;
+  summary_message_id: string | null;
+  summary_version: number | null;
+  summary_sent_at: Date | null;
+  order_id: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface AiRunRow {
+  id: string;
+  restaurant_id: string;
+  conversation_id: string;
+  trigger_message_id: string;
+  status:
+    | "running"
+    | "replied"
+    | "silent"
+    | "superseded"
+    | "paused"
+    | "answered"
+    | "stale"
+    | "blocked"
+    | "locked"
+    | "stopped"
+    | "failed";
+  model: string | null;
+  model_calls: number;
+  input_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  output_tokens: number;
+  billed_as: "included" | "overage" | null;
+  tool_calls: { name: string; ok: boolean; error_code: string | null }[];
+  stop_reason: string | null;
+  error_code: string | null;
+  started_at: Date;
+  finished_at: Date | null;
+}
+
+// ---------------------------------------------------------------------------
 // Table registry
 // ---------------------------------------------------------------------------
 
@@ -565,6 +663,9 @@ export interface Tables {
   rate_counters: RateCounterRow;
   job_attempts: JobAttemptRow;
   audit_logs: AuditLogRow;
+  ai_settings: AiSettingsRow;
+  ai_carts: AiCartRow;
+  ai_runs: AiRunRow;
   usage_events: UsageEventRow;
   uatis_event_receipts: UatisEventReceiptRow;
 }
@@ -603,6 +704,9 @@ export const TENANT_TABLES = [
   "idempotency_records",
   "job_attempts",
   "audit_logs",
+  "ai_settings",
+  "ai_runs",
+  "ai_carts",
   "usage_events",
   "uatis_event_receipts",
 ] as const satisfies readonly TableName[];

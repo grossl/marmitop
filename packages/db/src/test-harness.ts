@@ -38,7 +38,7 @@ export async function truncateAll(db: Db): Promise<void> {
   await db.unsafe(`truncate table ${tables} restart identity cascade`);
 }
 
-/** Empties the four queues and their archives. */
+/** Empties every queue and its archive. */
 export async function truncateQueues(db: Db): Promise<void> {
   const tables = QUEUE_NAMES.flatMap((q) => [`pgmq.q_${q}`, `pgmq.a_${q}`]).join(", ");
   await db.unsafe(`truncate table ${tables}`);
@@ -128,6 +128,10 @@ export interface RestaurantFixture {
   uatisEventId: string;
   auditLogId: string;
   usageEventId: string;
+  /** `ai_settings` is keyed by `restaurant_id`; the fixture row has the assistant off. */
+  aiRunId: string;
+  /** A placed cart (not open), so a test may open a new cart on `conversationId`. */
+  aiCartId: string;
   adminCtx: RestaurantContext;
   attendantCtx: RestaurantContext;
   apiKeyCtx: RestaurantContext;
@@ -339,6 +343,20 @@ export async function seedRestaurant(db: Db, label: string): Promise<RestaurantF
       "usage_events",
     );
 
+    await tx`insert into public.ai_settings (restaurant_id) values (${rid})`;
+    const aiRun = await one(
+      tx<{ id: string }[]>`
+        insert into public.ai_runs (restaurant_id, conversation_id, trigger_message_id, status, model_calls)
+        values (${rid}, ${conversation.id}, ${message.id}, 'replied', 1) returning id`,
+      "ai_runs",
+    );
+    const aiCart = await one(
+      tx<{ id: string }[]>`
+        insert into public.ai_carts (restaurant_id, conversation_id, status, fulfillment, order_id)
+        values (${rid}, ${conversation.id}, 'placed', 'delivery', ${order.id}) returning id`,
+      "ai_carts",
+    );
+
     return {
       restaurantId: rid,
       adminId,
@@ -369,6 +387,8 @@ export async function seedRestaurant(db: Db, label: string): Promise<RestaurantF
       uatisEventId,
       auditLogId: audit.id,
       usageEventId: usage.id,
+      aiRunId: aiRun.id,
+      aiCartId: aiCart.id,
       adminCtx: { restaurantId: rid, actorType: "user", userId: adminId },
       attendantCtx: { restaurantId: rid, actorType: "user", userId: attendantId },
       apiKeyCtx: { restaurantId: rid, actorType: "api_key", apiKeyId: apiKey.id },

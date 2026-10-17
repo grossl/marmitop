@@ -1,6 +1,6 @@
 // packages/db/src/queue.ts
 //
-// Thin typed access to the four pgmq queues (05.data-model.md "Queues
+// Thin typed access to the pgmq queues (05.data-model.md "Queues
 // (pgmq)", ADR-007). The message shapes live in packages/core; nothing here
 // knows what a job means. pgmq functions run as the caller, so the connection
 // needs the grants migration 0012 gives `app_service`.
@@ -15,6 +15,7 @@ export const QUEUES = {
   webhookDeliveries: "mt_webhook_deliveries",
   invoiceJobs: "mt_invoice_jobs",
   sync: "mt_sync",
+  aiTurns: "mt_ai_turns",
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];

@@ -1,6 +1,6 @@
 // packages/db/src/tenant-fks.integration.test.ts
 //
-// covers NFR-001, FR-049, FR-089
+// covers NFR-001, FR-049, FR-089, FR-195
 //
 // Composite tenant foreign keys (ADR-018, 05.data-model.md "Tenant foreign
 // keys"). RLS checks the child row's own restaurant_id; the composite key
@@ -188,6 +188,35 @@ const CASES: Case[] = [
     foreign: (tx) =>
       tx`update public.integrations_fiscal set webhook_secret_id = ${b.secretIds.webnfWebhook} where restaurant_id = ${a.restaurantId}`,
     codes: [FOREIGN_KEY_VIOLATION, CHECK_VIOLATION],
+  },
+  {
+    name: "ai_runs.conversation_id -> conversations",
+    own: (tx) => tx`
+      insert into public.ai_runs (restaurant_id, conversation_id, trigger_message_id, status)
+      values (${a.restaurantId}, ${a.conversationId}, ${a.messageId}, 'running')`,
+    foreign: (tx) => tx`
+      insert into public.ai_runs (restaurant_id, conversation_id, trigger_message_id, status)
+      values (${a.restaurantId}, ${b.conversationId}, ${a.messageId}, 'running')`,
+  },
+  {
+    name: "ai_carts.conversation_id -> conversations",
+    own: (tx) => tx`update public.ai_carts set conversation_id = ${a.conversationId} where id = ${a.aiCartId}`,
+    foreign: (tx) => tx`update public.ai_carts set conversation_id = ${b.conversationId} where id = ${a.aiCartId}`,
+  },
+  {
+    name: "ai_carts.order_id -> orders",
+    own: (tx) => tx`update public.ai_carts set order_id = ${a.orderId} where id = ${a.aiCartId}`,
+    foreign: (tx) => tx`update public.ai_carts set order_id = ${b.orderId} where id = ${a.aiCartId}`,
+  },
+  {
+    name: "messages.ai_run_id -> ai_runs",
+    own: (tx) => tx`update public.messages set ai_run_id = ${a.aiRunId} where id = ${a.messageId}`,
+    foreign: (tx) => tx`update public.messages set ai_run_id = ${b.aiRunId} where id = ${a.messageId}`,
+  },
+  {
+    name: "orders.ai_run_id -> ai_runs",
+    own: (tx) => tx`update public.orders set ai_run_id = ${a.aiRunId} where id = ${a.orderId}`,
+    foreign: (tx) => tx`update public.orders set ai_run_id = ${b.aiRunId} where id = ${a.orderId}`,
   },
 ];
 

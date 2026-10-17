@@ -1,6 +1,6 @@
 // packages/db/src/rls.integration.test.ts
 //
-// covers NFR-001, NFR-002, NFR-003, NFR-052, FR-004, FR-006, FR-008, FR-049
+// covers NFR-001, NFR-002, NFR-003, NFR-052, FR-004, FR-006, FR-008, FR-049, FR-195
 //
 // Tenant isolation and the role rules, proven against the real migrations
 // (05.data-model.md "Access model" and "Role rules", 07.security.md, ADR-005,
@@ -425,6 +425,46 @@ const SPECS: TableSpec[] = [
     insertRow: (tx, f) => tx`
       insert into public.audit_logs (restaurant_id, actor_type, action, entity_type)
       values (${f.restaurantId}, 'system', 'test.probe', 'probe')`,
+  },
+  {
+    table: "ai_settings",
+    tenantColumn: "restaurant_id",
+    pkColumn: "restaurant_id",
+    pk: (f) => f.restaurantId,
+    select: "member",
+    insert: "admin",
+    update: "admin",
+    delete: null,
+    updateSet: "enabled = true",
+    insertRow: (tx, f) => tx`insert into public.ai_settings (restaurant_id) values (${f.restaurantId})`,
+  },
+  {
+    table: "ai_runs",
+    tenantColumn: "restaurant_id",
+    pkColumn: "id",
+    pk: (f) => f.aiRunId,
+    select: "member",
+    insert: "admin",
+    update: "admin",
+    delete: null,
+    updateSet: "status = 'failed'",
+    insertRow: (tx, f) => tx`
+      insert into public.ai_runs (restaurant_id, conversation_id, trigger_message_id, status)
+      values (${f.restaurantId}, ${f.conversationId}, ${f.messageId}, 'running')`,
+  },
+  {
+    table: "ai_carts",
+    tenantColumn: "restaurant_id",
+    pkColumn: "id",
+    pk: (f) => f.aiCartId,
+    select: "member",
+    insert: "admin",
+    update: "admin",
+    delete: null,
+    updateSet: "status = 'abandoned'",
+    insertRow: (tx, f) => tx`
+      insert into public.ai_carts (restaurant_id, conversation_id, status)
+      values (${f.restaurantId}, ${f.conversationId}, 'abandoned')`,
   },
   {
     table: "usage_events",
