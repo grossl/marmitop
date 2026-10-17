@@ -3,6 +3,7 @@
 
 export const packageName = "@mt/core";
 
+export * from "./ai";
 export * from "./api-keys";
 export * from "./automatic-messages";
 export type { NullBillingProviderOptions } from "./billing/billing-providers";
