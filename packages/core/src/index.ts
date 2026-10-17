@@ -17,6 +17,8 @@ export { FakeInvoiceGateway } from "./fakes/fake-invoice-gateway";
 export type { RecordedDelivery, ScriptedWebhook } from "./fakes/fake-webhook-sender";
 export { FakeWebhookSender } from "./fakes/fake-webhook-sender";
 export { FixedClock } from "./fakes/fixed-clock";
+export type { ScriptedStep } from "./fakes/scripted-assistant-model";
+export { ScriptedAssistantModel } from "./fakes/scripted-assistant-model";
 export * from "./fiscal";
 export * from "./money";
 export * from "./order-status";

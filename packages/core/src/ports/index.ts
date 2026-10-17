@@ -1,3 +1,4 @@
+export * from "./assistant-model";
 export type { BillingInvoice, BillingProvider, Plan, UsageEvent, UsageKind } from "./billing-provider";
 export type { Clock } from "./clock";
 export { systemClock } from "./clock";
