@@ -567,7 +567,11 @@ components:
         cidade: { type: [string, 'null'] }
         uf: { type: [string, 'null'] }
         codigo_municipio: { type: [string, 'null'] }
-        payment_method: { $ref: '#/components/schemas/PaymentMethod' }
+        payment_method:
+          description: 'null when the order came from the AI assistant and staff have not set it ("A definir").'
+          oneOf:
+            - { $ref: '#/components/schemas/PaymentMethod' }
+            - { type: 'null' }
         change_for_cents: { type: [integer, 'null'] }
         notes: { type: [string, 'null'] }
         subtotal_cents: { type: integer }
