@@ -69,7 +69,7 @@ This makes the AI quota the one plan limit that blocks. FR-155 gets that excepti
 
 ## Rules that follow from these decisions
 
-* **Port.** `AssistantModel` in `packages/core/src/ports` has two adapters: `AnthropicAssistantModel` (`@anthropic-ai/sdk`) and `ScriptedAssistantModel` (tests and local development). NFR-061 applies.
+* **Port.** `AssistantModel` in `packages/core/src/ports` has two adapters: `AnthropicAssistantModel` (`@anthropic-ai/sdk`, in `apps/worker` only) and `ScriptedAssistantModel` (tests and local development). NFR-061 applies.
 * **Loop.** A manual tool loop in the worker, capped at 6 model calls per turn.
 * **Tenant scope comes from the job.** No tool takes a restaurant, customer, or conversation id. Every tool runs in `withRestaurantContext` for the job's restaurant.
 * **Human first.** An attendant's reply pauses the AI for that conversation. `handoff_to_human` pauses it too.
