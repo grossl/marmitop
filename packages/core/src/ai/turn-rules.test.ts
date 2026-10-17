@@ -95,6 +95,14 @@ describe("decideTurnStart", () => {
   ] as const)("%o → %s", (patch, status, pause) => {
     expect(decideTurnStart({ ...base, ...patch })).toEqual({ kind: "stop", status, pause });
   });
+  test("claim boundary: exactly 120 s runs, 119.999 s is locked", () => {
+    expect(decideTurnStart({ ...base, claimedAt: ago(120_000) }).kind).toBe("run");
+    expect(decideTurnStart({ ...base, claimedAt: ago(119_999) })).toEqual({
+      kind: "stop",
+      status: "locked",
+      pause: null,
+    });
+  });
   test("a claim older than 120 seconds is ignored", () => {
     expect(decideTurnStart({ ...base, claimedAt: ago(121_000) }).kind).toBe("run");
   });

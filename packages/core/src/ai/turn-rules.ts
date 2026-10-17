@@ -111,7 +111,7 @@ export function decideTurnStart(i: TurnGuardInput): TurnGuard {
     return { kind: "stop", status: "stale", pause: "stale" };
   if (i.quota === "blocked_quota") return { kind: "stop", status: "blocked", pause: "quota" };
   if (i.quota === "blocked_cap") return { kind: "stop", status: "blocked", pause: "cap" };
-  if (i.claimedAt !== null && i.now.getTime() - i.claimedAt.getTime() <= AI_TURN_STALE_MS) {
+  if (i.claimedAt !== null && i.now.getTime() - i.claimedAt.getTime() < AI_TURN_STALE_MS) {
     return { kind: "stop", status: "locked", pause: null };
   }
   return { kind: "run", billedAs: i.quota === "overage" ? "overage" : "included" };

@@ -9,7 +9,7 @@ describe("AI_TOOL_SPECS", () => {
   });
   test("strict-ready: every object schema lists all properties as required and forbids extras", () => {
     const walk = (s: Record<string, unknown>): void => {
-      if (s.type === "object") {
+      if (s.type === "object" || (Array.isArray(s.type) && s.type.includes("object"))) {
         const props = Object.keys((s.properties as Record<string, unknown>) ?? {});
         expect(s.additionalProperties).toBe(false);
         expect([...((s.required as string[]) ?? [])].sort()).toEqual(props.sort());
