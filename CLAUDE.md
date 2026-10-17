@@ -104,7 +104,7 @@ entregue`; any non-final status → `cancelado`. Pickup skips `saiu`.
 
 `docs/` holds, in order: `01.briefing`, `02.requirements`, `03.domain-research`,
 `04.architecture`, `05.data-model`, `06.api-spec`, `07.security`,
-`08.fiscal-mapping`, `09.plan`, `10.testing`, `11.operations`. ADRs live in
+`08.fiscal-mapping`, `09.plan`, `10.testing`, `11.operations`, `12.ai-order-assistant`. ADRs live in
 `docs/decisions/ADR-NNN-*.md`. Read the matching doc before changing an area.
 
 ## Conventions
