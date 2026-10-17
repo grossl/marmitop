@@ -25,6 +25,11 @@ export class ScriptedAssistantModel implements AssistantModel {
     this.script = [...script];
   }
 
+  /** Appends steps, for tests that script one turn at a time. */
+  push(...steps: ScriptedStep[]): void {
+    this.script.push(...steps);
+  }
+
   async respond(request: AssistantRequest): Promise<AssistantResponse> {
     this.requests.push(request);
     const step = this.script.shift();

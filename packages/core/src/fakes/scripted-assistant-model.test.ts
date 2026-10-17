@@ -48,4 +48,11 @@ describe("ScriptedAssistantModel", () => {
   test("an exhausted script throws", async () => {
     await expect(new ScriptedAssistantModel([]).respond(req)).rejects.toThrow("script exhausted");
   });
+
+  test("push appends steps to the script", async () => {
+    const model = new ScriptedAssistantModel([]);
+    model.push({ text: "a" });
+    expect(await model.respond(req)).toMatchObject({ content: [{ type: "text", text: "a" }] });
+    await expect(model.respond(req)).rejects.toThrow("script exhausted");
+  });
 });
