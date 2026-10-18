@@ -2,8 +2,9 @@
 
 import type { ConversationDetail, ConversationSummary } from "@mt/http";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { listConversationsAction } from "@/app/(app)/messages/actions";
 import { ChatPanel } from "@/components/chat-panel";
 import { ContactsSidebar } from "@/components/contacts-sidebar";
 import { useRealtimeTable } from "@/lib/realtime";
@@ -22,6 +23,19 @@ interface MessagesScreenProps {
 // (FR-015), never a payload merge.
 export function MessagesScreen({ restaurantId, restaurantName, conversations, detail, canSimulate }: MessagesScreenProps) {
   const router = useRouter();
+  // FR-190: the "Precisa de atendente" chip asks the server; search still filters the result.
+  const [needsAttendant, setNeedsAttendant] = useState(false);
+  const [needsList, setNeedsList] = useState<ConversationSummary[]>([]);
+  useEffect(() => {
+    if (!needsAttendant) return;
+    let live = true;
+    void listConversationsAction({ limit: 100, needsAttendant: true }).then((result) => {
+      if (live && result.ok) setNeedsList(result.data.items);
+    });
+    return () => {
+      live = false;
+    };
+  }, [needsAttendant, conversations]);
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refresh = useCallback(() => {
@@ -39,7 +53,9 @@ export function MessagesScreen({ restaurantId, restaurantName, conversations, de
     <>
       <ContactsSidebar
         restaurantName={restaurantName}
-        conversations={conversations}
+        conversations={needsAttendant ? needsList : conversations}
+        needsAttendant={needsAttendant}
+        onToggleNeedsAttendant={() => setNeedsAttendant((v) => !v)}
         selectedId={detail?.conversation.id ?? null}
         onSelect={(id) => router.push(`/messages?c=${id}`)}
         canSimulate={canSimulate}

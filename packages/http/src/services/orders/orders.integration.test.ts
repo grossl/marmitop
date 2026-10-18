@@ -1,4 +1,4 @@
-// covers FR-020, FR-021, FR-022, FR-023, FR-024, FR-025, FR-026, FR-028, FR-029, FR-030, FR-032, FR-033, FR-034, FR-035, FR-037, FR-038, FR-008
+// covers FR-020, FR-021, FR-022, FR-023, FR-024, FR-025, FR-026, FR-028, FR-029, FR-030, FR-032, FR-033, FR-034, FR-035, FR-037, FR-038, FR-008, FR-193
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { AppError } from "@mt/core";
 import type { Db } from "@mt/db";
@@ -152,6 +152,18 @@ describe("createOrder", () => {
       ...base({ customerId: b.customerId, items: [{ menuItemId: b.menuItemId, sizeId: b.menuItemSizeId, qty: 1 }] }),
     });
     expect(Number(two.code.slice(4))).toBe(Number(one.code.slice(4)) + 1);
+  });
+});
+
+describe("order view fromAi (FR-193)", () => {
+  test("true for an order with ai_run_id, false otherwise", async () => {
+    const human = await createOrder(deps, att(), base());
+    const ai = await createOrder(deps, att(), base());
+    await db`update public.orders set ai_run_id = ${a.aiRunId} where id = ${ai.id}`;
+    expect((await getOrder(deps, att(), { orderId: human.id })).fromAi).toBe(false);
+    expect((await getOrder(deps, att(), { orderId: ai.id })).fromAi).toBe(true);
+    const board = await getOrdersBoard(deps, att(), undefined);
+    expect(board.orders.find((o) => o.id === ai.id)?.fromAi).toBe(true);
   });
 });
 

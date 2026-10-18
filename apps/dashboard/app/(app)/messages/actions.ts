@@ -6,6 +6,7 @@ import {
   markConversationRead,
   retryMessage,
   sendMessage,
+  setConversationAiMode,
   simulateInboundMessage,
 } from "@mt/http";
 import {
@@ -13,6 +14,7 @@ import {
   listConversationsActionSchema,
   retryMessageActionSchema,
   sendMessageActionSchema,
+  setConversationAiModeSchema,
   simulateInboundActionSchema,
 } from "@mt/schemas";
 
@@ -52,4 +54,10 @@ export const retryMessageAction = memberAction(
 export const simulateInboundMessageAction = adminAction(
   { name: "messages.simulateInbound", input: simulateInboundActionSchema },
   ({ deps, ctx, input }) => simulateInboundMessage(deps, ctx, input),
+);
+
+/** FR-189, FR-190: pause or resume the AI assistant on one conversation. */
+export const setConversationAiModeAction = memberAction(
+  { name: "messages.setConversationAiMode", input: setConversationAiModeSchema },
+  ({ deps, ctx, input }) => setConversationAiMode(deps, ctx, input),
 );

@@ -50,6 +50,8 @@ export interface BoardOrder {
   readonly items: readonly OrderItemView[];
   /** The latest invoice's status, for the card badge (FR-139). Null without an invoice. */
   readonly invoiceStatus: InvoiceStatusValue | null;
+  /** FR-193: the AI assistant created the order (`orders.ai_run_id` is set). */
+  readonly fromAi: boolean;
 }
 
 export interface StatusHistoryView {
@@ -128,6 +130,8 @@ export interface OrderRowForView {
   readonly paid_at: Date | null;
   /** The latest `order_invoices.status` (P6). */
   readonly invoice_status?: InvoiceStatusValue | null;
+  /** `ai_run_id is not null` (FR-193). */
+  readonly from_ai?: boolean;
   readonly items: readonly {
     readonly name: string;
     readonly sizeName: string | null;
@@ -166,6 +170,7 @@ export function toBoardOrder(r: OrderRowForView): BoardOrder {
     cancelReason: r.cancel_reason,
     items: r.items,
     invoiceStatus: r.invoice_status ?? null,
+    fromAi: r.from_ai === true,
   };
 }
 
@@ -177,7 +182,7 @@ export function orderViewColumns(tx: Tx) {
   o.cep, o.logradouro, o.numero, o.complemento, o.bairro, o.cidade, o.uf,
   o.payment_method, o.change_for_cents, o.notes,
   o.subtotal_cents, o.delivery_fee_cents, o.total_cents,
-  o.source, o.conversation_id, o.created_at, o.delivered_at, o.cancelled_at, o.cancel_reason, o.paid_at,
+  o.source, o.conversation_id, o.created_at, o.delivered_at, o.cancelled_at, o.cancel_reason, o.paid_at, (o.ai_run_id is not null) as from_ai,
   (
     select oi.status from public.order_invoices oi
     where oi.restaurant_id = o.restaurant_id and oi.order_id = o.id

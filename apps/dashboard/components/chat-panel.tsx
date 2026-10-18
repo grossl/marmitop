@@ -11,6 +11,7 @@ import { ScrollArea } from "@mt/ui/components/scroll-area";
 import { cn } from "@mt/ui/lib/utils";
 
 import { retryMessageAction, sendMessageAction } from "@/app/(app)/messages/actions";
+import { AiStateBar } from "@/components/ai-state-bar";
 import { CustomerOrdersPanel } from "@/components/customer-orders-panel";
 import { formatDate, formatTime, initials } from "@/components/messaging-format";
 
@@ -86,6 +87,11 @@ export function ChatPanel({ detail, onChanged }: ChatPanelProps) {
             </div>
           </div>
           <div className="flex items-center gap-1">
+            {detail.aiEnabled && (
+              <div className="mr-2">
+                <AiStateBar conversation={conversation} onChanged={onChanged} />
+              </div>
+            )}
             <Button variant="outline" size="sm" className="mr-1 h-8 gap-1.5 text-xs" asChild>
               <Link href={`/new-order?conversation=${conversation.id}&customer=${conversation.customerId}`}>
                 <ShoppingBag className="h-3.5 w-3.5" /> Criar pedido
@@ -153,6 +159,9 @@ export function ChatPanel({ detail, onChanged }: ChatPanelProps) {
                     </div>
                     <div className="mt-1 flex items-center gap-2 px-1 text-[10px] text-muted-foreground">
                       <span>{formatTime(msg.createdAt)}</span>
+                      {outbound && msg.fromAi && (
+                        <span className="rounded bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">IA</span>
+                      )}
                       {outbound && (
                         <span className={cn(msg.status === "failed" && "font-medium text-destructive")}>
                           {STATUS_LABEL[msg.status]}

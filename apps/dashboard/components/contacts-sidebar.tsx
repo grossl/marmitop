@@ -18,6 +18,9 @@ interface ContactsSidebarProps {
   onSelect: (id: string) => void;
   canSimulate?: boolean;
   onSimulated?: (conversationId: string) => void;
+  /** FR-190: the "Precisa de atendente" chip. */
+  needsAttendant?: boolean;
+  onToggleNeedsAttendant?: () => void;
 }
 
 // The conversation list (FR-010, FR-011): newest message first (the server
@@ -29,6 +32,8 @@ export function ContactsSidebar({
   onSelect,
   canSimulate = false,
   onSimulated,
+  needsAttendant = false,
+  onToggleNeedsAttendant,
 }: ContactsSidebarProps) {
   const [search, setSearch] = useState("");
 
@@ -67,6 +72,22 @@ export function ContactsSidebar({
             className="pl-8 h-8 text-sm bg-sidebar-accent border-sidebar-border text-sidebar-foreground placeholder:text-sidebar-foreground/40 focus-visible:ring-primary"
           />
         </div>
+
+        {onToggleNeedsAttendant && (
+          <button
+            type="button"
+            aria-pressed={needsAttendant}
+            onClick={onToggleNeedsAttendant}
+            className={cn(
+              "mt-2 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+              needsAttendant
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-sidebar-border text-sidebar-foreground/70 hover:bg-sidebar-accent",
+            )}
+          >
+            Precisa de atendente
+          </button>
+        )}
       </div>
 
       {/* Conversation list */}

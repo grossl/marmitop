@@ -240,7 +240,10 @@ function OrderCard({
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground truncate leading-tight">{order.customerName}</p>
-            <p className="text-xs text-muted-foreground font-mono">{order.code}</p>
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
+              {order.code}
+              {order.fromAi && <span className="rounded bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">IA</span>}
+            </p>
           </div>
         </div>
         <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
@@ -554,6 +557,7 @@ export function OrderDetailDialog({
           <DialogTitle className="flex items-center gap-2">
             <span className="font-mono">{order?.code}</span>
             {order && <Badge variant="outline">{STATUS_LABELS[order.status]}</Badge>}
+            {order?.fromAi && <span className="rounded bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">IA</span>}
           </DialogTitle>
           <DialogDescription>
             {order?.customerName} · {order?.customerPhone}
