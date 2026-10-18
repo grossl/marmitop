@@ -23,6 +23,8 @@ export const listConversationsActionSchema = z.object({
   q: searchTermSchema.optional(),
   cursor: paginationQuerySchema.shape.cursor,
   limit: paginationQuerySchema.shape.limit.optional(),
+  /** FR-190: only conversations the assistant handed to a person. */
+  needsAttendant: z.boolean().optional(),
 });
 
 /** `getConversation` and `markConversationRead` Server Actions (FR-012, FR-013). */

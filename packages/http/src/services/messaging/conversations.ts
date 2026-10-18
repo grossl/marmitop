@@ -17,6 +17,7 @@ import type { z } from "zod";
 import type { ServiceContext } from "../../context";
 import type { ServiceDeps } from "../../deps";
 import { defineService } from "../../service";
+import { loadAiSettings } from "../ai/settings";
 import { type CustomerOrderSummary, listCustomerOrders } from "./customer-orders";
 import { decodeCursor, encodeCursor, likePattern, previewOf } from "./helpers";
 
@@ -29,6 +30,10 @@ export interface ConversationSummary {
   readonly lastMessagePreview: string | null;
   readonly unreadCount: number;
   readonly lastInboundAt: string | null;
+  /** FR-189: the assistant answers when `auto`. */
+  readonly aiMode: "auto" | "paused";
+  readonly aiPauseReason: string | null;
+  readonly aiPauseNote: string | null;
 }
 
 export interface MessageDto {
@@ -41,6 +46,8 @@ export interface MessageDto {
   readonly automaticKind: string | null;
   readonly errorCode: string | null;
   readonly createdAt: string;
+  /** True when the AI order assistant wrote the message. */
+  readonly fromAi: boolean;
 }
 
 export interface ConversationDetail {
@@ -51,6 +58,8 @@ export interface ConversationDetail {
   readonly windowClosesAt: string | null;
   readonly messages: readonly MessageDto[];
   readonly orders: readonly CustomerOrderSummary[];
+  /** True when the restaurant turned the AI order assistant on. */
+  readonly aiEnabled: boolean;
 }
 
 interface ConversationRow {
@@ -62,6 +71,9 @@ interface ConversationRow {
   last_message_preview: string | null;
   unread_count: number;
   last_inbound_at: Date | null;
+  ai_mode: "auto" | "paused";
+  ai_pause_reason: string | null;
+  ai_pause_note: string | null;
 }
 
 function toSummary(row: ConversationRow): ConversationSummary {
@@ -74,6 +86,9 @@ function toSummary(row: ConversationRow): ConversationSummary {
     lastMessagePreview: row.last_message_preview,
     unreadCount: row.unread_count,
     lastInboundAt: row.last_inbound_at?.toISOString() ?? null,
+    aiMode: row.ai_mode,
+    aiPauseReason: row.ai_pause_reason,
+    aiPauseNote: row.ai_pause_note,
   };
 }
 
@@ -87,14 +102,18 @@ export const listConversations = defineService({
     const limit = input.limit ?? PAGE_DEFAULT;
     const offset = decodeCursor(input.cursor);
     const pattern = likePattern(input.q);
+    // FR-190: handoffs wait for a person; attendant and manual pauses do not.
+    const needsAttendant = input.needsAttendant === true;
     const rows = await tx<ConversationRow[]>`
       select c.id, c.customer_id, cu.name, cu.phone, c.last_message_at, c.last_message_preview,
-             c.unread_count, c.last_inbound_at
+             c.unread_count, c.last_inbound_at, c.ai_mode, c.ai_pause_reason, c.ai_pause_note
       from public.conversations c
       join public.customers cu on cu.restaurant_id = c.restaurant_id and cu.id = c.customer_id
       where c.restaurant_id = ${ctx.restaurantId}
         and (${pattern}::text is null
              or cu.name ilike ${pattern} or cu.phone ilike ${pattern} or c.last_message_preview ilike ${pattern})
+        and (not ${needsAttendant}::boolean
+             or (c.ai_mode = 'paused' and c.ai_pause_reason not in ('attendant', 'manual')))
       order by c.last_message_at desc nulls last, c.created_at desc, c.id
       limit ${limit + 1} offset ${offset}
     `;
@@ -109,7 +128,7 @@ export const listConversations = defineService({
 async function loadConversation(tx: Tx, restaurantId: string, conversationId: string): Promise<ConversationRow> {
   const [row] = await tx<ConversationRow[]>`
     select c.id, c.customer_id, cu.name, cu.phone, c.last_message_at, c.last_message_preview,
-           c.unread_count, c.last_inbound_at
+           c.unread_count, c.last_inbound_at, c.ai_mode, c.ai_pause_reason, c.ai_pause_note
     from public.conversations c
     join public.customers cu on cu.restaurant_id = c.restaurant_id and cu.id = c.customer_id
     where c.restaurant_id = ${restaurantId} and c.id = ${conversationId}
@@ -145,11 +164,12 @@ export const getConversation = defineService({
         automatic_kind: string | null;
         error_code: string | null;
         created_at: Date;
+        ai_run_id: string | null;
       }[]
     >`
       select * from (
         select m.id, m.direction, m.body, m.status, m.order_id, o.code as order_code,
-               m.automatic_kind, m.error_code, m.created_at
+               m.automatic_kind, m.error_code, m.created_at, m.ai_run_id
         from public.messages m
         left join public.orders o on o.restaurant_id = m.restaurant_id and o.id = m.order_id
         where m.restaurant_id = ${ctx.restaurantId} and m.conversation_id = ${row.id}
@@ -180,9 +200,11 @@ export const getConversation = defineService({
           automaticKind: m.automatic_kind,
           errorCode: m.error_code,
           createdAt: m.created_at.toISOString(),
+          fromAi: m.ai_run_id !== null,
         }),
       ),
       orders,
+      aiEnabled: (await loadAiSettings(tx, ctx.restaurantId)).enabled,
     } satisfies ConversationDetail;
   },
 });
@@ -259,6 +281,14 @@ export async function sendMessageInTx(
         last_message_preview = ${previewOf(input.body)}
       where id = ${conversation.id} and restaurant_id = ${ctx.restaurantId}
     `;
+  // FR-189: a person answered, so the assistant steps back for this conversation.
+  if (ctx.actorType === "user") {
+    await tx`
+      update public.conversations set ai_mode = 'paused', ai_paused_at = ${deps.clock.now()},
+        ai_pause_reason = 'attendant', ai_pause_note = null
+      where id = ${conversation.id} and restaurant_id = ${ctx.restaurantId} and ai_mode = 'auto'
+    `;
+  }
   await enqueueOutbound(tx, ctx.restaurantId, message.id);
   return { messageId: message.id, conversationId: conversation.id };
 }

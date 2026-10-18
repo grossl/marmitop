@@ -5,7 +5,8 @@ import { AppError } from "@mt/core";
 import { simulateInboundActionSchema } from "@mt/schemas";
 
 import { defineService } from "../../service";
-import { runInboundAutomation } from "../whatsapp/automatic";
+import { enqueueAiTurn } from "../ai/trigger";
+import { type AutomaticResult, runInboundAutomation } from "../whatsapp/automatic";
 import { ingestInboundMessage } from "./ingest-inbound";
 
 export const simulateInboundMessage = defineService({
@@ -25,14 +26,19 @@ export const simulateInboundMessage = defineService({
     const [customer] = await tx<{ name: string }[]>`
       select name from public.customers where id = ${result.customerId} and restaurant_id = ${ctx.restaurantId}
     `;
-    const automatic =
-      result.messageId === null
-        ? null
-        : await runInboundAutomation(tx, deps, ctx.restaurantId, {
-            conversationId: result.conversationId,
-            conversationCreated: result.conversationCreated,
-            customerName: customer?.name ?? input.phone,
-          });
+    let automatic: AutomaticResult | null = null;
+    if (result.messageId !== null) {
+      automatic = await runInboundAutomation(tx, deps, ctx.restaurantId, {
+        conversationId: result.conversationId,
+        conversationCreated: result.conversationCreated,
+        customerName: customer?.name ?? input.phone,
+      });
+      await enqueueAiTurn(tx, deps, ctx.restaurantId, {
+        conversationId: result.conversationId,
+        triggerMessageId: result.messageId,
+        closedSent: automatic?.kind === "closed",
+      });
+    }
     return {
       conversationId: result.conversationId,
       customerId: result.customerId,

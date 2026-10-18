@@ -13,6 +13,7 @@ import { type GatewayMessage, type MessageFailure, type MessageStatus, nextMessa
 import type { Tx } from "@mt/db";
 
 import type { ServiceDeps } from "../../deps";
+import { enqueueAiTurn } from "../ai/trigger";
 import { ingestInboundMessage } from "../messaging/ingest-inbound";
 import { type AutomaticResult, runInboundAutomation } from "./automatic";
 
@@ -97,6 +98,11 @@ export async function applyGatewayMessage(
     conversationId: ingest.conversationId,
     conversationCreated: ingest.conversationCreated,
     customerName: customer?.name ?? message.contactAddress,
+  });
+  await enqueueAiTurn(tx, deps, restaurantId, {
+    conversationId: ingest.conversationId,
+    triggerMessageId: ingest.messageId,
+    closedSent: automatic?.kind === "closed",
   });
   // message.received (FR-146) was emitted by ingestInboundMessage, in this transaction.
   return { action: "ingested", messageId: ingest.messageId, conversationId: ingest.conversationId, automatic };
