@@ -75,7 +75,7 @@ describe("runAiTurn", () => {
     expect(m?.ai_run_id).toBe(out.runId);
     const [u] = await db<
       { n: number }[]
-    >`select count(*)::int as n from public.usage_events where ref_id = ${out.runId} and kind = 'ai.reply'`;
+    >`select count(*)::int as n from public.usage_events where ref_id = ${trigger} and kind = 'ai.reply'`;
     expect(u?.n).toBe(1);
     expect(model.requests[0]?.messages.at(-1)?.role).toBe("user");
     expect((await lastRun())?.billed_as).toBe("included");
@@ -181,6 +181,51 @@ describe("runAiTurn", () => {
     expect(signals).toEqual([controller.signal]);
   });
 
+  test("a customer message that arrives during a running turn gets its own turn (not answered)", async () => {
+    const m1 = await inbound("quero 1 marmita");
+    const model = new ScriptedAssistantModel([{ text: "Anotei! Retirada ou entrega?" }, { text: "Certo, entrega!" }]);
+    const original = model.respond.bind(model);
+    let m2 = "";
+    const spy = spyOn(model, "respond").mockImplementationOnce(async (req) => {
+      // M2 arrives while turn A runs; A's reply is stored after it.
+      m2 = await inbound("entrega, por favor");
+      t += 1000;
+      return original(req);
+    });
+    expect(await runAiTurn(deps, model, job(m1))).toMatchObject({ kind: "done", status: "replied" });
+    spy.mockRestore();
+    const out = await runAiTurn(deps, model, job(m2));
+    expect(out).toMatchObject({ kind: "done", status: "replied" });
+    expect(model.requests).toHaveLength(2);
+    expect(JSON.stringify(model.requests[1]?.messages)).toContain("entrega, por favor");
+  });
+
+  test("a retry of the same trigger stops as answered when its reply already went out", async () => {
+    const m = await inbound("oi, retry");
+    t += 1000; // the reply is stored after the trigger
+    const model = new ScriptedAssistantModel([{ text: "Oi!" }]);
+    expect(await runAiTurn(deps, model, job(m))).toMatchObject({ status: "replied" });
+    expect(await runAiTurn(deps, model, job(m))).toMatchObject({ kind: "done", status: "answered" });
+    expect(model.requests).toHaveLength(1);
+  });
+
+  test("a retryable failure, then success, on the same trigger records one usage row", async () => {
+    const m = await inbound("quero almoçar");
+    const model = new ScriptedAssistantModel([
+      { error: new AssistantModelError("busy", true, "overloaded") },
+      { text: "Claro! O que vai querer?" },
+    ]);
+    expect(await runAiTurn(deps, model, job(m))).toMatchObject({ kind: "retry" });
+    expect(await runAiTurn(deps, model, job(m))).toMatchObject({ kind: "done", status: "replied" });
+    const [u] = await db<{ n: number }[]>`
+      select count(*)::int as n from public.usage_events
+      where restaurant_id = ${a.restaurantId} and kind = 'ai.reply' and ref_id = ${m}`;
+    expect(u?.n).toBe(1);
+    const [runs] = await db<{ n: number }[]>`
+      select count(*)::int as n from public.ai_runs where restaurant_id = ${a.restaurantId} and trigger_message_id = ${m}`;
+    expect(runs?.n).toBe(2);
+  });
+
   test("an empty history stops as silent before the model, with no usage and no claim", async () => {
     const m = await inbound("oi");
     // Twenty automatic messages after the trigger fill the history window with outbound rows only.
@@ -194,7 +239,7 @@ describe("runAiTurn", () => {
     expect(model.requests).toHaveLength(0);
     const [u] = await db<
       { n: number }[]
-    >`select count(*)::int as n from public.usage_events where ref_id = ${out.runId}`;
+    >`select count(*)::int as n from public.usage_events where ref_id in (${out.runId}, ${m})`;
     expect(u?.n).toBe(0);
     expect((await lastRun())?.model_calls).toBe(0);
     const [c] = await db<

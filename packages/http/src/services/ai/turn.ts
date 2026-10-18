@@ -93,7 +93,11 @@ async function start(deps: ServiceDeps, job: AiTurnJob): Promise<Started | AiTur
       for update of c
     `;
     if (conv === undefined) return { kind: "done", status: "stopped", runId: "" } as const;
-    // `out_after` counts only a reply: an attendant message (sent_by) or an AI message (ai_run_id).
+    // `out_after` counts only an answer to the trigger T (12 "Guards in the worker"):
+    //   * an attendant message (sent_by) created after T;
+    //   * an AI message created after T whose run saw T: its trigger is T itself or an inbound
+    //     created at or after T. A turn that started on an earlier message and stored its reply
+    //     after T arrived did not see T, so T still gets its own turn.
     // An automatic message (the welcome stored with the inbound row) is not an answer.
     const [facts] = await t<{ latest_in: string | null; out_after: number }[]>`
       select
@@ -101,9 +105,13 @@ async function start(deps: ServiceDeps, job: AiTurnJob): Promise<Started | AiTur
            and direction = 'in' order by created_at desc, id desc limit 1) as latest_in,
         (select count(*)::int from public.messages m
            join public.messages trig on trig.id = ${job.triggerMessageId} and trig.restaurant_id = m.restaurant_id
+           left join public.ai_runs r on r.id = m.ai_run_id and r.restaurant_id = m.restaurant_id
+           left join public.messages rt on rt.id = r.trigger_message_id and rt.restaurant_id = r.restaurant_id
            where m.restaurant_id = ${job.restaurantId} and m.conversation_id = ${job.conversationId}
-             and m.direction = 'out' and m.created_at > trig.created_at
-             and m.automatic_kind is null and (m.sent_by is not null or m.ai_run_id is not null)) as out_after
+             and m.direction = 'out' and m.created_at > trig.created_at and m.automatic_kind is null
+             and (m.sent_by is not null
+                  or (m.ai_run_id is not null
+                      and (r.trigger_message_id = trig.id or rt.created_at >= trig.created_at)))) as out_after
     `;
     const settings = await loadAiSettings(t, job.restaurantId);
     const quota = await loadAiQuota(t, job.restaurantId, now, settings);
@@ -161,7 +169,9 @@ async function start(deps: ServiceDeps, job: AiTurnJob): Promise<Started | AiTur
 
     const runId = await insertRun(t, job, "running", guard.billedAs, now);
     await t`update public.conversations set ai_turn_claimed_at = ${now} where id = ${job.conversationId} and restaurant_id = ${job.restaurantId}`;
-    await recordUsage(t, job.restaurantId, "ai.reply", runId, now);
+    // One ai.reply per trigger message (FR-196): `(kind, ref_id)` is unique, so a retry or a duplicate
+    // job of the same trigger bills once. Written in the claim transaction, so the quota stays conservative.
+    await recordUsage(t, job.restaurantId, "ai.reply", job.triggerMessageId, now);
 
     const { menu, categories } = await loadTodayMenu(t, deps, job.restaurantId);
     const order = await loadOrderSettings(t, job.restaurantId);
