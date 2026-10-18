@@ -206,6 +206,8 @@ describe("listStockItems and archiveStockItem", () => {
   test("flags low items and totals the value over active items", async () => {
     const fresh = await seedRestaurant(db, "stock-totals");
     const ctx = userCtx(fresh.restaurantId, fresh.adminId, "admin");
+    // The fixture already holds one active item (18 kg of Arroz, not low).
+    const base = await listStockItems(deps, ctx, {});
     await saveStockItem(deps, ctx, {
       name: "A",
       unit: "kg",
@@ -223,8 +225,8 @@ describe("listStockItems and archiveStockItem", () => {
       initialQty: 2.5,
     });
     const list = await listStockItems(deps, ctx, {});
-    expect(list.lowCount).toBe(1);
-    expect(list.totalValueCents).toBe(500 + 625);
+    expect(list.lowCount).toBe(base.lowCount + 1);
+    expect(list.totalValueCents).toBe(base.totalValueCents + 500 + 625);
     expect(list.items.find((i) => i.name === "A")?.low).toBe(true);
     expect((await listStockItems(deps, ctx, { category: "bebidas" })).items).toHaveLength(0);
   });
@@ -232,6 +234,7 @@ describe("listStockItems and archiveStockItem", () => {
   test("archiving hides the item from lists and totals but keeps its history", async () => {
     const fresh = await seedRestaurant(db, "stock-archive");
     const ctx = userCtx(fresh.restaurantId, fresh.adminId, "admin");
+    const base = await listStockItems(deps, ctx, {});
     const item = await saveStockItem(deps, ctx, {
       name: "Velho",
       unit: "un",
@@ -243,7 +246,7 @@ describe("listStockItems and archiveStockItem", () => {
     await archiveStockItem(deps, ctx, { id: item.id });
     const list = await listStockItems(deps, ctx, {});
     expect(list.items.some((i) => i.id === item.id)).toBe(false);
-    expect(list.totalValueCents).toBe(0);
+    expect(list.totalValueCents).toBe(base.totalValueCents);
     const [counted] = await db<
       { n: number }[]
     >`select count(*)::int as n from public.stock_movements where stock_item_id = ${item.id}`;
