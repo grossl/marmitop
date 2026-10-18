@@ -15,6 +15,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@mt/core": "workspace:*",
     "@mt/db": "workspace:*",
     "@mt/http": "workspace:*",

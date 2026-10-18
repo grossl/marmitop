@@ -9,7 +9,7 @@ import type { QueueMessage, QueueName } from "@mt/db";
 import type { ZodType, ZodTypeDef } from "zod";
 
 /** `job_attempts.subject_type`. */
-export type SubjectType = "message" | "webhook_delivery" | "order_invoice" | "sync";
+export type SubjectType = "message" | "webhook_delivery" | "order_invoice" | "sync" | "ai_turn";
 
 /** Every queue payload carries the tenant and, on a retry, the attempt number. */
 export interface JobPayload {

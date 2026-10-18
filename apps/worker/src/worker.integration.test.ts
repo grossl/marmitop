@@ -1,7 +1,7 @@
 // covers FR-101, FR-107, FR-108, FR-117, NFR-022, NFR-032, ADR-007, ADR-017 #4
 // Needs the local stack (`bun run dev:stack`) or TEST_DATABASE_URL.
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { FakeGateway, FixedClock, GatewayError } from "@mt/core";
+import { FakeGateway, FixedClock, GatewayError, ScriptedAssistantModel } from "@mt/core";
 import { type Db, QUEUES, sendJob } from "@mt/db";
 import { asService, createTestDb, type RestaurantFixture, seedRestaurant, truncateQueues } from "@mt/db/test-harness";
 import { connectWhatsApp, enableUatisWebhook, type GatewayFactory, type ServiceDeps } from "@mt/http";
@@ -130,7 +130,7 @@ describe("QueueWorker over pgmq", () => {
     );
     const worker = new QueueWorker({
       client: new PgmqQueueClient(db),
-      registry: buildRegistry(deps, quiet),
+      registry: buildRegistry(deps, quiet, new ScriptedAssistantModel([])),
       log: quiet,
     });
     expect(await worker.tick(QUEUES.outboundMessages)).toBe(1);
@@ -151,7 +151,7 @@ describe("QueueWorker over pgmq", () => {
     gateway.failNextSend(GatewayError.connection());
     const worker = new QueueWorker({
       client: new PgmqQueueClient(db),
-      registry: buildRegistry(deps, quiet),
+      registry: buildRegistry(deps, quiet, new ScriptedAssistantModel([])),
       log: quiet,
     });
     await worker.tick(QUEUES.outboundMessages);
@@ -229,7 +229,11 @@ describe("DbFeedStore with the feed handler", () => {
     const enabled = await enableUatisWebhook(deps, userCtx(a.restaurantId, a.adminId, "admin"), undefined);
     expect(enabled).toMatchObject({ ok: true, mode: "pull" });
     if (!enabled.ok) return;
-    const m = gateway.simulateInbound({ from: "+5511955553333", body: "Oi pelo feed", at: new Date(NOW.getTime() - 5_000) });
+    const m = gateway.simulateInbound({
+      from: "+5511955553333",
+      body: "Oi pelo feed",
+      at: new Date(NOW.getTime() - 5_000),
+    });
     expect(await run()).toEqual({ kind: "ok" });
     const feed = gateway.feeds.get(enabled.webhookId) ?? [];
     const [w] = await db<{ uatis_feed_cursor: string; last_synced_at: Date }[]>`
@@ -268,4 +272,3 @@ describe("DbFeedStore with the feed handler", () => {
     expect(jobs.map((j) => j.op)).toEqual(["uatis_feed_pull"]);
   });
 });
-

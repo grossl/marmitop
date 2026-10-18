@@ -1,10 +1,12 @@
 // apps/worker entry: pgmq consumer (ADR-007) plus GET /health on WORKER_HEALTH_PORT (8181).
 // SIGTERM and SIGINT stop reading, wait for running jobs, then close the pool.
 
+import { ScriptedAssistantModel } from "@mt/core";
+import { withoutContext } from "@mt/db";
 import { createServiceDeps, readServerConfig } from "@mt/http";
 
-import { withoutContext } from "@mt/db";
-
+import { AnthropicAssistantModel } from "./ai/anthropic-model";
+import { readAiConfig } from "./ai/config";
 import { FeedPullTimer } from "./feed-timer";
 import { createLogger } from "./framework/logger";
 import { PgmqQueueClient } from "./framework/pgmq-client";
@@ -26,9 +28,17 @@ if (config.uatisFake) {
 }
 
 const deps = createServiceDeps(config);
+// FR-198: the AI assistant model. Never log ai.apiKey.
+const ai = readAiConfig();
+const model =
+  ai.apiKey === null
+    ? new ScriptedAssistantModel([])
+    : AnthropicAssistantModel.fromConfig({ ...ai, apiKey: ai.apiKey });
+if (ai.apiKey === null) log.warn("AI assistant in fake mode: ANTHROPIC_API_KEY is empty, AI turns will fail", {});
+else log.info("AI assistant ready", { model: ai.model, effort: ai.effort });
 const worker = new QueueWorker({
   client: new PgmqQueueClient(deps.db, deps.contextOptions),
-  registry: buildRegistry(deps, log),
+  registry: buildRegistry(deps, log, model),
   log,
   concurrency: Number(process.env.MT_WORKER_CONCURRENCY ?? 4),
 });

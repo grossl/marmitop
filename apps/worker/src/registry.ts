@@ -1,12 +1,14 @@
 // The worker's handler set. P6 adds the `mt_invoice_jobs` handlers (issue, poll,
 // cancel) and P7 the `mt_webhook_deliveries` handler, each with one
-// `registry.register(...)` line here.
+// `registry.register(...)` line here. P10 adds `mt_ai_turns` (ADR-025).
 
+import type { AssistantModel } from "@mt/core";
 import type { ServiceDeps } from "@mt/http";
 import { createSafeFetch, SafeFetchWebhookSender } from "@mt/http";
 
 import { HandlerRegistry } from "./framework/registry";
 import type { Logger } from "./framework/types";
+import { createAiTurnHandler } from "./handlers/ai-turn";
 import {
   createInvoiceCancelHandler,
   createInvoiceIssueHandler,
@@ -14,15 +16,15 @@ import {
 } from "./handlers/invoice-jobs";
 import { createOutboundMessageHandler } from "./handlers/outbound-message";
 import { createUatisFeedHandler } from "./handlers/uatis-feed";
-import { createWhatsAppReconcileHandler } from "./handlers/whatsapp-reconcile";
 import { createWebhookDeliveryHandler } from "./handlers/webhook-delivery";
-import { DbInvoiceJobStore } from "./stores/invoice-store";
+import { createWhatsAppReconcileHandler } from "./handlers/whatsapp-reconcile";
 import { DbFeedStore } from "./stores/feed-store";
+import { DbInvoiceJobStore } from "./stores/invoice-store";
 import { DbOutboundStore } from "./stores/outbound-store";
 import { DbReconcileStore } from "./stores/reconcile-store";
 import { DbWebhookDeliveryStore } from "./stores/webhook-delivery-store";
 
-export function buildRegistry(deps: ServiceDeps, log: Logger): HandlerRegistry {
+export function buildRegistry(deps: ServiceDeps, log: Logger, model: AssistantModel): HandlerRegistry {
   const gatewayFor = deps.gateways.whatsapp.bind(deps.gateways);
   const reconcileStore = new DbReconcileStore(deps);
   const invoiceDeps = { store: new DbInvoiceJobStore(deps), gatewayFor: deps.gateways.invoices.bind(deps.gateways) };
@@ -49,5 +51,7 @@ export function buildRegistry(deps: ServiceDeps, log: Logger): HandlerRegistry {
           clock: deps.clock,
         }),
       )
+      // P10: mt_ai_turns, the AI order assistant (ADR-025)
+      .register(createAiTurnHandler({ serviceDeps: deps, model }))
   );
 }

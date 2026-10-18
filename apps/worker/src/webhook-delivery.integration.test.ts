@@ -1,7 +1,7 @@
 // covers FR-146, FR-147, FR-148, FR-152, ADR-007, ADR-009 (end to end over pgmq with a local receiver)
 // Needs the local stack (`bun run dev:stack`) or TEST_DATABASE_URL.
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { FakeGateway, FixedClock, verifyMarmitopSignature } from "@mt/core";
+import { FakeGateway, FixedClock, ScriptedAssistantModel, verifyMarmitopSignature } from "@mt/core";
 import { type Db, QUEUES } from "@mt/db";
 import { createTestDb, type RestaurantFixture, seedRestaurant, truncateQueues } from "@mt/db/test-harness";
 import {
@@ -9,8 +9,8 @@ import {
   createOrder,
   type GatewayFactory,
   rotateWebhookSecret,
-  saveWebhookEndpoint,
   type ServiceDeps,
+  saveWebhookEndpoint,
 } from "@mt/http";
 import { createTestServiceDeps, userCtx } from "@mt/http/testing";
 
@@ -79,7 +79,11 @@ afterAll(async () => {
 });
 
 const worker = () =>
-  new QueueWorker({ client: new PgmqQueueClient(db), registry: buildRegistry(deps, quiet), log: quiet });
+  new QueueWorker({
+    client: new PgmqQueueClient(db),
+    registry: buildRegistry(deps, quiet, new ScriptedAssistantModel([])),
+    log: quiet,
+  });
 
 async function newOrder() {
   return createOrder(deps, userCtx(a.restaurantId, a.attendantId, "attendant"), {
