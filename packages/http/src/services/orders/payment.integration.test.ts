@@ -78,4 +78,48 @@ describe("null payment method", () => {
     }).catch((x) => x);
     expect(e instanceof AppError ? e.code : String(e)).toBe("not_found");
   });
+
+  test("an attendant sets it and an audit row records the old and new method", async () => {
+    const id = await aiStyleOrder(a);
+    await setOrderPaymentMethod(deps, userCtx(a.restaurantId, a.attendantId, "attendant"), {
+      orderId: id,
+      paymentMethod: "dinheiro",
+    });
+    const rows = await db<{ actor_id: string; entity_type: string; context: Record<string, unknown> }[]>`
+      select actor_id, entity_type, context from public.audit_logs
+      where restaurant_id = ${a.restaurantId} and action = 'order.payment_method_set' and entity_id = ${id}`;
+    expect(rows).toEqual([{ actor_id: a.attendantId, entity_type: "order", context: { from: null, to: "dinheiro" } }]);
+  });
+});
+
+describe("invoiced order", () => {
+  async function invoiced(status: string, method: string | null): Promise<string> {
+    const id = await aiStyleOrder(a);
+    await db`update public.orders set payment_method = ${method} where id = ${id}`;
+    await db`insert into public.order_invoices (restaurant_id, order_id, kind, status, created_by)
+             values (${a.restaurantId}, ${id}, 'nfce', ${status}, ${a.adminId})`;
+    return id;
+  }
+  const set = (orderId: string) =>
+    setOrderPaymentMethod(deps, userCtx(a.restaurantId, a.adminId, "admin"), { orderId, paymentMethod: "pix" });
+
+  test("a set method cannot change while an invoice is authorized", async () => {
+    const id = await invoiced("authorized", "dinheiro");
+    const e = await set(id).catch((x) => x);
+    expect(e).toBeInstanceOf(AppError);
+    expect((e as AppError).code).toBe("conflict");
+    expect((e as AppError).details?.[0]?.code).toBe("invoice_active");
+    const [o] = await db<{ payment_method: string }[]>`select payment_method from public.orders where id = ${id}`;
+    expect(o?.payment_method).toBe("dinheiro");
+  });
+
+  test("a set method can change after the invoice was rejected", async () => {
+    const id = await invoiced("rejected", "dinheiro");
+    expect(await set(id)).toEqual({ orderId: id, paymentMethod: "pix" });
+  });
+
+  test("a null method can be set even while an invoice is in progress", async () => {
+    const id = await invoiced("queued", null);
+    expect(await set(id)).toEqual({ orderId: id, paymentMethod: "pix" });
+  });
 });

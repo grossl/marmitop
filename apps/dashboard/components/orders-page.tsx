@@ -471,7 +471,9 @@ function PaymentMethodPicker({ orderId, onChanged }: { orderId: string; onChange
     const result = await setOrderPaymentMethodAction({ orderId, paymentMethod: paymentMethod as PaymentMethod });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error.message);
+      // `invoice_active` and other refusals carry a pt-BR detail; show it over the generic message.
+      const details = result.error.fieldErrors;
+      toast.error(details ? Object.values(details).join(" ") : result.error.message);
       return;
     }
     toast.success("Forma de pagamento definida.");
