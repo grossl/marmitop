@@ -243,6 +243,13 @@ describe("receiveUatisWebhook with the database store", () => {
   });
 
   test("restaurant B's integration row with A's secret cannot pass", async () => {
+    // B needs a real sealed secret of its own; the fixture row holds placeholder ciphertext.
+    await connectWhatsApp(deps, userCtx(b.restaurantId, b.adminId, "admin"), {
+      baseUrl: "http://127.0.0.1:4010",
+      apiKey: "obk_test_integration_b",
+      webhookSecret: "whsec_integration_b",
+      phoneNumberId: "pn-int-b",
+    });
     const store = createDbUatisInboundStore(deps);
     const raw = body(`wamid.${crypto.randomUUID()}`, nextPhone());
     const r = await receiveUatisWebhook(store, {
