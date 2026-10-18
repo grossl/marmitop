@@ -96,6 +96,14 @@ All 8 are in `packages/http`. They exist before P10. Likely cause: the seed chan
 
 No failure outside this list.
 
+**Resolved after P10.** `64ecb79` did not cause them: the same 8 fail at `fec506f`, its parent. Each test was wrong, and no service code changed:
+
+- messaging (since `bd61e40`): the fixture's `welcome` goes out 1 ms after the first inbound (FR-110). On the fixed test clock it stays the newest message and owns the preview. The test file now turns automatic messages off for restaurant A.
+- stock (since `500081c`): `seedRestaurant` already holds one active item worth 11,700 cents. The tests now compare against that baseline.
+- outbound webhook (since `ff120f9`): an earlier test deletes the fixture endpoint with raw SQL and leaves its secret behind. The test now checks the endpoint's own secret.
+- API send (since `ff120f9`): the test set `last_inbound_at` from the database clock, but the service reads the test clock. The test now uses the test clock.
+- uatis webhook (since `bd61e40`): restaurant B's fixture secret is placeholder ciphertext, so unsealing it fails with 500. The test now connects B with a real secret of its own.
+
 ### Biome
 
 All 237 errors exist before P10. I checked the 28 errors that sit in files that P10 changed. These files are in 11 dashboard and http test files. Each file has the same error count at `61db1ab` as now (chat-panel 4, contacts-page 3, contacts-sidebar 2, finance-page 4, invoice-panel 2, messages-screen 1, messaging-format 1, orders-format 1, orders-page 5, settings-page 3, orders.integration.test 2). The other 209 errors are in files P10 did not touch. I also ran `bunx biome check` on the code files P10 created (46 files, from `git diff --name-only --diff-filter=A 61db1ab..HEAD`, excluding docs). It found no errors.
