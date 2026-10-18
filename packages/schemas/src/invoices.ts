@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { addressShapeCamel, cpfCnpjSchema, optionalOf, uuidSchema } from "./common";
+import { PAYMENT_METHODS } from "./orders";
 
 export const INVOICE_KINDS = ["nfce", "nfe"] as const;
 
@@ -11,6 +12,8 @@ export const INVOICE_KINDS = ["nfce", "nfe"] as const;
  */
 export const invoiceFillSchema = z.object({
   cpfCnpj: optionalOf(cpfCnpjSchema),
+  /** FR-188: asked only when the order has no payment method ("A definir"). */
+  paymentMethod: optionalOf(z.enum(PAYMENT_METHODS)),
   ...addressShapeCamel,
 });
 

@@ -23,6 +23,7 @@ import type { BoardOrder, OrderDetail, OrderInvoiceView } from "@mt/http";
 import {
   INVOICE_TONE_CLASSES,
   MISSING_FIELD_LABELS,
+  PAYMENT_LABELS,
   canIssueInvoice,
   fillKey,
   formatChave,
@@ -323,13 +324,30 @@ export function InvoicePanel({
                       <label htmlFor={`nf-fill-${order.id}-${key}`} className="text-muted-foreground">
                         {MISSING_FIELD_LABELS[path] ?? path}
                       </label>
-                      <Input
-                        id={`nf-fill-${order.id}-${key}`}
-                        className="h-8 text-xs"
-                        value={fill[key] ?? ""}
-                        onChange={(e) => setFill((prev) => ({ ...prev, [key]: e.target.value }))}
-                        required
-                      />
+                      {key === "paymentMethod" ? (
+                        <select
+                          id={`nf-fill-${order.id}-${key}`}
+                          className="h-8 w-full rounded-md border bg-background px-2 text-xs"
+                          value={fill[key] ?? ""}
+                          onChange={(e) => setFill((prev) => ({ ...prev, [key]: e.target.value }))}
+                          required
+                        >
+                          <option value="">Selecione</option>
+                          {Object.entries(PAYMENT_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <Input
+                          id={`nf-fill-${order.id}-${key}`}
+                          className="h-8 text-xs"
+                          value={fill[key] ?? ""}
+                          onChange={(e) => setFill((prev) => ({ ...prev, [key]: e.target.value }))}
+                          required
+                        />
+                      )}
                     </div>
                   );
                 })}

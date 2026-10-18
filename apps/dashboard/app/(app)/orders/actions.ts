@@ -7,6 +7,7 @@ import {
   getOrderKpis,
   listOrders,
   markOrderPaid,
+  setOrderPaymentMethod,
   unmarkOrderPaid,
 } from "@mt/http";
 import {
@@ -16,6 +17,7 @@ import {
   getOrderKpisSchema,
   listOrdersActionSchema,
   orderPaymentSchema,
+  setOrderPaymentMethodSchema,
 } from "@mt/schemas";
 import { revalidatePath } from "next/cache";
 
@@ -72,6 +74,18 @@ export const unmarkOrderPaidAction = adminAction(
   { name: "finance.unmarkPaid", input: orderPaymentSchema },
   async ({ deps, ctx, input }) => {
     const result = await unmarkOrderPaid(deps, ctx, input);
+    revalidatePath("/orders");
+    revalidatePath("/finance");
+    return result;
+  },
+);
+
+// Payment method for an order that has none, "A definir" (FR-188, ADR-025).
+
+export const setOrderPaymentMethodAction = memberAction(
+  { name: "orders.setPaymentMethod", input: setOrderPaymentMethodSchema },
+  async ({ deps, ctx, input }) => {
+    const result = await setOrderPaymentMethod(deps, ctx, input);
     revalidatePath("/orders");
     revalidatePath("/finance");
     return result;

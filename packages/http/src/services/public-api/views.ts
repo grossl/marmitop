@@ -32,7 +32,7 @@ export interface ApiOrder {
   readonly cidade: string | null;
   readonly uf: string | null;
   readonly codigo_municipio: string | null;
-  readonly payment_method: PaymentMethodCode;
+  readonly payment_method: PaymentMethodCode | null;
   readonly change_for_cents: number | null;
   readonly notes: string | null;
   readonly subtotal_cents: number;
@@ -70,7 +70,7 @@ export interface ApiOrderRow {
   cidade: string | null;
   uf: string | null;
   codigo_municipio: string | null;
-  payment_method: PaymentMethodCode;
+  payment_method: PaymentMethodCode | null;
   change_for_cents: number | null;
   notes: string | null;
   subtotal_cents: number;

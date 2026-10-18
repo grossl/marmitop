@@ -43,12 +43,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@mt/ui/components/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@mt/ui/components/select";
 import { cn } from "@mt/ui/lib/utils";
+import type { PaymentMethod } from "@mt/schemas";
 import type { BoardOrder, OrderDetail, OrderKpis } from "@mt/http";
 import { useRealtimeTable } from "@/lib/realtime";
 import {
   PAYMENT_LABELS,
   STATUS_LABELS,
+  paymentLabel,
   formatCents,
   formatDateTime,
   formatTime,
@@ -60,6 +63,7 @@ import {
   changeOrderStatusAction,
   getOrderAction,
   markOrderPaidAction,
+  setOrderPaymentMethodAction,
   unmarkOrderPaidAction,
 } from "@/app/(app)/orders/actions";
 import { InvoiceBadge, InvoicePanel } from "@/components/invoice-panel";
@@ -274,7 +278,7 @@ function OrderCard({
       <div className="flex items-center justify-between pt-1 border-t border-border">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
           <CreditCard className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-          <span>{PAYMENT_LABELS[order.paymentMethod]}</span>
+          <span>{paymentLabel(order.paymentMethod)}</span>
           {/* FR-139: a small invoice badge when the order has an invoice */}
           {order.invoiceStatus && <InvoiceBadge status={order.invoiceStatus} className="ml-1" />}
         </div>
@@ -455,6 +459,41 @@ function PaymentSection({
   );
 }
 
+/** FR-188: an order from the AI assistant has no method until staff pick one. */
+function PaymentMethodPicker({ orderId, onChanged }: { orderId: string; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+
+  async function choose(paymentMethod: string) {
+    setBusy(true);
+    const result = await setOrderPaymentMethodAction({ orderId, paymentMethod: paymentMethod as PaymentMethod });
+    setBusy(false);
+    if (!result.ok) {
+      toast.error(result.error.message);
+      return;
+    }
+    toast.success("Forma de pagamento definida.");
+    onChanged();
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 border-t pt-3">
+      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pagamento</span>
+      <Select disabled={busy} onValueChange={(v) => void choose(v)}>
+        <SelectTrigger size="sm" className="w-48" aria-label="Pagamento">
+          <SelectValue placeholder="A definir" />
+        </SelectTrigger>
+        <SelectContent>
+          {Object.entries(PAYMENT_LABELS).map(([value, label]) => (
+            <SelectItem key={value} value={value}>
+              {label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 // ─── Order detail (FR-023) ─────────────────────────────────────────────────────
 
 /**
@@ -543,7 +582,7 @@ export function OrderDetailDialog({
               <dd className="text-right font-semibold">{formatCents(order.totalCents)}</dd>
               <dt className="text-muted-foreground">Pagamento</dt>
               <dd className="text-right">
-                {PAYMENT_LABELS[order.paymentMethod]}
+                {paymentLabel(order.paymentMethod)}
                 {order.changeForCents ? ` · troco para ${formatCents(order.changeForCents)}` : ""}
               </dd>
               <dt className="text-muted-foreground">Origem</dt>
@@ -581,6 +620,9 @@ export function OrderDetailDialog({
                 </ol>
               )}
             </div>
+            {(view ? view.paymentMethod : order.paymentMethod) === null && (
+              <PaymentMethodPicker orderId={order.id} onChanged={reload} />
+            )}
             <PaymentSection
               orderId={order.id}
               status={view?.status ?? order.status}

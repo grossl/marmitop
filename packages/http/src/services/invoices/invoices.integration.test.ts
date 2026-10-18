@@ -200,6 +200,26 @@ describe("issueInvoice (FR-120..FR-125)", () => {
     expect(o).toEqual({ cep: "01310100", numero: "12" });
   });
 
+  test("an order with no payment method asks for it, queues nothing, then the short form sets it (FR-125, FR-188)", async () => {
+    const { orderId } = await makeOrder("pronto", "pickup");
+    await db`update public.orders set payment_method = null where id = ${orderId}`;
+    const before = await invoiceJobs();
+    const r = await issueInvoice(deps, attendant(), { orderId });
+    expect(r.outcome).toBe("blocked");
+    if (r.outcome !== "blocked") return;
+    expect(r.missingFields).toContain("paymentMethod");
+    expect(r.problems).toContainEqual({
+      path: "paymentMethod",
+      code: "required",
+      message: "Informe a forma de pagamento.",
+    });
+    expect(await invoiceJobs()).toEqual(before);
+    const ok = await issueInvoice(deps, attendant(), { orderId, fill: { paymentMethod: "dinheiro" } });
+    expect(ok.outcome).toBe("queued");
+    const [o] = await db<{ payment_method: string }[]>`select payment_method from public.orders where id = ${orderId}`;
+    expect(o?.payment_method).toBe("dinheiro");
+  });
+
   test("NF-e needs a CNPJ customer (FR-122, V10)", async () => {
     const { orderId, customerId } = await makeOrder("entregue", "pickup");
     const blocked = await issueInvoice(deps, attendant(), { orderId, kind: "nfe" });

@@ -15,7 +15,7 @@ import {
   weekdayInTimezone,
 } from "@mt/core";
 import type { Tx } from "@mt/db";
-import { createOrderActionSchema } from "@mt/schemas";
+import { createOrderActionSchema, type PaymentMethod } from "@mt/schemas";
 import type { z } from "zod";
 
 import type { ServiceContext } from "../../context";
@@ -24,9 +24,9 @@ import { defineService } from "../../service";
 import { recordUsage } from "../billing/usage";
 import { loadApiOrder } from "../public-api/views";
 import { emitEvent } from "../webhooks/emit";
-import type { OrderSourceCode } from "./shared";
 import { enqueueOrderReceived } from "../whatsapp/automatic";
 import { loadOrderSettings } from "./order-settings";
+import type { OrderSourceCode } from "./shared";
 
 export interface CreatedOrder {
   readonly id: string;
@@ -37,9 +37,13 @@ export interface CreatedOrder {
 
 const blank = (v: string | null | undefined) => (v === undefined || v === null || v.trim() === "" ? null : v);
 
-/** The validated create input. `source` is `api` only on the API-key path (ADR-017). */
-export type CreateOrderInput = Omit<z.output<typeof createOrderActionSchema>, "source"> & {
+/**
+ * The validated create input. `source` is `api` only on the API-key path (ADR-017).
+ * `paymentMethod` is null only for an order from the AI assistant (FR-188, ADR-025).
+ */
+export type CreateOrderInput = Omit<z.output<typeof createOrderActionSchema>, "source" | "paymentMethod"> & {
   readonly source: OrderSourceCode;
+  readonly paymentMethod: PaymentMethod | null;
 };
 
 export const createOrder = defineService({

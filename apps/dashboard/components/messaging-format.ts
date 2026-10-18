@@ -65,6 +65,11 @@ export const PAYMENT_LABELS: Record<string, string> = {
   cartao_debito: "Cartão de débito",
 };
 
+/** FR-188: an order with no method shows "A definir". */
+export function paymentLabel(method: string | null): string {
+  return method === null ? "A definir" : (PAYMENT_LABELS[method] ?? method);
+}
+
 /** "Rua A, 10 — Centro, Rio de Janeiro/RJ", skipping empty parts (FR-042). */
 export function addressLine(a: {
   logradouro: string | null;

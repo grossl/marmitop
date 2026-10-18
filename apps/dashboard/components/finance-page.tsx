@@ -10,6 +10,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import {
   Banknote,
+  CircleHelp,
   CreditCard,
   DollarSign,
   ExternalLink,
@@ -43,7 +44,7 @@ import { lookupCustomersAction } from "@/app/(app)/new-order/actions";
 import { canIssueRow, countBatch, formatRange, INVOICE_STATE_OPTIONS, pluralOrders } from "@/components/finance-format";
 import { InvoiceBadge } from "@/components/invoice-panel";
 import { OrderDetailDialog } from "@/components/orders-page";
-import { MISSING_FIELD_LABELS, PAYMENT_LABELS, formatCents, formatDateTime } from "@/components/orders-format";
+import { MISSING_FIELD_LABELS, PAYMENT_LABELS, formatCents, formatDateTime, paymentLabel } from "@/components/orders-format";
 import { useRealtimeTable } from "@/lib/realtime";
 
 type InvoiceStateValue = (typeof INVOICE_STATE_OPTIONS)[number]["value"];
@@ -449,6 +450,15 @@ export function FinancePage({
               color={color}
             />
           ))}
+          {totals.byMethod.a_definir.count > 0 && (
+            <KpiCard
+              label="A definir"
+              value={formatCents(totals.byMethod.a_definir.totalCents)}
+              sub={pluralOrders(totals.byMethod.a_definir.count)}
+              icon={CircleHelp}
+              color="bg-slate-100 dark:bg-slate-500/15 text-slate-600 dark:text-slate-400"
+            />
+          )}
         </div>
 
         {/* Batch bar (FR-168) */}
@@ -526,7 +536,7 @@ export function FinancePage({
                       </TableCell>
                       <TableCell className="text-muted-foreground">{formatDateTime(row.paidAt, timezone)}</TableCell>
                       <TableCell className="max-w-48 truncate">{row.customerName}</TableCell>
-                      <TableCell>{PAYMENT_LABELS[row.paymentMethod] ?? row.paymentMethod}</TableCell>
+                      <TableCell>{paymentLabel(row.paymentMethod)}</TableCell>
                       <TableCell className="text-right font-medium">{formatCents(row.totalCents)}</TableCell>
                       <TableCell>
                         {row.invoice ? (

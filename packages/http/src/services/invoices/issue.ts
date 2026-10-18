@@ -70,7 +70,7 @@ interface OrderRow {
   cidade: string | null;
   uf: string | null;
   codigo_municipio: string | null;
-  payment_method: PaymentMethod;
+  payment_method: PaymentMethod | null;
   change_for_cents: number | null;
   delivery_fee_cents: number;
   total_cents: number;
@@ -114,6 +114,12 @@ async function applyFill(tx: Tx, restaurantId: string, orderId: string, order: O
     await tx`
       update public.customers set ${tx(customer, ...customerColumns)}
       where restaurant_id = ${restaurantId} and id = ${order.customer_id}
+    `;
+  }
+  if (fill.paymentMethod && order.payment_method === null) {
+    await tx`
+      update public.orders set payment_method = ${fill.paymentMethod}, change_for_cents = null
+      where restaurant_id = ${restaurantId} and id = ${orderId}
     `;
   }
   const orderColumns = Object.keys(address);
@@ -292,7 +298,8 @@ export const issueInvoice = defineService({
       code: order.code,
       status: order.status,
       fulfillment: order.fulfillment,
-      paymentMethod: order.payment_method,
+      // An order without a method is checked below; the placeholder never reaches web-nf.
+      paymentMethod: order.payment_method ?? "pix",
       changeForCents: order.change_for_cents,
       deliveryFeeCents: order.delivery_fee_cents,
       totalCents: order.total_cents,
@@ -332,6 +339,14 @@ export const issueInvoice = defineService({
       identifyBuyer: input.identifyBuyer,
       hasActiveInvoice: (active?.n ?? 0) > 0,
     });
+    // FR-125, FR-188: an order from the AI assistant may still be "A definir".
+    if (order.payment_method === null) {
+      const problems: InvoiceProblem[] = [
+        ...(built.ok ? [] : built.problems),
+        { path: "paymentMethod", code: "required", message: "Informe a forma de pagamento." },
+      ];
+      return { outcome: "blocked", problems, missingFields: missingFields(problems) };
+    }
     if (!built.ok)
       return { outcome: "blocked", problems: built.problems, missingFields: missingFields(built.problems) };
 

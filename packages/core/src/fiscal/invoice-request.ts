@@ -460,7 +460,9 @@ export function precheckInvoice(
 
 /** Paths of customer and address gaps, for the short "complete the data" form (FR-125, ADR-016). */
 export function missingFields(problems: readonly InvoiceProblem[]): string[] {
-  return problems.filter((p) => p.path.startsWith("customer.") || p.path.startsWith("address.")).map((p) => p.path);
+  return problems
+    .filter((p) => p.path.startsWith("customer.") || p.path.startsWith("address.") || p.path === "paymentMethod")
+    .map((p) => p.path);
 }
 
 function endereco(a: ResolvedAddress): InvoiceEndereco {

@@ -9,6 +9,11 @@ export const PAYMENT_LABELS: Record<string, string> = {
   cartao_debito: "Cartão Débito",
 };
 
+/** FR-188: an order with no method shows "A definir". */
+export function paymentLabel(method: string | null): string {
+  return method === null ? "A definir" : (PAYMENT_LABELS[method] ?? method);
+}
+
 export const STATUS_LABELS: Record<string, string> = {
   aguardando: "Aguardando",
   confirmado: "Confirmado",
@@ -118,6 +123,7 @@ export const MISSING_FIELD_LABELS: Record<string, string> = {
   "address.cidade": "Cidade",
   "address.uf": "UF",
   "address.codigo_municipio": "Código IBGE do município",
+  paymentMethod: "Forma de pagamento",
 };
 
 /** Problem path to the `fill` key of `issueInvoice`. */

@@ -8,7 +8,7 @@ export interface CustomerOrderSummary {
   readonly code: string;
   readonly status: string;
   readonly fulfillment: string;
-  readonly paymentMethod: string;
+  readonly paymentMethod: string | null;
   readonly totalCents: number;
   readonly createdAt: string;
   readonly items: readonly { readonly name: string; readonly qty: number }[];
@@ -19,7 +19,7 @@ interface OrderRow {
   code: string;
   status: string;
   fulfillment: string;
-  payment_method: string;
+  payment_method: string | null;
   total_cents: number;
   created_at: Date;
 }

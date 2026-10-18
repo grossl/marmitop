@@ -24,7 +24,7 @@ import {
   initials,
   ORDER_STATUS_LABELS,
   ORDER_STATUS_STYLES,
-  PAYMENT_LABELS,
+  paymentLabel,
 } from "@/components/messaging-format";
 
 // ─── Customer form (create and edit; FR-045, FR-046, ADR-016) ────────────────
@@ -245,7 +245,7 @@ function ContactSheet({
                     <span>{formatDate(order.createdAt)}</span>
                     <span className="font-semibold text-foreground">{formatBRL(order.totalCents)}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground">{PAYMENT_LABELS[order.paymentMethod] ?? order.paymentMethod}</div>
+                  <div className="text-xs text-muted-foreground">{paymentLabel(order.paymentMethod)}</div>
                 </div>
               ))}
             </div>

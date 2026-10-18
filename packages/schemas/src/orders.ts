@@ -14,6 +14,7 @@ import {
 } from "./common";
 
 export const PAYMENT_METHODS = ["pix", "dinheiro", "cartao_credito", "cartao_debito"] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export const FULFILLMENTS = ["delivery", "pickup"] as const;
 export const ORDER_SOURCES = ["counter", "phone", "whatsapp", "api"] as const;
 /** Sources a dashboard user can pick. `api` is set by the server for API-key calls. */
@@ -99,6 +100,12 @@ export const createOrderActionSchema = z
     }
   })
   .transform((v) => ({ ...v, changeForCents: changeFor(v, v.changeForCents) }));
+
+/** FR-188: staff set the payment method of an order that has none ("A definir"), or change it. */
+export const setOrderPaymentMethodSchema = z.object({
+  orderId: uuidSchema,
+  paymentMethod: z.enum(PAYMENT_METHODS),
+});
 
 const reasonSchema = z.string().trim().max(500);
 

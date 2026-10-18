@@ -7,6 +7,7 @@ export * from "./customer-lookup";
 export * from "./list-orders";
 export * from "./order-form";
 export * from "./order-settings";
+export * from "./payment";
 export type {
   AddressParts,
   BoardOrder,

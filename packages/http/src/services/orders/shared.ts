@@ -33,7 +33,7 @@ export interface BoardOrder {
   readonly customerName: string;
   readonly customerPhone: string;
   readonly addressLine: string;
-  readonly paymentMethod: PaymentMethodCode;
+  readonly paymentMethod: PaymentMethodCode | null;
   readonly changeForCents: number | null;
   readonly notes: string | null;
   readonly subtotalCents: number;
@@ -113,7 +113,7 @@ export interface OrderRowForView {
   readonly bairro: string | null;
   readonly cidade: string | null;
   readonly uf: string | null;
-  readonly payment_method: PaymentMethodCode;
+  readonly payment_method: PaymentMethodCode | null;
   readonly change_for_cents: number | null;
   readonly notes: string | null;
   readonly subtotal_cents: number;

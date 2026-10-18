@@ -313,6 +313,7 @@ describe("listPaidOrders / getFinanceTotals (FR-164..FR-166, FR-169)", () => {
       dinheiro: { count: 1, totalCents: 3780 },
       cartao_credito: { count: 1, totalCents: 3780 },
       cartao_debito: { count: 1, totalCents: 3780 },
+      a_definir: { count: 0, totalCents: 0 },
     });
     const none = await getFinanceTotals(deps, admin(p), { ...october, invoiceState: "issued" });
     expect(none.byMethod.pix).toEqual({ count: 0, totalCents: 0 });

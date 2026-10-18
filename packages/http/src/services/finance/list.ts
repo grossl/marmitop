@@ -6,14 +6,13 @@
 // `orders_restaurant_paid_idx` serves both reads. The invoice state comes from the newest
 // `order_invoices` row (FR-165).
 
+import type { InvoiceStatusValue } from "@mt/core";
 import { AppError, localDay } from "@mt/core";
 import type { Tx } from "@mt/db";
 import { DEFAULT_TIMEZONE, type FinanceInvoiceState, financeFilterSchema, listPaidOrdersSchema } from "@mt/schemas";
 import type { z } from "zod";
-
 import type { ServiceContext } from "../../context";
 import { defineService } from "../../service";
-import type { InvoiceStatusValue } from "@mt/core";
 import type { PaymentMethodCode } from "../orders/shared";
 
 export const FINANCE_PAGE_SIZE = 50;
@@ -26,7 +25,7 @@ export interface FinanceRow {
   readonly paidAt: string;
   readonly customerId: string;
   readonly customerName: string;
-  readonly paymentMethod: PaymentMethodCode;
+  readonly paymentMethod: PaymentMethodCode | null;
   readonly totalCents: number;
   readonly status: string;
   readonly fulfillment: "delivery" | "pickup";
@@ -51,7 +50,7 @@ export interface MethodTotal {
 export interface FinanceTotals {
   readonly count: number;
   readonly totalCents: number;
-  readonly byMethod: Readonly<Record<PaymentMethodCode, MethodTotal>>;
+  readonly byMethod: Readonly<Record<PaymentMethodCode | "a_definir", MethodTotal>>;
   readonly from: string;
   readonly to: string;
   readonly timezone: string;
@@ -150,7 +149,7 @@ interface ListRow {
   paid_at_text: string;
   customer_id: string;
   customer_name: string;
-  payment_method: PaymentMethodCode;
+  payment_method: PaymentMethodCode | null;
   total_cents: number;
   status: string;
   fulfillment: "delivery" | "pickup";
@@ -205,19 +204,18 @@ export const getFinanceTotals = defineService({
   input: financeFilterSchema,
   run: async ({ tx, ctx, deps, input }): Promise<FinanceTotals> => {
     const range = await resolveRange(tx, ctx, deps.clock.now(), input);
-    const rows = await tx<{ payment_method: PaymentMethodCode; n: number; total: number }[]>`
+    const rows = await tx<{ payment_method: PaymentMethodCode | null; n: number; total: number }[]>`
       select o.payment_method, count(*)::int as n, coalesce(sum(o.total_cents), 0)::bigint as total
       ${paidOrdersFrom(tx, ctx, range, input)}
       group by o.payment_method
     `;
-    const byMethod = Object.fromEntries(PAYMENT_METHOD_CODES.map((m) => [m, { count: 0, totalCents: 0 }])) as Record<
-      PaymentMethodCode,
-      MethodTotal
-    >;
+    const byMethod = Object.fromEntries(
+      [...PAYMENT_METHOD_CODES, "a_definir"].map((m) => [m, { count: 0, totalCents: 0 }]),
+    ) as Record<PaymentMethodCode | "a_definir", MethodTotal>;
     let count = 0;
     let totalCents = 0;
     for (const r of rows) {
-      byMethod[r.payment_method] = { count: r.n, totalCents: Number(r.total) };
+      byMethod[r.payment_method ?? "a_definir"] = { count: r.n, totalCents: Number(r.total) };
       count += r.n;
       totalCents += Number(r.total);
     }
