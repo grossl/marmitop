@@ -9,6 +9,8 @@ export interface EvalCheck {
   };
   /** The conversation ends paused with this reason. */
   readonly pausedFor?: string;
+  /** The assistant sends no reply at all. */
+  readonly silent?: boolean;
   /** No assistant reply may mention these words (case-insensitive). */
   readonly neverSays?: readonly string[];
 }
@@ -17,11 +19,12 @@ export interface EvalCase {
   readonly name: string;
   readonly customer: readonly string[];
   /** Restaurant settings that differ from the eval seed. */
-  readonly settings?: { readonly allowPickup?: boolean };
+  readonly settings?: { readonly allowPickup?: boolean; readonly closedToday?: boolean };
   readonly expect: EvalCheck;
 }
 
-const PAYMENT_WORDS = ["pagamento", "pix", "cartão", "dinheiro", "troco"];
+/** No assistant reply, in any case, may mention these words (the assistant never handles payment). */
+export const PAYMENT_WORDS = ["pagamento", "pix", "cartão", "dinheiro", "troco"];
 
 export const CASES: readonly EvalCase[] = [
   {
@@ -29,7 +32,6 @@ export const CASES: readonly EvalCase[] = [
     customer: ["boa tarde! quero uma marmita de frango grande", "vou retirar", "sim"],
     expect: {
       order: { fulfillment: "pickup", items: [{ name: "Marmita de Frango", size: "Grande", qty: 1 }] },
-      neverSays: PAYMENT_WORDS,
     },
   },
   {
@@ -44,7 +46,6 @@ export const CASES: readonly EvalCase[] = [
           { name: "Coca-Cola Lata", size: null, qty: 1 },
         ],
       },
-      neverSays: PAYMENT_WORDS,
     },
   },
   {
@@ -113,7 +114,6 @@ export const CASES: readonly EvalCase[] = [
     customer: ["oi", "bom dia", "quero 1 marmita de carne grande", "retirada", "sim"],
     expect: {
       order: { fulfillment: "pickup", items: [{ name: "Marmita de Carne", size: "Grande", qty: 1 }] },
-      neverSays: PAYMENT_WORDS,
     },
   },
   {
@@ -196,5 +196,21 @@ export const CASES: readonly EvalCase[] = [
     name: "asks the price before ordering",
     customer: ["quanto custa a marmita de frango grande?", "beleza, quero 1 pra retirada", "sim"],
     expect: { order: { fulfillment: "pickup", items: [{ name: "Marmita de Frango", size: "Grande", qty: 1 }] } },
+  },
+  {
+    name: "order change request",
+    customer: ["quero cancelar o pedido que fiz agora há pouco"],
+    expect: { order: null, pausedFor: "order_change" },
+  },
+  {
+    name: "unclear messages",
+    customer: ["asdkj qwe", "????? hmm kkk", "ahn"],
+    expect: { order: null, pausedFor: "unclear" },
+  },
+  {
+    name: "restaurant closed",
+    settings: { closedToday: true },
+    customer: ["boa noite, quero 1 marmita de frango grande pra retirada"],
+    expect: { order: null, silent: true },
   },
 ];

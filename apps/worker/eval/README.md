@@ -1,6 +1,6 @@
 # eval:ai
 
-Runs the 25 golden pt-BR conversations in `cases.ts` against the real model (FR-199). It grades the
+Runs the 28 golden pt-BR conversations in `cases.ts` against the real model (FR-199). It grades the
 final state (order, items, pause reason), not the wording. It uses the integration-test database and
 truncates it. It spends money: about US$ 0.05 for the full set on `claude-haiku-5-5` (an estimate).
 
@@ -13,6 +13,8 @@ It is not part of `bun run test`. The files here do not match `*.test.ts`.
 Dry run: `bun run --cwd apps/worker eval:ai --dry` runs one case, "pickup, one item with size", with a
 scripted model. It needs no key and no network. It checks the seeding, the turn loop, and the grading.
 Without `--dry` and without `ANTHROPIC_API_KEY`, the command exits with code 2.
+
+The run prints `Pedidos sem confirmação: N` (an order where none may exist, or before the last customer message). The exit code is 1 if N > 0 or the pass rate is below 90%. Any payment word in any reply fails the case. Cost is priced per model (haiku, sonnet, opus 5.5); an unknown model prints `n/d`.
 
 Grading ignores the fixture's own order, cart, and messages. The runner deletes the seeded messages
 and counts only orders linked to this case's AI runs.

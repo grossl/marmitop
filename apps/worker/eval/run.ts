@@ -10,10 +10,16 @@ import { createTestServiceDeps } from "@mt/http/testing";
 
 import { AnthropicAssistantModel } from "../src/ai/anthropic-model";
 import { readAiConfig } from "../src/ai/config";
-import { CASES, type EvalCase } from "./cases";
+import { CASES, type EvalCase, PAYMENT_WORDS } from "./cases";
 
-// USD per million tokens, claude-haiku-5-5. An estimate: cache writes are not priced.
-const PRICE = { input: 0.1, output: 0.5, cacheRead: 0.01 };
+// USD per million tokens. An estimate: cache writes are not priced. Unknown models print "n/d".
+const PRICES: Record<string, { input: number; output: number; cacheRead: number }> = {
+  "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheRead: 0.01 },
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.2 },
+  "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2 },
+};
+
+const DRY_CASE = "pickup, one item with size";
 
 interface MenuIds {
   readonly items: Record<string, { id: string; sizes: Record<string, string> }>;
@@ -48,11 +54,12 @@ async function seedEvalMenu(db: Db, restaurantId: string, c: EvalCase): Promise<
     values (${restaurantId}, 'drink', 'Coca-Cola Lata', 'refrigerantes', 600, '350ml') returning id`;
   ids.items["Coca-Cola Lata"] = { id: drink!.id, sizes: {} };
 
-  // The fixture opens Monday only. Open all seven days.
+  // The fixture opens Monday only. Open all seven days, or close all of them for a closed-restaurant case.
+  const open = !(c.settings?.closedToday ?? false);
   for (let weekday = 0; weekday <= 6; weekday++) {
     await db`insert into public.business_hours (restaurant_id, weekday, enabled, opens_at, closes_at)
-             values (${restaurantId}, ${weekday}, true, '00:00', '23:59')
-             on conflict (restaurant_id, weekday) do update set enabled = true, opens_at = '00:00', closes_at = '23:59'`;
+             values (${restaurantId}, ${weekday}, ${open}, '00:00', '23:59')
+             on conflict (restaurant_id, weekday) do update set enabled = ${open}, opens_at = '00:00', closes_at = '23:59'`;
   }
   const allowPickup = c.settings?.allowPickup ?? true;
   await db`update public.restaurant_settings set allow_pickup = ${allowPickup}, delivery_fee_cents = 500 where restaurant_id = ${restaurantId}`;
@@ -64,7 +71,7 @@ async function seedEvalMenu(db: Db, restaurantId: string, c: EvalCase): Promise<
 
 /** Scripts for --dry: one model step list per customer turn, built from the seeded menu ids. */
 function dryScript(c: EvalCase, menu: MenuIds): ScriptedStep[] {
-  if (c.name !== "pickup, one item with size") throw new Error(`--dry has no script for "${c.name}"`);
+  if (c.name !== DRY_CASE) throw new Error(`--dry has no script for "${c.name}"`);
   const frango = menu.items["Marmita de Frango"]!;
   const item = { menu_item_id: frango.id, size_id: frango.sizes.Grande, quantity: 1, notes: null };
   return [
@@ -84,7 +91,23 @@ function dryScript(c: EvalCase, menu: MenuIds): ScriptedStep[] {
   ];
 }
 
-async function runCase(db: Db, deps: ServiceDeps, c: EvalCase, makeModel: (menu: MenuIds) => AssistantModel) {
+type OrderRow = { id: string; fulfillment: string; bairro: string | null };
+
+/** Orders the assistant created in this case: never the fixture's own order. */
+function caseOrders(db: Db, r: RestaurantFixture): Promise<OrderRow[]> {
+  return db<OrderRow[]>`
+    select id, fulfillment, bairro from public.orders
+    where restaurant_id = ${r.restaurantId} and id <> ${r.orderId} and source = 'whatsapp'
+      and ai_run_id in (select id from public.ai_runs where restaurant_id = ${r.restaurantId} and id <> ${r.aiRunId})`;
+}
+
+async function runCase(
+  db: Db,
+  deps: ServiceDeps,
+  c: EvalCase,
+  makeModel: (menu: MenuIds) => AssistantModel,
+  modelName: string,
+) {
   await truncateAll(db);
   const r: RestaurantFixture = await seedRestaurant(db, `eval-${crypto.randomUUID().slice(0, 8)}`);
   const menu = await seedEvalMenu(db, r.restaurantId, c);
@@ -95,7 +118,8 @@ async function runCase(db: Db, deps: ServiceDeps, c: EvalCase, makeModel: (menu:
   const model = makeModel(menu);
 
   let replies: string[] = [];
-  for (const text of c.customer) {
+  let early = false;
+  for (const [turn, text] of c.customer.entries()) {
     const [m] = await db<{ id: string }[]>`
       insert into public.messages (restaurant_id, conversation_id, direction, body, status)
       values (${r.restaurantId}, ${r.conversationId}, 'in', ${text}, 'delivered') returning id`;
@@ -120,15 +144,16 @@ async function runCase(db: Db, deps: ServiceDeps, c: EvalCase, makeModel: (menu:
     const [conv] = await db<
       { ai_mode: string }[]
     >`select ai_mode from public.conversations where id = ${r.conversationId}`;
+    if (turn < c.customer.length - 1 && (await caseOrders(db, r)).length > 0) {
+      early = true;
+      break;
+    }
     if (conv?.ai_mode === "paused") break;
   }
 
   const failures: string[] = [];
-  // Grade only orders the assistant created in this case: never the fixture's own order.
-  const orders = await db<{ id: string; fulfillment: string; bairro: string | null }[]>`
-    select id, fulfillment, bairro from public.orders
-    where restaurant_id = ${r.restaurantId} and id <> ${r.orderId} and source = 'whatsapp'
-      and ai_run_id in (select id from public.ai_runs where restaurant_id = ${r.restaurantId} and id <> ${r.aiRunId})`;
+  if (early) failures.push("order before confirmation");
+  const orders = await caseOrders(db, r);
   if (c.expect.order === null) {
     if (orders.length > 0) failures.push("an order was created");
   } else if (orders.length !== 1) {
@@ -156,16 +181,22 @@ async function runCase(db: Db, deps: ServiceDeps, c: EvalCase, makeModel: (menu:
     if (conv?.ai_mode !== "paused" || conv.ai_pause_reason !== c.expect.pausedFor)
       failures.push(`${conv?.ai_mode} for ${conv?.ai_pause_reason}`);
   }
-  for (const word of c.expect.neverSays ?? []) {
+  if (c.expect.silent && replies.length > 0) failures.push("the assistant replied");
+  for (const word of [...PAYMENT_WORDS, ...(c.expect.neverSays ?? [])]) {
     if (replies.some((t) => t.toLowerCase().includes(word.toLowerCase()))) failures.push(`said "${word}"`);
   }
   const [usage] = await db<{ i: number; o: number; cr: number }[]>`
     select coalesce(sum(input_tokens),0)::int as i, coalesce(sum(output_tokens),0)::int as o,
            coalesce(sum(cache_read_tokens),0)::int as cr
     from public.ai_runs where restaurant_id = ${r.restaurantId} and id <> ${r.aiRunId}`;
+  const price = PRICES[modelName];
   const cost =
-    ((usage?.i ?? 0) * PRICE.input + (usage?.o ?? 0) * PRICE.output + (usage?.cr ?? 0) * PRICE.cacheRead) / 1e6;
-  return { failures, cost };
+    price === undefined
+      ? null
+      : ((usage?.i ?? 0) * price.input + (usage?.o ?? 0) * price.output + (usage?.cr ?? 0) * price.cacheRead) / 1e6;
+  // An order that should not exist, or that exists before the final message, is an unconfirmed order.
+  const unconfirmed = early || (c.expect.order === null && orders.length > 0);
+  return { failures, cost, unconfirmed };
 }
 
 const dry = process.argv.includes("--dry");
@@ -175,29 +206,53 @@ if (!dry && ai.apiKey === null) {
   process.exit(2);
 }
 const caseIdx = process.argv.indexOf("--case");
-const only = caseIdx >= 0 ? process.argv[caseIdx + 1] : dry ? "pickup, one item with size" : undefined;
+const caseArg = caseIdx >= 0 ? process.argv[caseIdx + 1] : undefined;
+if (caseIdx >= 0 && (caseArg === undefined || caseArg.startsWith("--"))) {
+  console.error('eval:ai: --case needs a case name, for example --case "audio"');
+  process.exit(2);
+}
+const only = caseArg ?? (dry ? DRY_CASE : undefined);
 const selected = CASES.filter((x) => only === undefined || x.name === only);
 if (selected.length === 0) {
   console.error(`eval:ai: no case named "${only}"`);
   process.exit(2);
 }
-
-const db = await createTestDb();
-const deps = createTestServiceDeps(db, { clock: { now: () => new Date() } });
-const real = !dry && ai.apiKey !== null ? AnthropicAssistantModel.fromConfig({ ...ai, apiKey: ai.apiKey }) : null;
-let passed = 0;
-let cost = 0;
-for (const c of selected) {
-  const r = await runCase(db, deps, c, (menu) => real ?? new ScriptedAssistantModel(dryScript(c, menu)));
-  cost += r.cost;
-  if (r.failures.length === 0) passed += 1;
-  console.log(
-    `${r.failures.length === 0 ? "PASS" : "FAIL"}  ${c.name}${r.failures.length ? `  — ${r.failures.join("; ")}` : ""}`,
-  );
+if (dry && selected.some((c) => c.name !== DRY_CASE)) {
+  console.error(`eval:ai --dry has a script only for "${DRY_CASE}"`);
+  process.exit(2);
 }
-const total = selected.length;
-console.log(
-  `\n${passed}/${total} passed (${Math.round((passed / total) * 100)}%) · model ${dry ? "scripted (dry)" : ai.model} · est. cost US$ ${cost.toFixed(4)}`,
-);
-await db.end();
-process.exit(passed / total >= 0.9 ? 0 : 1);
+
+const modelName = dry ? "scripted" : ai.model;
+const db = await createTestDb();
+let passed = 0;
+let unconfirmed = 0;
+let cost: number | null = 0;
+try {
+  const deps = createTestServiceDeps(db, { clock: { now: () => new Date() } });
+  const real = !dry && ai.apiKey !== null ? AnthropicAssistantModel.fromConfig({ ...ai, apiKey: ai.apiKey }) : null;
+  for (const c of selected) {
+    try {
+      const r = await runCase(db, deps, c, (menu) => real ?? new ScriptedAssistantModel(dryScript(c, menu)), modelName);
+      cost = cost === null || r.cost === null ? null : cost + r.cost;
+      if (r.unconfirmed) unconfirmed += 1;
+      if (r.failures.length === 0) passed += 1;
+      console.log(
+        `${r.failures.length === 0 ? "PASS" : "FAIL"}  ${c.name}${r.failures.length ? `  — ${r.failures.join("; ")}` : ""}`,
+      );
+    } catch (error: unknown) {
+      // Name and code only: an error message could carry request data.
+      const e = error as { name?: unknown; code?: unknown };
+      const code = typeof e.code === "string" ? ` ${e.code}` : "";
+      console.log(`FAIL  ${c.name}  — error ${String(e.name ?? "Error")}${code}`);
+    }
+  }
+} finally {
+  const total = selected.length;
+  console.log(
+    `\n${passed}/${total} passed (${Math.round((passed / Math.max(total, 1)) * 100)}%) · model ${dry ? "scripted (dry)" : ai.model} · est. cost US$ ${cost === null ? "n/d" : cost.toFixed(4)}`,
+  );
+  console.log(`Pedidos sem confirmação: ${unconfirmed}`);
+  await db.end();
+  process.exitCode = passed / Math.max(selected.length, 1) >= 0.9 && unconfirmed === 0 ? 0 : 1;
+}
+process.exit(process.exitCode);
