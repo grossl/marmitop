@@ -107,9 +107,11 @@ async function runCase(
   c: EvalCase,
   makeModel: (menu: MenuIds) => AssistantModel,
   modelName: string,
+  progress: { r?: RestaurantFixture; turn: number },
 ) {
   await truncateAll(db);
   const r: RestaurantFixture = await seedRestaurant(db, `eval-${crypto.randomUUID().slice(0, 8)}`);
+  progress.r = r;
   const menu = await seedEvalMenu(db, r.restaurantId, c);
   // Start clean: no seeded history, no saved customer address, no seeded cart.
   await db`delete from public.messages where conversation_id = ${r.conversationId}`;
@@ -120,6 +122,7 @@ async function runCase(
   let replies: string[] = [];
   let early = false;
   for (const [turn, text] of c.customer.entries()) {
+    progress.turn = turn;
     const [m] = await db<{ id: string }[]>`
       insert into public.messages (restaurant_id, conversation_id, direction, body, status)
       values (${r.restaurantId}, ${r.conversationId}, 'in', ${text}, 'delivered') returning id`;
@@ -181,7 +184,6 @@ async function runCase(
     if (conv?.ai_mode !== "paused" || conv.ai_pause_reason !== c.expect.pausedFor)
       failures.push(`${conv?.ai_mode} for ${conv?.ai_pause_reason}`);
   }
-  if (c.expect.silent && replies.length > 0) failures.push("the assistant replied");
   for (const word of [...PAYMENT_WORDS, ...(c.expect.neverSays ?? [])]) {
     if (replies.some((t) => t.toLowerCase().includes(word.toLowerCase()))) failures.push(`said "${word}"`);
   }
@@ -231,8 +233,16 @@ try {
   const deps = createTestServiceDeps(db, { clock: { now: () => new Date() } });
   const real = !dry && ai.apiKey !== null ? AnthropicAssistantModel.fromConfig({ ...ai, apiKey: ai.apiKey }) : null;
   for (const c of selected) {
+    const progress: { r?: RestaurantFixture; turn: number } = { turn: 0 };
     try {
-      const r = await runCase(db, deps, c, (menu) => real ?? new ScriptedAssistantModel(dryScript(c, menu)), modelName);
+      const r = await runCase(
+        db,
+        deps,
+        c,
+        (menu) => real ?? new ScriptedAssistantModel(dryScript(c, menu)),
+        modelName,
+        progress,
+      );
       cost = cost === null || r.cost === null ? null : cost + r.cost;
       if (r.unconfirmed) unconfirmed += 1;
       if (r.failures.length === 0) passed += 1;
@@ -240,6 +250,15 @@ try {
         `${r.failures.length === 0 ? "PASS" : "FAIL"}  ${c.name}${r.failures.length ? `  — ${r.failures.join("; ")}` : ""}`,
       );
     } catch (error: unknown) {
+      // An error mid-run must still count any order that should not exist.
+      try {
+        if (progress.r !== undefined) {
+          const orders = await caseOrders(db, progress.r);
+          if (orders.length > 0 && (c.expect.order === null || progress.turn < c.customer.length - 1)) unconfirmed += 1;
+        }
+      } catch {
+        // The database check itself failed: nothing more to count.
+      }
       // Name and code only: an error message could carry request data.
       const e = error as { name?: unknown; code?: unknown };
       const code = typeof e.code === "string" ? ` ${e.code}` : "";

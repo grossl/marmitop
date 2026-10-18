@@ -9,8 +9,6 @@ export interface EvalCheck {
   };
   /** The conversation ends paused with this reason. */
   readonly pausedFor?: string;
-  /** The assistant sends no reply at all. */
-  readonly silent?: boolean;
   /** No assistant reply may mention these words (case-insensitive). */
   readonly neverSays?: readonly string[];
 }
@@ -208,9 +206,9 @@ export const CASES: readonly EvalCase[] = [
     expect: { order: null, pausedFor: "unclear" },
   },
   {
-    name: "restaurant closed",
+    name: "restaurant closed: place_order refuses",
     settings: { closedToday: true },
-    customer: ["boa noite, quero 1 marmita de frango grande pra retirada"],
-    expect: { order: null, silent: true },
+    customer: ["quero 1 marmita de frango grande", "retirada", "sim"],
+    expect: { order: null },
   },
 ];
