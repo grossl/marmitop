@@ -26,14 +26,29 @@ export function AiAssistantCard({ ai }: { ai: AiSettings & { quota: AiQuota } })
     allowOverage: ai.allowOverage,
     monthlyHardCap: ai.monthlyHardCap,
   });
+  const [raw, setRaw] = useState({
+    autoResumeMinutes: String(ai.autoResumeMinutes),
+    monthlyHardCap: String(ai.monthlyHardCap),
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pending, start] = useTransition();
   const set = <K extends keyof AiSettingsForm>(k: K, v: AiSettingsForm[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   const save = (e: React.FormEvent) => {
     e.preventDefault();
+    const numbers: Record<string, number> = {};
+    const invalid: Record<string, string> = {};
+    for (const [key, text] of Object.entries(raw)) {
+      const value = Number(text);
+      if (text.trim() === "" || !Number.isInteger(value)) invalid[key] = "Informe um número inteiro.";
+      else numbers[key] = value;
+    }
+    if (Object.keys(invalid).length > 0) {
+      setErrors(invalid);
+      return;
+    }
     start(async () => {
-      const r = await saveAiSettingsAction(form);
+      const r = await saveAiSettingsAction({ ...form, ...numbers });
       if (r.ok) {
         setErrors({});
         toast.success("Atendente IA salvo.");
@@ -101,8 +116,8 @@ export function AiAssistantCard({ ai }: { ai: AiSettings & { quota: AiQuota } })
           type="number"
           min={0}
           max={10080}
-          value={form.autoResumeMinutes}
-          onChange={(e) => set("autoResumeMinutes", Number(e.target.value))}
+          value={raw.autoResumeMinutes}
+          onChange={(e) => setRaw((r) => ({ ...r, autoResumeMinutes: e.target.value }))}
         />
         {fieldError("autoResumeMinutes")}
       </div>
@@ -134,8 +149,8 @@ export function AiAssistantCard({ ai }: { ai: AiSettings & { quota: AiQuota } })
             type="number"
             min={1}
             max={1000000}
-            value={form.monthlyHardCap}
-            onChange={(e) => set("monthlyHardCap", Number(e.target.value))}
+            value={raw.monthlyHardCap}
+            onChange={(e) => setRaw((r) => ({ ...r, monthlyHardCap: e.target.value }))}
           />
           {fieldError("monthlyHardCap")}
         </div>
