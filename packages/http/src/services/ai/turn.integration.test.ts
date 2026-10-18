@@ -177,8 +177,63 @@ describe("runAiTurn", () => {
       },
     };
     const controller = new AbortController();
-    expect(await runAiTurn(deps, model, job(m), controller.signal)).toMatchObject({ status: "replied" });
+    expect(await runAiTurn(deps, model, job(m), { budget: controller.signal })).toMatchObject({ status: "replied" });
     expect(signals).toEqual([controller.signal]);
+  });
+
+  // The adapter maps any abort to a non-retryable `deadline` error (anthropic-model.ts).
+  const abortingModel = (abort: () => void) => ({
+    modelName: "scripted",
+    respond: async () => {
+      abort();
+      throw new AssistantModelError("aborted", false, "deadline");
+    },
+  });
+  const convState = async () =>
+    (
+      await db<{ ai_mode: string; ai_pause_reason: string | null; ai_turn_claimed_at: Date | null }[]>`
+      select ai_mode, ai_pause_reason, ai_turn_claimed_at from public.conversations where id = ${a.conversationId}`
+    )[0];
+
+  test("a worker shutdown during the model call retries: no pause, claim cleared", async () => {
+    const m = await inbound("oi, desligando");
+    const budget = new AbortController();
+    const shutdown = new AbortController();
+    const out = await runAiTurn(
+      deps,
+      abortingModel(() => shutdown.abort()),
+      job(m),
+      {
+        budget: budget.signal,
+        shutdown: shutdown.signal,
+      },
+    );
+    expect(out).toMatchObject({ kind: "retry", errorCode: "shutdown" });
+    expect(await convState()).toEqual({ ai_mode: "auto", ai_pause_reason: null, ai_turn_claimed_at: null });
+    const [r] = await db<{ status: string; error_code: string | null }[]>`
+      select status, error_code from public.ai_runs where id = ${out.runId}`;
+    expect(r).toEqual({ status: "failed", error_code: "shutdown" });
+  });
+
+  test("a budget abort fails the turn with deadline and pauses with model", async () => {
+    const m = await inbound("oi, sem tempo");
+    const budget = new AbortController();
+    const shutdown = new AbortController();
+    const out = await runAiTurn(
+      deps,
+      abortingModel(() => budget.abort()),
+      job(m),
+      {
+        budget: budget.signal,
+        shutdown: shutdown.signal,
+      },
+    );
+    expect(out).toMatchObject({ kind: "done", status: "failed" });
+    expect(await convState()).toEqual({ ai_mode: "paused", ai_pause_reason: "model", ai_turn_claimed_at: null });
+    const [r] = await db<
+      { error_code: string | null }[]
+    >`select error_code from public.ai_runs where id = ${out.runId}`;
+    expect(r?.error_code).toBe("deadline");
   });
 
   test("a customer message that arrives during a running turn gets its own turn (not answered)", async () => {

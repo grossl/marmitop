@@ -28,7 +28,8 @@ function stopReasonOf(r: string | null): AssistantStopReason {
 
 function mapError(error: unknown): AssistantModelError {
   if (error instanceof AssistantModelError) return error;
-  // The turn budget (AI_TURN_BUDGET_MS) or worker shutdown aborted the call. Not retried: the turn is out of time.
+  // The turn budget (AI_TURN_BUDGET_MS) or a worker shutdown aborted the call. runAiTurn checks which
+  // signal fired: a shutdown retries, a budget abort stays `deadline` and is not retried.
   if (error instanceof Anthropic.APIUserAbortError) return new AssistantModelError("aborted", false, "deadline");
   if (error instanceof Anthropic.RateLimitError) return new AssistantModelError("rate limited", true, "rate_limited");
   if (error instanceof Anthropic.APIConnectionTimeoutError) return new AssistantModelError("timeout", true, "timeout");

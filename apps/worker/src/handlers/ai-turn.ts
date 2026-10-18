@@ -1,10 +1,11 @@
 // mt_ai_turns: one assistant turn per inbound burst (12.ai-order-assistant.md "Flow", ADR-025).
-// A failed turn has already recorded its ai_runs row; the framework only retries transient model errors,
-// 20 seconds later, and runAiTurn turns a job older than 120 seconds into `stale`.
+// A failed turn has already recorded its ai_runs row. The framework retries a transient model error
+// 20 seconds later and a shutdown 5 seconds later. A retry keeps the payload, so `enqueuedAt` stays,
+// and runAiTurn turns a job older than 120 seconds into `stale`.
 
 import { AI_TURN_BUDGET_MS, type AssistantModel } from "@mt/core";
 import { QUEUES } from "@mt/db";
-import { type AiTurnOutcome, runAiTurn, type ServiceDeps } from "@mt/http";
+import { type AiTurnOutcome, type AiTurnSignals, runAiTurn, type ServiceDeps } from "@mt/http";
 import { type AiTurnJob, aiTurnJobSchema } from "@mt/schemas";
 
 import type { JobHandler } from "../framework/types";
@@ -17,9 +18,13 @@ export interface AiTurnHandlerDeps {
     deps: ServiceDeps,
     model: AssistantModel,
     job: AiTurnJob,
-    signal?: AbortSignal,
+    signals?: AiTurnSignals,
   ) => Promise<AiTurnOutcome>;
 }
+
+/** Fixed retry delays (12 "Errors and limits"), not the ADR-007 backoff. */
+const MODEL_RETRY_MS = 20_000;
+const SHUTDOWN_RETRY_MS = 5_000;
 
 export function createAiTurnHandler(deps: AiTurnHandlerDeps): JobHandler<AiTurnJob> {
   const runTurn = deps.runTurn ?? runAiTurn;
@@ -32,9 +37,15 @@ export function createAiTurnHandler(deps: AiTurnHandlerDeps): JobHandler<AiTurnJ
     visibilityTimeoutSeconds: 180,
     async run({ payload, signal }) {
       // The turn ends before its claim goes stale (AI_TURN_BUDGET_MS < AI_TURN_STALE_MS) or on shutdown.
-      const turnSignal = AbortSignal.any([signal, AbortSignal.timeout(AI_TURN_BUDGET_MS)]);
-      const outcome = await runTurn(deps.serviceDeps, deps.model, payload, turnSignal);
-      if (outcome.kind === "retry") return { kind: "retry", errorCode: outcome.errorCode, retryAfterMs: 20_000 };
+      // The two signals stay separate so runAiTurn can retry a shutdown and fail a budget abort.
+      const budget = AbortSignal.timeout(AI_TURN_BUDGET_MS);
+      const outcome = await runTurn(deps.serviceDeps, deps.model, payload, { budget, shutdown: signal });
+      if (outcome.kind === "retry")
+        return {
+          kind: "retry",
+          errorCode: outcome.errorCode,
+          retryAfterMs: outcome.errorCode === "shutdown" ? SHUTDOWN_RETRY_MS : MODEL_RETRY_MS,
+        };
       return { kind: "ok" };
     },
   };

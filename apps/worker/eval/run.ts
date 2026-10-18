@@ -137,7 +137,7 @@ async function runCase(
         triggerMessageId: m!.id,
         enqueuedAt: new Date().toISOString(),
       },
-      AbortSignal.timeout(AI_TURN_BUDGET_MS),
+      { budget: AbortSignal.timeout(AI_TURN_BUDGET_MS) },
     );
     const out = await db<{ body: string }[]>`
       select body from public.messages

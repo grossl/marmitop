@@ -6,4 +6,4 @@ export * from "./quota";
 export * from "./settings";
 export { type AiToolResult, type AiToolScope, runAiTool } from "./tools";
 export { enqueueAiTurn } from "./trigger";
-export { type AiTurnOutcome, runAiTurn } from "./turn";
+export { type AiTurnOutcome, type AiTurnSignals, runAiTurn } from "./turn";

@@ -47,21 +47,35 @@ describe("ai turn handler", () => {
     });
     expect(await retry.run(ctx)).toEqual({ kind: "retry", errorCode: "overloaded", retryAfterMs: 20_000 });
   });
-  test("passes a signal that follows the job signal and carries the turn budget", async () => {
+  test("passes the job signal as shutdown and a separate turn budget", async () => {
     const controller = new AbortController();
-    let seen: AbortSignal | undefined;
+    let seen: { budget?: AbortSignal; shutdown?: AbortSignal } | undefined;
     const h = createAiTurnHandler({
       serviceDeps: {} as ServiceDeps,
       model: new ScriptedAssistantModel([]),
-      runTurn: async (_deps, _model, _job, signal) => {
-        seen = signal;
+      runTurn: async (_deps, _model, _job, signals) => {
+        seen = signals;
         return { kind: "done", status: "replied", runId: "r" };
       },
     });
     await h.run({ queue: "mt_ai_turns", msgId: 1, payload, attempt: 1, readCount: 1, signal: controller.signal });
-    expect(seen).toBeInstanceOf(AbortSignal);
-    expect(seen?.aborted).toBe(false);
+    expect(seen?.shutdown).toBe(controller.signal);
+    expect(seen?.budget).toBeInstanceOf(AbortSignal);
     controller.abort();
-    expect(seen?.aborted).toBe(true);
+    // A shutdown does not abort the budget: runAiTurn tells the two apart (I2).
+    expect(seen?.budget?.aborted).toBe(false);
+  });
+  test("a shutdown retry comes back after 5 seconds", async () => {
+    const h = createAiTurnHandler({
+      serviceDeps: {} as ServiceDeps,
+      model: new ScriptedAssistantModel([]),
+      runTurn: async () => ({ kind: "retry", errorCode: "shutdown", runId: "r" }),
+    });
+    const ctx = { queue: "mt_ai_turns" as const, msgId: 1, payload, attempt: 1, readCount: 1 };
+    expect(await h.run({ ...ctx, signal: new AbortController().signal })).toEqual({
+      kind: "retry",
+      errorCode: "shutdown",
+      retryAfterMs: 5_000,
+    });
   });
 });

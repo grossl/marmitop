@@ -281,13 +281,29 @@ async function finish(
   });
 }
 
-/** `signal` carries the turn budget (AI_TURN_BUDGET_MS) and the worker's shutdown; every model call gets it. */
+/**
+ * The two reasons a model call can be aborted (12 "Turn budget and shutdown").
+ * `budget` fires after AI_TURN_BUDGET_MS: the turn is out of time, so it fails with `deadline`
+ * and pauses with `model`. `shutdown` fires when the worker stops: the turn retries and does not pause.
+ */
+export interface AiTurnSignals {
+  readonly budget?: AbortSignal;
+  readonly shutdown?: AbortSignal;
+}
+
+function combined(signals: AiTurnSignals): AbortSignal | undefined {
+  const list = [signals.budget, signals.shutdown].filter((s): s is AbortSignal => s !== undefined);
+  return list.length <= 1 ? list[0] : AbortSignal.any(list);
+}
+
+/** Every model call gets one signal that fires on the budget or on shutdown. */
 export async function runAiTurn(
   deps: ServiceDeps,
   model: AssistantModel,
   job: AiTurnJob,
-  signal?: AbortSignal,
+  signals: AiTurnSignals = {},
 ): Promise<AiTurnOutcome> {
+  const signal = combined(signals);
   const started = await start(deps, job);
   if ("kind" in started) return started;
   const { runId, scope, request } = started;
@@ -347,8 +363,10 @@ export async function runAiTurn(
     });
     return { kind: "done", status, runId };
   } catch (error) {
-    const code = error instanceof AssistantModelError ? error.code : "internal_error";
-    const retryable = error instanceof AssistantModelError && error.retryable;
+    // A worker shutdown is not the turn's fault: retry it, with no pause. The budget wins when both fired.
+    const shutdown = signals.shutdown?.aborted === true && signals.budget?.aborted !== true;
+    const code = shutdown ? "shutdown" : error instanceof AssistantModelError ? error.code : "internal_error";
+    const retryable = shutdown || (error instanceof AssistantModelError && error.retryable);
     await finish(deps, job, runId, tally, {
       status: "failed",
       reply: null,
