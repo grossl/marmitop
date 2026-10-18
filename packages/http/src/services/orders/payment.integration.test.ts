@@ -88,7 +88,9 @@ describe("null payment method", () => {
     const rows = await db<{ actor_id: string; entity_type: string; context: Record<string, unknown> }[]>`
       select actor_id, entity_type, context from public.audit_logs
       where restaurant_id = ${a.restaurantId} and action = 'order.payment_method_set' and entity_id = ${id}`;
-    expect(rows).toEqual([{ actor_id: a.attendantId, entity_type: "order", context: { from: null, to: "dinheiro" } }]);
+    expect(rows.map((r) => ({ ...r }))).toEqual([
+      { actor_id: a.attendantId, entity_type: "order", context: { from: null, to: "dinheiro" } },
+    ]);
   });
 });
 
