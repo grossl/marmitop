@@ -1,6 +1,6 @@
 # ADR-025 — AI order assistant on WhatsApp
 
-**Status:** accepted · 2026-10-17 · revised 2026-10-17 (owner review: narrow scope, cheapest model, usage limit with pay-by-usage)
+**Status:** accepted · 2026-10-17 · revised 2026-10-17 (owner review: narrow scope, cheapest model, usage limit with pay-by-usage) · revised 2026-10-18 (final review rulings, Decision 5)
 
 ## Question
 
@@ -58,7 +58,7 @@ Haiku 5.5 has no server-side refusal fallback. A `refusal` stop pauses the conve
 
 ## Decision 4 — Usage limit and pay by usage
 
-* The meter is the **AI reply**: one turn that called the model. Each one writes a `usage_events` row with kind `ai.reply`. A turn that a guard stops before the model call does not count.
+* The meter is the **AI reply**: one customer message that got a turn with a model call. The turn writes a `usage_events` row with kind `ai.reply` and `ref_id` = the trigger message id, before its first model call. The `(kind, ref_id)` unique key makes a retry or a duplicate job of the same message count once. A turn that a guard stops before the model call does not count.
 * Each plan has `included_ai_replies_month`. Seed values: Free 300, Pro 3,000. The owner sets the real numbers in `plans`.
 * Each plan has `ai_overage_price_cents` per 100 extra replies. Seed value: 500 (R$ 5,00 per 100 replies). The owner sets the real price.
 * When a restaurant uses its included replies, the assistant stops and pauses new conversations with reason `quota`, unless the admin turned on "Continuar e pagar pelo uso" (`ai_settings.allow_overage`). With overage on, the assistant continues, and Settings → Plano shows the extra replies and the amount due.
@@ -72,8 +72,23 @@ This makes the AI quota the one plan limit that blocks. FR-155 gets that excepti
 * **Port.** `AssistantModel` in `packages/core/src/ports` has two adapters: `AnthropicAssistantModel` (`@anthropic-ai/sdk`, in `apps/worker` only) and `ScriptedAssistantModel` (tests and local development). NFR-061 applies.
 * **Loop.** A manual tool loop in the worker, capped at 6 model calls per turn.
 * **Tenant scope comes from the job.** No tool takes a restaurant, customer, or conversation id. Every tool runs in `withRestaurantContext` for the job's restaurant.
-* **Human first.** An attendant's reply pauses the AI for that conversation. `handoff_to_human` pauses it too.
+* **Human first.** An attendant's reply pauses the AI for that conversation while the assistant is on. `handoff_to_human` pauses it too.
 * **Off by default.** Each restaurant turns the assistant on in Configurações → Atendente IA.
+
+## Decision 5 — Turn reliability (final review, 2026-10-18)
+
+Question: how does a turn behave when messages arrive mid-turn, when the worker stops, when a call fails and retries, and when staff change data that an invoice uses?
+
+Choices:
+
+1. **What counts as an answer.** An outbound row answers trigger T only when it is an attendant reply after T, or an AI message after T whose run saw T (its trigger is T or a later inbound). Option rejected: count any AI message after T. It left a message that arrived during a running turn with no reply.
+2. **Budget and shutdown are separate signals.** A 100-second budget abort fails the turn (`deadline`) and pauses it with `model`. A worker-shutdown abort retries after 5 seconds with no pause. Option rejected: one shared signal. A deploy would pause every in-flight conversation.
+3. **Fixed retry delay.** A retryable model error retries after 20 seconds, not the ADR-007 backoff, because a job becomes `stale` 120 seconds after `enqueuedAt`. The retry keeps `enqueuedAt`.
+4. **Bill once per customer message.** Usage is keyed on the trigger message, not the run. Option rejected: key on `ai_runs.id`. Each retry billed the same message again.
+5. **Attendant pause only while the assistant is on.** Option rejected: pause always. With `auto_resume_minutes = 0`, conversations stayed paused after the admin turned the assistant on.
+6. **Payment method and invoices.** A set payment method may change only while the order has no active invoice. Each change is audited (`order.payment_method_set`). Option rejected: allow any change. It could make the order disagree with an authorized NFC-e.
+
+12.ai-order-assistant.md "Review rulings" lists every rule from the reviews.
 
 ## Consequences
 

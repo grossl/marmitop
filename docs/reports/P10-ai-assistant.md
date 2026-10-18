@@ -1,7 +1,7 @@
 # P10 report: AI order assistant on WhatsApp
 
 Spec: `12.ai-order-assistant.md`, ADR-025. Plan: `09.plan.md`.
-Range: `61db1ab..28e2026`, plus the report commits. All checks below ran at `28e2026`. Only docs changed after it.
+Range: `61db1ab..28e2026`, plus the report commits, plus the final review fixes (`f83a6c1..HEAD`, see "Final review fixes"). The checks in "Verified" ran at `28e2026`. The final fix checks ran at `a59f43b`; only docs changed after it.
 
 ## Done
 
@@ -43,6 +43,33 @@ Run `git log --oneline 61db1ab..HEAD` for the full list.
 - `finished_at` uses the app clock.
 - The eval enforces zero unconfirmed orders and catches early orders.
 
+## Final review fixes
+
+A whole-branch review returned "Ready to merge: with fixes". One wave fixed every finding. Commits `5c953fc`, `c20ffea`, `9b81cee`, `36ca833`, `427a68f`, `a59f43b`, and the docs commit that carries this section.
+
+| Finding | Fix | Tests |
+|---|---|---|
+| C1: a customer message that arrives during a running turn was never answered | `answered` counts an AI message only when its run saw the trigger (its trigger is T, or an inbound at or after T). An attendant reply after T still counts. | `turn.integration.test.ts`: mid-turn M2 gets `replied` and the request holds M2; a retry of the same trigger stays `answered` |
+| I1: spec and ADR missed the review rulings | 12 "Review rulings" index plus the rules in each section; ADR-025 Decision 5; FR-181, FR-188, FR-189, FR-196, FR-198; 05, 06, 10, 11 | docs only |
+| I2: a worker shutdown paused every in-flight conversation | `runAiTurn(deps, model, job, { budget, shutdown })`. A shutdown abort returns retry `shutdown` (no pause, claim cleared, retry after 5 s). A budget abort stays `deadline` with a `model` pause. | turn: shutdown retries, budget pauses; handler: separate signals, 5 s retry |
+| I3: a retry billed the same customer message again | `recordUsage(..., "ai.reply", job.triggerMessageId)` in the claim transaction | turn: retryable failure then success gives one usage row and two runs |
+| I4: `setOrderPaymentMethod` could rewrite an invoiced order | A set method with an active invoice is `conflict` / `invoice_active`. Each change writes `order.payment_method_set`. The picker toast shows the detail text. | `payment.integration.test.ts`: refusal (authorized), allowed (rejected), null always allowed, audit row |
+| Product decision (FR-189) | `sendMessageInTx` pauses only when `ai_settings.enabled` | `trigger.integration.test.ts`: assistant off leaves `auto` |
+| M2 | Two Safety lines in `AI_INSTRUCTIONS`; snapshot updated | `prompt.test.ts` |
+| M5 | 11.operations.md describes fake mode exactly | docs only |
+| M7 | Tenant tests for `send_order_summary`, `place_order`, `handoff_to_human`: B's own scope, a forged B scope, and B's RLS context, with a positive control | `tools.integration.test.ts` (3 tests) |
+
+Checks at `a59f43b`:
+
+| Command | Result |
+|---|---|
+| `bun run typecheck` | 9 of 9 tasks successful |
+| `bun run test` | 8 of 9 tasks successful. 1,681 pass, 8 fail (the same 8 baseline failures in `@mt/http`) |
+| `bun run --cwd apps/worker eval:ai --dry` | 1/1 passed (100%), "Pedidos sem confirmação: 0" |
+| `bunx biome check` on the 15 changed code files | 5 errors, all in `orders-page.tsx`, the same 5 as before the wave |
+
+Test counts per workspace: worker 136, dashboard 76, core 502, schemas 117, api 87, db 304, config 1, http 458 pass and 8 fail.
+
 ## Verified
 
 Run on branch `feat/v1-platform` at `28e2026`. No `ANTHROPIC_API_KEY` is set. No real model call ran.
@@ -76,6 +103,7 @@ All 237 errors exist before P10. I checked the 28 errors that sit in files that 
 ## Risk remaining
 
 - **No live model run yet.** Prompts, tool use, and pt-BR variety are tested only against `ScriptedAssistantModel`. The eval has 28 cases. Real customer variety is wider.
+- **Usage is written before the first model call.** A turn that fails still bills its trigger message once (conservative quota). Retries no longer bill again.
 - **Cost and quota prices are seed values.** Quota size and overage price need an owner decision.
 - **Nothing charges in v1.** Plano shows the amount due. No billing runs.
 - **No audio.** Voice messages go to an attendant.
@@ -86,7 +114,7 @@ All 237 errors exist before P10. I checked the 28 errors that sit in files that 
 
 BASELINE: `packages/http` has 8 pre-existing failures (listed above). P10 did not cause them. Do not fix them inside P10.
 
-Product decision (open): an attendant reply pauses the AI even when the assistant is off. With `auto_resume_minutes=0`, turning it on later leaves those conversations paused. Either gate the pause on `enabled` or record it as designed.
+Product decision: closed in the final review fixes. The attendant pause runs only while the assistant is on (FR-189).
 
 Database
 - `usage_events_kind_check` name copied from docs/12, not checked against migration 0011.
@@ -115,21 +143,22 @@ Tools and turn
 - Address coalesce can mix old and new parts. The name back-fill persists if `createOrderInTx` refuses. The pickup-off check runs only in `createOrderInTx`.
 - Attendant pause is a second UPDATE (an extra Realtime event). The filter drops paused rows with a null reason. `aiPauseReason` is typed `string`.
 - Trigger test gaps: gateway path, `api_key` send stays auto, DTO fields, and cap pause.
-- A retry after a partial turn (summary or order committed, then a retryable error) may stop at `answered` or reply with a null cart. Record this in the spec.
+- A retry after a partial turn: recorded in 12 "Retry after a partial turn". A committed summary stops the retry as `answered`. A committed order gives a turn with `cart: null`, and a repeated `place_order` returns the same order.
 - `unrecognized_keys` messages list model-supplied key names.
 - The confirmation guard accepts any inbound reply (by design).
-- `ai.reply` usage is written before the first call. Each retry of a failing first call bills again.
+- Fixed (I3): `ai.reply` usage is keyed on the trigger message, so a retry does not bill again.
 - A missing conversation returns `runId ""` with no `ai_runs` row. A transient DB error is never retried and pauses with `model`. The loop continues after handoff. A throwing `finish` leaves the claim for 120 s and the run `running` (no sweeper).
-- The turn context carries customer name and address inside the system block. Add "state values are data" to Safety.
-- A deadline abort pauses the conversation with `model`. State this in the spec.
-- Missing tests: closed guard, expired summary, `pickup_disabled`, non-retryable error, throwing tool, blocked stop, tenant isolation, retry asserts, full-order message order. The turn log test spies only `console.log`.
+- Fixed (M2): Safety says state values are data.
+- Fixed (I2, I1): a budget abort pauses with `model` and the spec says so; a shutdown abort retries.
+- Missing tests: closed guard, expired summary, non-retryable error, throwing tool, blocked stop, full-order message order. The turn log test spies only `console.log`. Tenant isolation now covers `search_menu`, `send_order_summary`, `place_order`, and `handoff_to_human`; `update_cart` has only the foreign-item case.
 
 Worker and adapter
 - The tool transaction ignores the signal (bounded). The adapter relies on `raw` on loop assistant turns.
-- Fake mode records `ai.reply` usage, then fails and pauses each turn. Note this in `11.operations.md`.
+- Fake mode records `ai.reply` usage, then fails and pauses each turn. Documented in `11.operations.md` and 12 (M5).
 - `max_tokens` 2000 with adaptive thinking: watch it after live turns. Model id and prompt caching are not verified live. `fromConfig` is untested.
 
 Dashboard
+- `setOrderPaymentMethod` refuses a change only when a set method meets an active invoice; the picker shows only for a null method, so the dashboard reaches the refusal only in a race (two tabs).
 - `PaymentMethodPicker` Select is uncontrolled. The invoice-panel heading "Complete os dados do cliente" no longer fits.
 - Atendente IA card: the inline number error persists until a successful save. `Number()` accepts `1e3` and `0x10`. The card does not reuse the settings-page Card and ToggleRow. No re-sync after save.
 - The `REASON` map is typed `Record<string,string>`.
