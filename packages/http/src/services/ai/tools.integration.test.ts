@@ -1,4 +1,4 @@
-// covers FR-184, FR-185, FR-186, FR-187, FR-190, FR-195
+// covers FR-184, FR-185, FR-186, FR-187, FR-190, FR-195, NFR-001
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { FixedClock } from "@mt/core";
 import { type Db, withRestaurantContext } from "@mt/db";
@@ -310,6 +310,93 @@ describe("tenant isolation", () => {
     };
     const items = json((await run("search_menu", { query: null }, sb)).content).items as { menu_item_id: string }[];
     expect(items.some((i) => i.menu_item_id === a.menuItemId)).toBe(false);
+  });
+});
+
+describe("tenant isolation: summary, order, handoff", () => {
+  // Restaurant A has a confirmed cart: a summary and a customer "sim" after it. A's own scope could
+  // place the order now. Restaurant B must not read or change any of it.
+  async function confirmedCartOfA(): Promise<void> {
+    await run("update_cart", cartInput("pickup"));
+    expect((await run("send_order_summary", {})).ok).toBe(true);
+    await inbound("sim", new Date(NOW.getTime() + 1000));
+  }
+  async function stateOfA() {
+    const [cart] = await db<{ status: string; version: number; summary_message_id: string | null }[]>`
+      select status, version, summary_message_id from public.ai_carts
+      where restaurant_id = ${a.restaurantId} and conversation_id = ${a.conversationId}`;
+    const [conv] = await db<{ ai_mode: string; ai_pause_reason: string | null }[]>`
+      select ai_mode, ai_pause_reason from public.conversations where id = ${a.conversationId}`;
+    const [counts] = await db<{ orders: number; out: number }[]>`
+      select (select count(*)::int from public.orders where restaurant_id = ${a.restaurantId}) as orders,
+             (select count(*)::int from public.messages where conversation_id = ${a.conversationId} and direction = 'out') as out`;
+    return { cart, conv, counts };
+  }
+  async function runOfB(): Promise<string> {
+    // The fixture gives B a placed cart; remove it so B has no cart of its own.
+    await db`delete from public.ai_carts where restaurant_id = ${b.restaurantId}`;
+    const [r] = await db<{ id: string }[]>`
+      insert into public.ai_runs (restaurant_id, conversation_id, trigger_message_id, status)
+      values (${b.restaurantId}, ${b.conversationId}, ${b.messageId}, 'running') returning id`;
+    return r!.id;
+  }
+  // A tool that fails on a database error (a foreign key, RLS) also leaves A unchanged.
+  const attempt = (p: Promise<unknown>) => p.catch((e: unknown) => ({ threw: e instanceof Error }));
+  /** Runs a tool in restaurant `contextRid`'s RLS context with any scope. */
+  const runIn = (contextRid: string, s: AiToolScope, name: string, input: unknown) =>
+    withRestaurantContext(
+      db,
+      toDbContext(systemCtx(contextRid)),
+      (tx) => runAiTool(tx, deps, s, name, input),
+      deps.contextOptions,
+    );
+
+  test("B's own scope never sees A's cart, conversation, or orders", async () => {
+    await confirmedCartOfA();
+    const before = await stateOfA();
+    const sb = {
+      restaurantId: b.restaurantId,
+      conversationId: b.conversationId,
+      customerId: b.customerId,
+      runId: await runOfB(),
+    };
+    expect(await run("send_order_summary", {}, sb)).toMatchObject({ ok: false, errorCode: "cart_incomplete" });
+    expect(await run("place_order", {}, sb)).toMatchObject({ ok: false, errorCode: "not_confirmed" });
+    expect((await run("handoff_to_human", { reason: "complaint", note: "b" }, sb)).ok).toBe(true);
+    expect(await stateOfA()).toEqual(before);
+    await db`update public.conversations set ai_mode = 'auto', ai_pause_reason = null, ai_pause_note = null where id = ${b.conversationId}`;
+  });
+
+  test("a B scope that names A's conversation and customer changes nothing in A", async () => {
+    await confirmedCartOfA();
+    const before = await stateOfA();
+    const forged = {
+      restaurantId: b.restaurantId,
+      conversationId: a.conversationId,
+      customerId: a.customerId,
+      runId: await runOfB(),
+    };
+    // A summary or an order would need A's cart, which B's scope cannot load. The handoff matches no row.
+    expect(await attempt(run("send_order_summary", {}, forged))).not.toMatchObject({ ok: true });
+    expect(await attempt(run("place_order", {}, forged))).not.toMatchObject({ ok: true });
+    await attempt(run("handoff_to_human", { reason: "complaint", note: "b" }, forged));
+    expect(await stateOfA()).toEqual(before);
+  });
+
+  test("B's RLS context blocks a scope that names restaurant A", async () => {
+    await confirmedCartOfA();
+    const before = await stateOfA();
+    const scopeOfA = { ...scope };
+    for (const [name, input] of [
+      ["send_order_summary", {}],
+      ["place_order", {}],
+      ["handoff_to_human", { reason: "complaint", note: "b" }],
+    ] as const) {
+      await attempt(runIn(b.restaurantId, scopeOfA, name, input));
+    }
+    expect(await stateOfA()).toEqual(before);
+    // Positive control: in A's own context the same cart places an order.
+    expect((await run("place_order", {})).ok).toBe(true);
   });
 });
 
