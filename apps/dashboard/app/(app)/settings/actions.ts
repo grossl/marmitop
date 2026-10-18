@@ -8,12 +8,14 @@ import {
   disableUatisWebhook,
   disconnectWhatsApp,
   enableUatisWebhook,
+  getAiSettings,
   getPlanAndUsage,
   getRestaurantProfile,
   getSettings,
   redeliverWebhook,
   revokeApiKey,
   rotateWebhookSecret,
+  saveAiSettings,
   saveAutomaticMessage,
   saveBusinessHours,
   saveFiscalConfig,
@@ -27,6 +29,7 @@ import {
 } from "@mt/http";
 import {
   revokeApiKeySchema,
+  saveAiSettingsSchema,
   saveAutomaticMessageSchema,
   saveBusinessHoursSchema,
   saveOrderPreferencesSchema,
@@ -145,4 +148,13 @@ export const testFiscalConnectionAction = adminAction(
 
 export const getPlanAndUsageAction = adminAction({ name: "settings.getPlanAndUsage", input: none }, ({ deps, ctx }) =>
   getPlanAndUsage(deps, ctx, undefined),
+);
+
+export const getAiSettingsAction = adminAction({ name: "settings.getAi", input: none }, ({ deps, ctx }) =>
+  getAiSettings(deps, ctx, undefined),
+);
+
+export const saveAiSettingsAction = adminAction(
+  { name: "settings.saveAi", input: saveAiSettingsSchema },
+  ({ deps, ctx, input }) => saved(saveAiSettings(deps, ctx, input)),
 );

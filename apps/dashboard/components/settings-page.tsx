@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Check, Clock3, Copy, CreditCard, KeyRound, Link2, MessageSquareText, Receipt, Save, Settings2 } from "lucide-react";
-import type { ApiKeyListItem, PlanAndUsage, SettingsView, UatisWebhookStatus, WebhookDeliveryView } from "@mt/http";
+import { Bot, Check, Clock3, Copy, CreditCard, KeyRound, Link2, MessageSquareText, Receipt, Save, Settings2 } from "lucide-react";
+import type { AiQuota, AiSettings, ApiKeyListItem, PlanAndUsage, SettingsView, UatisWebhookStatus, WebhookDeliveryView } from "@mt/http";
 import { Button } from "@mt/ui/components/button";
 import { Input } from "@mt/ui/components/input";
 import { Label } from "@mt/ui/components/label";
@@ -42,6 +42,7 @@ import {
   testFiscalConnectionAction,
   testWhatsAppConnectionAction,
 } from "@/app/(app)/settings/actions";
+import { AiAssistantCard } from "@/components/ai-assistant-card";
 import type { ActionResult } from "@/lib/server/action-core";
 
 const tabs = [
@@ -50,6 +51,7 @@ const tabs = [
   { id: "messages", label: "Mensagens automáticas", icon: MessageSquareText },
   { id: "integrations", label: "WhatsApp, webhook e API", icon: Link2 },
   { id: "fiscal", label: "Notas fiscais", icon: Receipt },
+  { id: "ai", label: "Atendente IA", icon: Bot },
   { id: "plan", label: "Plano", icon: CreditCard },
 ] as const;
 
@@ -59,11 +61,13 @@ export function SettingsPage({
   settings,
   plan,
   deliveries = [],
+  ai,
   uatisWebhook = null,
 }: {
   settings: SettingsView;
   plan: PlanAndUsage;
   deliveries?: WebhookDeliveryView[];
+  ai: AiSettings & { quota: AiQuota };
   uatisWebhook?: UatisWebhookStatus | null;
 }) {
   const [activeTab, setActiveTab] = useState<TabId>("restaurant");
@@ -111,6 +115,7 @@ export function SettingsPage({
               <IntegrationSettings settings={settings} deliveries={deliveries} uatisWebhook={uatisWebhook} />
             )}
             {activeTab === "fiscal" && <FiscalSettings settings={settings} />}
+            {activeTab === "ai" && <AiAssistantCard ai={ai} />}
             {activeTab === "plan" && <PlanSettings plan={plan} />}
           </div>
         </div>
@@ -1199,13 +1204,20 @@ function PlanSettings({ plan }: { plan: PlanAndUsage }) {
           <p className="text-xl font-bold text-foreground">{plan.plan?.name ?? "Sem plano"}</p>
           {plan.plan?.priceDisplay && <p className="text-sm text-muted-foreground">{plan.plan.priceDisplay}</p>}
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">Os limites são informativos. Nada é bloqueado por enquanto.</p>
+        <p className="mt-1 text-xs text-muted-foreground">Os limites são informativos, exceto as respostas da IA.</p>
       </Card>
       <Card title="Uso do mês">
         <div className="space-y-4">
           <UsageRow label="Pedidos" used={plan.usage.orders.used} included={plan.usage.orders.included} />
           <UsageRow label="Mensagens enviadas" used={plan.usage.messages.used} included={plan.usage.messages.included} />
           <UsageRow label="Notas fiscais emitidas" used={plan.usage.invoices.used} included={plan.usage.invoices.included} />
+          <UsageRow label="Respostas da IA" used={plan.usage.aiReplies.used} included={plan.usage.aiReplies.included} />
+          {plan.usage.aiReplies.allowOverage && plan.usage.aiReplies.extra > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {plan.usage.aiReplies.extra.toLocaleString("pt-BR")} respostas extras ·{" "}
+              {formatBRL(plan.usage.aiReplies.amountCents)} a pagar pelo uso
+            </p>
+          )}
         </div>
       </Card>
       <Card title="Histórico de faturas">

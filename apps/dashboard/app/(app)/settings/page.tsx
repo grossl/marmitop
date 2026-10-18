@@ -1,4 +1,4 @@
-import { getPlanAndUsage, getSettings, getUatisWebhookStatus, listWebhookDeliveries } from "@mt/http";
+import { getAiSettings, getPlanAndUsage, getSettings, getUatisWebhookStatus, listWebhookDeliveries } from "@mt/http";
 import type { Metadata } from "next";
 
 import { SettingsPage } from "@/components/settings-page";
@@ -12,10 +12,11 @@ export const metadata: Metadata = { title: "Configurações — Marmitop" };
 export default async function SettingsRoute() {
   const ctx = await requireScreen("settings");
   const deps = requireDeps();
-  const [settings, plan, deliveries] = await Promise.all([
+  const [settings, plan, deliveries, ai] = await Promise.all([
     getSettings(deps, ctx, undefined),
     getPlanAndUsage(deps, ctx, undefined),
     listWebhookDeliveries(deps, ctx, undefined),
+    getAiSettings(deps, ctx, undefined),
   ]);
   // FR-178: never throws on a gateway failure; null only when WhatsApp is not configured.
   const uatisWebhook = settings.integrations.whatsapp
@@ -23,7 +24,7 @@ export default async function SettingsRoute() {
     : null;
   return (
     <div className="flex-1 overflow-hidden">
-      <SettingsPage settings={settings} plan={plan} deliveries={deliveries} uatisWebhook={uatisWebhook} />
+      <SettingsPage settings={settings} plan={plan} deliveries={deliveries} ai={ai} uatisWebhook={uatisWebhook} />
     </div>
   );
 }
