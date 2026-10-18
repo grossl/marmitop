@@ -80,6 +80,14 @@ describe("attendant pause", () => {
     await simulateInboundMessage(deps, admin(), { phone: "+5511911112226", body: "e aí?" });
     expect(await aiJobs()).toHaveLength(0);
   });
+  test("with the assistant off, an attendant reply leaves ai_mode auto", async () => {
+    const first = await simulateInboundMessage(deps, admin(), { phone: "+5511911112231", body: "oi" });
+    await db`update public.ai_settings set enabled = false where restaurant_id = ${a.restaurantId}`;
+    await sendMessage(deps, attendant(), { conversationId: first.conversationId, body: "Olá!" });
+    const [c] = await db<{ ai_mode: string; ai_pause_reason: string | null }[]>`
+      select ai_mode, ai_pause_reason from public.conversations where id = ${first.conversationId}`;
+    expect(c).toEqual({ ai_mode: "auto", ai_pause_reason: null });
+  });
   test("after auto_resume_minutes the next inbound resumes and enqueues", async () => {
     const first = await simulateInboundMessage(deps, admin(), { phone: "+5511911112227", body: "oi" });
     await db`update public.conversations set ai_mode = 'paused', ai_pause_reason = 'attendant',

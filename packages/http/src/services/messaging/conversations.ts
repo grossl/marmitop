@@ -281,8 +281,9 @@ export async function sendMessageInTx(
         last_message_preview = ${previewOf(input.body)}
       where id = ${conversation.id} and restaurant_id = ${ctx.restaurantId}
     `;
-  // FR-189: a person answered, so the assistant steps back for this conversation.
-  if (ctx.actorType === "user") {
+  // FR-189: a person answered, so the assistant steps back for this conversation. Only while the
+  // assistant is on: with it off, a pause would outlive the switch (12 "Dashboard", product decision).
+  if (ctx.actorType === "user" && (await loadAiSettings(tx, ctx.restaurantId)).enabled) {
     await tx`
       update public.conversations set ai_mode = 'paused', ai_paused_at = ${deps.clock.now()},
         ai_pause_reason = 'attendant', ai_pause_note = null
