@@ -42,6 +42,9 @@ beforeAll(async () => {
   b = await seedRestaurant(db, "msg-b");
   await db`update public.conversations set last_inbound_at = ${new Date(NOW.getTime() - 3600_000)}
            where id = ${a.conversationId}`;
+  // The fixture's welcome goes out 1 ms after the first inbound (FR-110). On the fixed clock it
+  // stays the newest message, so it would own the preview. whatsapp.integration.test.ts covers it.
+  await db`update public.automatic_messages set enabled = false where restaurant_id = ${a.restaurantId}`;
 });
 
 afterAll(async () => {
