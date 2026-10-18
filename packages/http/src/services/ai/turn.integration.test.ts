@@ -57,7 +57,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await truncateQueues(db);
-  await db`update public.conversations set ai_mode = 'auto', ai_pause_reason = null, ai_turn_claimed_at = null where id = ${a.conversationId}`;
+  await db`update public.conversations set ai_mode = 'auto', ai_pause_reason = null, ai_pause_note = null, ai_turn_claimed_at = null where id = ${a.conversationId}`;
   await db`delete from public.ai_carts where restaurant_id = ${a.restaurantId}`;
 });
 afterAll(async () => db.end());
@@ -225,6 +225,50 @@ describe("runAiTurn", () => {
       return original(req);
     });
     expect(await runAiTurn(deps, model, job(m))).toMatchObject({ status: "silent" });
+  });
+
+  test("the closing reply after a handoff goes out and the handoff pause stays", async () => {
+    const m = await inbound("quero falar com uma pessoa");
+    const model = new ScriptedAssistantModel([
+      { tools: [{ name: "handoff_to_human", input: { reason: "customer_request", note: "pediu atendente" } }] },
+      { text: "Uma pessoa vai te responder em breve." },
+    ]);
+    const out = await runAiTurn(deps, model, job(m));
+    expect(out).toMatchObject({ kind: "done", status: "replied" });
+    const [msg] = await db<{ body: string; ai_run_id: string }[]>`
+      select body, ai_run_id from public.messages where conversation_id = ${a.conversationId} and ai_run_id = ${out.runId}`;
+    expect(msg?.body).toBe("Uma pessoa vai te responder em breve.");
+    const [c] = await db<{ ai_mode: string; ai_pause_reason: string; ai_pause_note: string | null }[]>`
+      select ai_mode, ai_pause_reason, ai_pause_note from public.conversations where id = ${a.conversationId}`;
+    expect(c).toEqual({ ai_mode: "paused", ai_pause_reason: "customer_request", ai_pause_note: "pediu atendente" });
+  });
+
+  test("an attendant pause during the loop survives a refusal", async () => {
+    const m = await inbound("oi");
+    const model = new ScriptedAssistantModel([{ stop: "refusal" }]);
+    const original = model.respond.bind(model);
+    spyOn(model, "respond").mockImplementation(async (req) => {
+      await db`update public.conversations set ai_mode = 'paused', ai_pause_reason = 'attendant', ai_pause_note = null
+               where id = ${a.conversationId}`;
+      return original(req);
+    });
+    expect(await runAiTurn(deps, model, job(m))).toMatchObject({ status: "stopped" });
+    const [c] = await db<
+      { ai_pause_reason: string }[]
+    >`select ai_pause_reason from public.conversations where id = ${a.conversationId}`;
+    expect(c?.ai_pause_reason).toBe("attendant");
+  });
+
+  test("a refusal after a handoff keeps the handoff reason and note", async () => {
+    const m = await inbound("quero reclamar");
+    const model = new ScriptedAssistantModel([
+      { tools: [{ name: "handoff_to_human", input: { reason: "complaint", note: "pedido frio" } }] },
+      { stop: "refusal" },
+    ]);
+    expect(await runAiTurn(deps, model, job(m))).toMatchObject({ status: "stopped" });
+    const [c] = await db<{ ai_pause_reason: string; ai_pause_note: string | null }[]>`
+      select ai_pause_reason, ai_pause_note from public.conversations where id = ${a.conversationId}`;
+    expect(c).toEqual({ ai_pause_reason: "complaint", ai_pause_note: "pedido frio" });
   });
 
   test("logs and ai_runs hold no customer text", async () => {

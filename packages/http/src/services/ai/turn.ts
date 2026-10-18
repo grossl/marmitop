@@ -56,12 +56,13 @@ async function insertRun(
   job: AiTurnJob,
   status: AiRunRow["status"],
   billedAs: "included" | "overage" | null,
+  now: Date,
 ): Promise<string> {
   const [r] = await t<{ id: string }[]>`
     insert into public.ai_runs (restaurant_id, conversation_id, trigger_message_id, status, billed_as,
       finished_at)
     values (${job.restaurantId}, ${job.conversationId}, ${job.triggerMessageId}, ${status}, ${billedAs},
-      ${status === "running" ? null : new Date()})
+      ${status === "running" ? null : now})
     returning id
   `;
   if (r === undefined) throw new Error("ai_runs insert returned no row");
@@ -116,7 +117,7 @@ async function start(deps: ServiceDeps, job: AiTurnJob): Promise<Started | AiTur
     });
 
     if (guard.kind === "stop") {
-      const runId = await insertRun(t, job, guard.status, null);
+      const runId = await insertRun(t, job, guard.status, null, now);
       if (guard.pause !== null)
         await pauseConversation(t, job.restaurantId, job.conversationId, guard.pause, null, now);
       if (guard.status === "locked") await sendJob(t, QUEUES.aiTurns, job, AI_RELOCK_DELAY_SECONDS);
@@ -149,11 +150,11 @@ async function start(deps: ServiceDeps, job: AiTurnJob): Promise<Started | AiTur
     );
     // The model never gets zero messages. No claim and no usage: the turn ends before any model call.
     if (messages.length === 0) {
-      const runId = await insertRun(t, job, "silent", null);
+      const runId = await insertRun(t, job, "silent", null, now);
       return { kind: "done", status: "silent", runId } as const;
     }
 
-    const runId = await insertRun(t, job, "running", guard.billedAs);
+    const runId = await insertRun(t, job, "running", guard.billedAs, now);
     await t`update public.conversations set ai_turn_claimed_at = ${now} where id = ${job.conversationId} and restaurant_id = ${job.restaurantId}`;
     await recordUsage(t, job.restaurantId, "ai.reply", runId, now);
 
@@ -232,10 +233,15 @@ async function finish(
   return tx(deps, job.restaurantId, async (t) => {
     const now = deps.clock.now();
     let status = result.status;
-    const [conv] = await t<{ ai_mode: string }[]>`
-      select ai_mode from public.conversations where id = ${job.conversationId} and restaurant_id = ${job.restaurantId} for update`;
+    const [conv] = await t<{ ai_mode: string; ai_pause_reason: AiPauseReason | null }[]>`
+      select ai_mode, ai_pause_reason from public.conversations
+      where id = ${job.conversationId} and restaurant_id = ${job.restaurantId} for update`;
+    // Drop the reply only when a person paused the conversation during the loop (12 "Reply").
+    // A pause from this turn's own handoff_to_human keeps the closing reply.
+    const pausedByPerson =
+      conv?.ai_mode === "paused" && (conv.ai_pause_reason === "attendant" || conv.ai_pause_reason === "manual");
     if (result.reply !== null) {
-      if (conv?.ai_mode === "auto")
+      if (conv !== undefined && !pausedByPerson)
         await storeAiMessage(t, job.restaurantId, {
           conversationId: job.conversationId,
           body: result.reply,
@@ -244,7 +250,8 @@ async function finish(
         });
       else if (status === "replied") status = "silent";
     }
-    if (result.pause !== null)
+    // Never overwrite an existing pause (an attendant's, or this turn's handoff with its note).
+    if (result.pause !== null && conv?.ai_mode === "auto")
       await pauseConversation(t, job.restaurantId, job.conversationId, result.pause, null, now);
     await t`update public.conversations set ai_turn_claimed_at = null where id = ${job.conversationId} and restaurant_id = ${job.restaurantId}`;
     await t`
