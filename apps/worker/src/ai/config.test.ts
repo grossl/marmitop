@@ -17,4 +17,8 @@ describe("readAiConfig", () => {
   test("an unknown effort falls back to low", () => {
     expect(readAiConfig({ MT_AI_EFFORT: "turbo" }).effort).toBe("low");
   });
+  test("a whitespace-only key means fake mode; a key is trimmed", () => {
+    expect(readAiConfig({ ANTHROPIC_API_KEY: "  \n" }).apiKey).toBeNull();
+    expect(readAiConfig({ ANTHROPIC_API_KEY: " k-1 \n" }).apiKey).toBe("k-1");
+  });
 });

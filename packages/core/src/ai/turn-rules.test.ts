@@ -1,7 +1,15 @@
 // covers FR-181, FR-182, FR-183, FR-186, FR-189, FR-196, FR-197
 import { describe, expect, test } from "bun:test";
 
-import { aiQuotaState, checkPlaceOrder, decideEnqueue, decideTurnStart, overageAmountCents } from "./turn-rules";
+import {
+  AI_TURN_BUDGET_MS,
+  AI_TURN_STALE_MS,
+  aiQuotaState,
+  checkPlaceOrder,
+  decideEnqueue,
+  decideTurnStart,
+  overageAmountCents,
+} from "./turn-rules";
 
 const now = new Date("2026-10-17T15:00:00Z");
 const ago = (ms: number) => new Date(now.getTime() - ms);
@@ -129,4 +137,10 @@ describe("checkPlaceOrder", () => {
     expect(checkPlaceOrder({ ...ok, ...patch })).toEqual({ ok: false, code: "not_confirmed" });
   });
   test("closed", () => expect(checkPlaceOrder({ ...ok, open: false })).toEqual({ ok: false, code: "closed" }));
+});
+
+describe("AI_TURN_BUDGET_MS", () => {
+  test("stays below the claim stale time", () => {
+    expect(AI_TURN_BUDGET_MS).toBeLessThan(AI_TURN_STALE_MS);
+  });
 });

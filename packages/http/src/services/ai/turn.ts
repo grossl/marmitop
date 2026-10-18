@@ -16,6 +16,7 @@ import {
   decideTurnStart,
   formatBRL,
   historyToMessages,
+  splitTrailingAssistant,
   weekdayInTimezone,
 } from "@mt/core";
 import { type AiRunRow, QUEUES, sendJob, type Tx, withRestaurantContext } from "@mt/db";
@@ -139,14 +140,18 @@ async function start(deps: ServiceDeps, job: AiTurnJob): Promise<Started | AiTur
         order by created_at desc, id desc limit ${AI_HISTORY_WINDOW}
       ) recent order by created_at asc, id asc
     `;
-    const messages = historyToMessages(
-      rows.map((r) => ({
-        direction: r.direction,
-        body: r.body,
-        automaticKind: r.automatic_kind,
-        sentByUser: r.sent_by !== null,
-        aiRunId: r.ai_run_id,
-      })),
+    // The request must end with the customer (no prefill): our messages after the customer's last
+    // one (for example the automatic welcome) move into the turn context instead.
+    const { messages, trailingAssistantText } = splitTrailingAssistant(
+      historyToMessages(
+        rows.map((r) => ({
+          direction: r.direction,
+          body: r.body,
+          automaticKind: r.automatic_kind,
+          sentByUser: r.sent_by !== null,
+          aiRunId: r.ai_run_id,
+        })),
+      ),
     );
     // The model never gets zero messages. No claim and no usage: the turn ends before any model call.
     if (messages.length === 0) {
@@ -206,6 +211,7 @@ async function start(deps: ServiceDeps, job: AiTurnJob): Promise<Started | AiTur
           cart: cart.id === null || cart.status !== "open" ? null : cart.state,
           customerName: conv.name === conv.phone ? null : conv.name,
           savedAddress: conv.logradouro ? [conv.logradouro, conv.numero, conv.bairro].filter(Boolean).join(", ") : null,
+          alreadySent: trailingAssistantText,
         }),
       },
     };
@@ -265,7 +271,13 @@ async function finish(
   });
 }
 
-export async function runAiTurn(deps: ServiceDeps, model: AssistantModel, job: AiTurnJob): Promise<AiTurnOutcome> {
+/** `signal` carries the turn budget (AI_TURN_BUDGET_MS) and the worker's shutdown; every model call gets it. */
+export async function runAiTurn(
+  deps: ServiceDeps,
+  model: AssistantModel,
+  job: AiTurnJob,
+  signal?: AbortSignal,
+): Promise<AiTurnOutcome> {
   const started = await start(deps, job);
   if ("kind" in started) return started;
   const { runId, scope, request } = started;
@@ -282,7 +294,7 @@ export async function runAiTurn(deps: ServiceDeps, model: AssistantModel, job: A
 
   try {
     while (tally.modelCalls < AI_MAX_MODEL_CALLS) {
-      const res = await model.respond(request);
+      const res = await model.respond(request, signal);
       tally.modelCalls += 1;
       tally.model = res.model;
       tally.input += res.usage.inputTokens;

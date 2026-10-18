@@ -27,6 +27,9 @@ function stopReasonOf(r: string | null): AssistantStopReason {
 }
 
 function mapError(error: unknown): AssistantModelError {
+  if (error instanceof AssistantModelError) return error;
+  // The turn budget (AI_TURN_BUDGET_MS) or worker shutdown aborted the call. Not retried: the turn is out of time.
+  if (error instanceof Anthropic.APIUserAbortError) return new AssistantModelError("aborted", false, "deadline");
   if (error instanceof Anthropic.RateLimitError) return new AssistantModelError("rate limited", true, "rate_limited");
   if (error instanceof Anthropic.APIConnectionTimeoutError) return new AssistantModelError("timeout", true, "timeout");
   if (error instanceof Anthropic.APIConnectionError) return new AssistantModelError("connection", true, "connection");
@@ -34,11 +37,9 @@ function mapError(error: unknown): AssistantModelError {
   if (error instanceof Anthropic.BadRequestError) return new AssistantModelError("bad request", false, "bad_request");
   if (error instanceof Anthropic.APIError) {
     const status = error.status ?? 0;
-    return new AssistantModelError(
-      "api error",
-      status >= 500 || status === 529,
-      status >= 500 ? "overloaded" : `http_${status}`,
-    );
+    if (status === 529) return new AssistantModelError("overloaded", true, "overloaded");
+    if (status >= 500) return new AssistantModelError("server error", true, "server_error");
+    return new AssistantModelError("api error", false, `http_${status}`);
   }
   return new AssistantModelError("unknown", false, "internal_error");
 }
@@ -74,6 +75,11 @@ export class AnthropicAssistantModel implements AssistantModel {
       role: m.role,
       content: m.raw !== undefined ? (m.raw as Anthropic.ContentBlockParam[]) : toApiContent(m.content),
     }));
+    // A system message must follow a user turn, and a final assistant turn would be a prefill.
+    // runAiTurn removes trailing assistant turns from the history (splitTrailingAssistant).
+    if (request.messages[historyLength - 1]?.role !== "user") {
+      throw new AssistantModelError("history must end with a user turn", false, "bad_history");
+    }
     messages.splice(historyLength, 0, { role: "system", content: request.turnContext });
 
     try {

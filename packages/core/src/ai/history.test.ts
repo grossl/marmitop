@@ -1,7 +1,7 @@
-// covers FR-192
+// covers FR-192, FR-198
 import { describe, expect, test } from "bun:test";
 
-import { type HistoryRow, historyToMessages } from "./history";
+import { type HistoryRow, historyToMessages, splitTrailingAssistant } from "./history";
 
 const row = (p: Partial<HistoryRow>): HistoryRow => ({
   direction: "in",
@@ -52,5 +52,27 @@ describe("historyToMessages", () => {
     );
     const text = historyToMessages(rows).flatMap((m) => m.content.map((b) => (b.type === "text" ? b.text : "")));
     expect(text[0]).toBe("m10");
+  });
+});
+
+describe("splitTrailingAssistant", () => {
+  const user = (text: string) => ({ role: "user" as const, content: [{ type: "text" as const, text }] });
+  const assistant = (text: string) => ({ role: "assistant" as const, content: [{ type: "text" as const, text }] });
+  test("no trailing assistant turn: unchanged, null text", () => {
+    const msgs = [user("oi"), assistant("Olá"), user("quero 1")];
+    expect(splitTrailingAssistant(msgs)).toEqual({ messages: msgs, trailingAssistantText: null });
+  });
+  test("a trailing automatic turn is removed and its text returned", () => {
+    const welcome = assistant("[mensagem automática] Bem-vindo!");
+    expect(splitTrailingAssistant([user("oi"), welcome])).toEqual({
+      messages: [user("oi")],
+      trailingAssistantText: "[mensagem automática] Bem-vindo!",
+    });
+  });
+  test("several trailing assistant turns join with a newline", () => {
+    expect(splitTrailingAssistant([user("oi"), assistant("a"), assistant("b")]).trailingAssistantText).toBe("a\nb");
+  });
+  test("all-assistant input gives no messages", () => {
+    expect(splitTrailingAssistant([assistant("a")]).messages).toEqual([]);
   });
 });

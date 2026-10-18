@@ -30,3 +30,23 @@ export function historyToMessages(rows: readonly HistoryRow[]): AssistantMessage
   while (out[0]?.role === "assistant") out.shift();
   return out.map((m) => ({ role: m.role, content: [{ type: "text", text: m.text }] }));
 }
+
+/**
+ * The model request must end with a customer (`user`) turn: a final assistant turn is a prefill,
+ * which the model rejects. Removes the assistant turns after the last user turn (for example the
+ * automatic welcome message stored right after the trigger) and returns their joined text, so the
+ * turn context can tell the model what the customer already received.
+ */
+export function splitTrailingAssistant(messages: readonly AssistantMessage[]): {
+  messages: AssistantMessage[];
+  trailingAssistantText: string | null;
+} {
+  let end = messages.length;
+  while (end > 0 && messages[end - 1]?.role === "assistant") end -= 1;
+  if (end === messages.length) return { messages: [...messages], trailingAssistantText: null };
+  const text = messages
+    .slice(end)
+    .flatMap((m) => m.content.flatMap((b) => (b.type === "text" ? [b.text] : [])))
+    .join("\n");
+  return { messages: messages.slice(0, end), trailingAssistantText: text };
+}

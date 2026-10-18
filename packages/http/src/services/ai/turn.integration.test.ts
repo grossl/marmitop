@@ -1,6 +1,6 @@
 // covers FR-182, FR-183, FR-186, FR-187, FR-191, FR-192, FR-196, FR-198
 import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { AssistantModelError, ScriptedAssistantModel } from "@mt/core";
+import { AssistantModelError, type AssistantRequest, ScriptedAssistantModel } from "@mt/core";
 import type { Db } from "@mt/db";
 import { createTestDb, type RestaurantFixture, seedRestaurant, truncateQueues } from "@mt/db/test-harness";
 import type { AiTurnJob } from "@mt/schemas";
@@ -159,6 +159,26 @@ describe("runAiTurn", () => {
     const model = new ScriptedAssistantModel([{ text: "Oi! O que vai querer?" }]);
     expect(await runAiTurn(deps, model, job(m))).toMatchObject({ kind: "done", status: "replied" });
     expect(model.requests).toHaveLength(1);
+    // The model request must end with the customer; the welcome moves into the turn context.
+    expect(model.requests[0]?.messages.at(-1)?.role).toBe("user");
+    expect(model.requests[0]?.turnContext).toContain("Bem-vindo!");
+    expect(model.requests[0]?.turnContext).toContain("already_sent_after_last_customer_message");
+  });
+
+  test("the turn signal reaches every model call", async () => {
+    const m = await inbound("oi de novo");
+    const inner = new ScriptedAssistantModel([{ text: "Oi!" }]);
+    const signals: (AbortSignal | undefined)[] = [];
+    const model = {
+      modelName: inner.modelName,
+      respond: (request: AssistantRequest, signal?: AbortSignal) => {
+        signals.push(signal);
+        return inner.respond(request);
+      },
+    };
+    const controller = new AbortController();
+    expect(await runAiTurn(deps, model, job(m), controller.signal)).toMatchObject({ status: "replied" });
+    expect(signals).toEqual([controller.signal]);
   });
 
   test("an empty history stops as silent before the model, with no usage and no claim", async () => {

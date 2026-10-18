@@ -10,8 +10,9 @@ const EFFORTS = new Set(["low", "medium", "high"]);
 
 export function readAiConfig(env: Record<string, string | undefined> = process.env): AiConfig {
   const effort = env.MT_AI_EFFORT ?? "low";
+  const apiKey = env.ANTHROPIC_API_KEY?.trim() ?? "";
   return {
-    apiKey: env.ANTHROPIC_API_KEY ? env.ANTHROPIC_API_KEY : null,
+    apiKey: apiKey === "" ? null : apiKey,
     model: env.MT_AI_MODEL || "claude-haiku-5-5",
     effort: (EFFORTS.has(effort) ? effort : "low") as AiConfig["effort"],
   };

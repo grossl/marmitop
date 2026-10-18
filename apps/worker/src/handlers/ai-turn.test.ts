@@ -47,4 +47,21 @@ describe("ai turn handler", () => {
     });
     expect(await retry.run(ctx)).toEqual({ kind: "retry", errorCode: "overloaded", retryAfterMs: 20_000 });
   });
+  test("passes a signal that follows the job signal and carries the turn budget", async () => {
+    const controller = new AbortController();
+    let seen: AbortSignal | undefined;
+    const h = createAiTurnHandler({
+      serviceDeps: {} as ServiceDeps,
+      model: new ScriptedAssistantModel([]),
+      runTurn: async (_deps, _model, _job, signal) => {
+        seen = signal;
+        return { kind: "done", status: "replied", runId: "r" };
+      },
+    });
+    await h.run({ queue: "mt_ai_turns", msgId: 1, payload, attempt: 1, readCount: 1, signal: controller.signal });
+    expect(seen).toBeInstanceOf(AbortSignal);
+    expect(seen?.aborted).toBe(false);
+    controller.abort();
+    expect(seen?.aborted).toBe(true);
+  });
 });

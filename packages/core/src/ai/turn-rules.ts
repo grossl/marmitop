@@ -3,6 +3,11 @@
 
 export const AI_TURN_DELAY_SECONDS = 8;
 export const AI_TURN_STALE_MS = 120_000;
+/**
+ * Wall-clock budget for one turn (every model call, retries included). It must stay below
+ * AI_TURN_STALE_MS, or a second turn could claim the conversation while this one still runs.
+ */
+export const AI_TURN_BUDGET_MS = 100_000;
 export const AI_MAX_MODEL_CALLS = 6;
 export const AI_REPLY_MAX_CHARS = 1000;
 export const AI_HISTORY_WINDOW = 20;

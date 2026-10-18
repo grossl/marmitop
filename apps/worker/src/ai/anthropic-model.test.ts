@@ -105,6 +105,7 @@ describe("AnthropicAssistantModel", () => {
     });
     const msgs = sent[0]!.messages as { role: string; content: unknown }[];
     expect(msgs.find((m) => m.role === "assistant")?.content).toEqual(raw);
+    expect(msgs[1]).toEqual({ role: "system", content: "CTX" });
     expect(msgs.at(-1)?.role).toBe("user");
   });
 
@@ -118,5 +119,49 @@ describe("AnthropicAssistantModel", () => {
     } as unknown as Anthropic;
     const model = new AnthropicAssistantModel({ client: failing, model: "m", effort: "low" });
     await expect(model.respond(req)).rejects.toMatchObject({ retryable: true, code: "rate_limited" });
+  });
+
+  test("a history that ends with an assistant turn is rejected before any call", async () => {
+    const sent: Record<string, unknown>[] = [];
+    const model = new AnthropicAssistantModel({
+      client: stub({ content: [], stop_reason: "end_turn", usage, model: "m" }, sent),
+      model: "m",
+      effort: "low",
+    });
+    await expect(
+      model.respond({
+        ...req,
+        messages: [
+          ...req.messages,
+          { role: "assistant", content: [{ type: "text", text: "[mensagem automática] Oi" }] },
+        ],
+      }),
+    ).rejects.toMatchObject({ retryable: false, code: "bad_history" });
+    expect(sent).toHaveLength(0);
+  });
+
+  test("an aborted request (turn budget) maps to deadline; 5xx to server_error; 529 to overloaded", async () => {
+    const throwing = (error: unknown) =>
+      new AnthropicAssistantModel({
+        client: {
+          messages: {
+            create: async () => {
+              throw error;
+            },
+          },
+        } as unknown as Anthropic,
+        model: "m",
+        effort: "low",
+      });
+    await expect(throwing(new Anthropic.APIUserAbortError()).respond(req)).rejects.toMatchObject({
+      retryable: false,
+      code: "deadline",
+    });
+    await expect(
+      throwing(new Anthropic.InternalServerError(500, undefined, "x", new Headers())).respond(req),
+    ).rejects.toMatchObject({ retryable: true, code: "server_error" });
+    await expect(
+      throwing(Anthropic.APIError.generate(529, undefined, "x", new Headers())).respond(req),
+    ).rejects.toMatchObject({ retryable: true, code: "overloaded" });
   });
 });

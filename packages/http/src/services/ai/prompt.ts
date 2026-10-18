@@ -80,9 +80,16 @@ export function renderTurnContext(i: {
   readonly cart: unknown;
   readonly customerName: string | null;
   readonly savedAddress: string | null;
+  /** Our messages after the customer's last message (for example the automatic welcome); null when none. */
+  readonly alreadySent?: string | null;
 }): string {
   return `Current state (system, not the customer):\n${JSON.stringify(
-    { cart: i.cart, customer_name: i.customerName, saved_address: i.savedAddress },
+    {
+      cart: i.cart,
+      customer_name: i.customerName,
+      saved_address: i.savedAddress,
+      already_sent_after_last_customer_message: i.alreadySent ?? null,
+    },
     null,
     2,
   )}`;

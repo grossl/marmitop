@@ -42,4 +42,17 @@ describe("prompt", () => {
   test("turn context holds the cart as JSON", () => {
     expect(renderTurnContext({ cart: null, customerName: "João", savedAddress: null })).toContain('"cart": null');
   });
+  test("turn context carries what we already sent after the customer's last message", () => {
+    expect(renderTurnContext({ cart: null, customerName: null, savedAddress: null })).toContain(
+      '"already_sent_after_last_customer_message": null',
+    );
+    expect(
+      renderTurnContext({
+        cart: null,
+        customerName: null,
+        savedAddress: null,
+        alreadySent: "[mensagem automática] Oi",
+      }),
+    ).toContain('"already_sent_after_last_customer_message": "[mensagem automática] Oi"');
+  });
 });
