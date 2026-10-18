@@ -182,7 +182,9 @@ describe("customers, menu, messages over the API", () => {
   });
 
   test("send outside the window is 422 and stores nothing; another restaurant's customer is 404", async () => {
-    await db`update public.conversations set last_inbound_at = now() - interval '2 days' where id = ${a.conversationId}`;
+    // The service reads the test clock, not the database clock.
+    const twoDaysAgo = new Date(deps.clock.now().getTime() - 2 * 86_400_000);
+    await db`update public.conversations set last_inbound_at = ${twoDaysAgo} where id = ${a.conversationId}`;
     const before = await db`select count(*)::int as n from public.messages where restaurant_id = ${a.restaurantId}`;
     const e = await apiSendMessage(deps, keyCtx(a), { customer_id: a.customerId, body: "Oi" }).catch((x) => x);
     expect(code(e)).toBe("outside_service_window");
