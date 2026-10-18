@@ -249,14 +249,21 @@ describe("outbound webhook", () => {
   });
 
   test("rotating returns a new secret once, replaces the old row, and audits kind and last4", async () => {
-    const before = await db<{ id: string }[]>`
-      select id from public.secrets where restaurant_id = ${a.restaurantId} and kind = 'outbound_webhook_secret'`;
+    // The endpoint's own secret: the fixture's first secret row outlives the raw delete above.
+    const endpointSecret = async () =>
+      (
+        await db<{ secret_id: string }[]>`
+          select secret_id from public.webhook_endpoints where restaurant_id = ${a.restaurantId}`
+      )[0]?.secret_id;
+    const before = await endpointSecret();
     const rotated = await rotateWebhookSecret(deps, admin(), undefined);
     expect(rotated.secret).toMatch(/^[0-9A-Za-z]{43}$/);
-    const after = await db<{ id: string }[]>`
-      select id from public.secrets where restaurant_id = ${a.restaurantId} and kind = 'outbound_webhook_secret'`;
-    expect(after).toHaveLength(1);
-    expect(after[0]?.id).not.toBe(before[0]?.id);
+    const after = await endpointSecret();
+    expect(after).toBeDefined();
+    expect(after).not.toBe(before);
+    const rows = await db<{ id: string; kind: string }[]>`
+      select id, kind from public.secrets where id in ${db([before as string, after as string])}`;
+    expect([...rows]).toEqual([{ id: after as string, kind: "outbound_webhook_secret" }]);
     const audits = await auditFor(a, "secret.set");
     expect(JSON.stringify(audits)).not.toContain(rotated.secret);
   });
