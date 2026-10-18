@@ -100,11 +100,10 @@ async function updateCart(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: un
   const parsed = parse(updateCartInputSchema, raw);
   if (!parsed.ok) return parsed.result;
   const input = parsed.data;
-  const now = deps.clock.now();
   const settings = await loadOrderSettings(tx, scope.restaurantId);
   if (input.fulfillment === "pickup" && !settings.allowPickup) return fail("pickup_disabled", "Pickup is turned off.");
 
-  const cart = await loadCart(tx, scope.restaurantId, scope.conversationId, now);
+  const cart = await loadCart(tx, scope.restaurantId, scope.conversationId);
   // A cart placed in the last 30 minutes keeps its fulfillment and address; its items start over.
   const base = cart.status === "open" ? cart.state : { ...cart.state, lines: [], version: 1 };
   const next = applyCartPatch(base, {
@@ -150,7 +149,7 @@ async function sendOrderSummary(tx: Tx, deps: ServiceDeps, scope: AiToolScope, r
   const parsed = parse(emptyToolInputSchema, raw);
   if (!parsed.ok) return parsed.result;
   const now = deps.clock.now();
-  const cart = await loadCart(tx, scope.restaurantId, scope.conversationId, now);
+  const cart = await loadCart(tx, scope.restaurantId, scope.conversationId);
   const fulfillment = cart.state.fulfillment;
   if (cart.id === null || cart.status !== "open" || missingCartFields(cart.state).length > 0 || fulfillment === null) {
     return fail("cart_incomplete", "Fill every missing field first.");
@@ -182,7 +181,7 @@ async function placeOrder(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: un
   const parsed = parse(emptyToolInputSchema, raw);
   if (!parsed.ok) return parsed.result;
   const now = deps.clock.now();
-  const cart = await loadCart(tx, scope.restaurantId, scope.conversationId, now);
+  const cart = await loadCart(tx, scope.restaurantId, scope.conversationId);
 
   // Idempotent: a cart placed in the last 30 minutes answers with its order.
   if (cart.status === "placed" && cart.orderId !== null) {
@@ -220,6 +219,16 @@ async function placeOrder(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: un
 
   const delivery = fulfillment === "delivery";
   const address = cart.state.address;
+  // FR-187: fill an empty saved name before the order, so the order_received message that
+  // createOrderInTx writes greets the customer by name. A new customer's name is their phone
+  // (ingest-inbound.ts). A saved name is never replaced.
+  const name = cart.state.customerName;
+  if (name !== null) {
+    await tx`
+      update public.customers set name = ${name}
+      where id = ${scope.customerId} and restaurant_id = ${scope.restaurantId} and name = phone`;
+  }
+
   let created: Awaited<ReturnType<typeof createOrderInTx>>;
   try {
     created = await createOrderInTx(tx, deps, systemCtx(scope.restaurantId), {
@@ -254,18 +263,17 @@ async function placeOrder(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: un
   await tx`
     update public.ai_carts set status = 'placed', order_id = ${created.id}
     where id = ${cart.id} and restaurant_id = ${scope.restaurantId}`;
-  // FR-187: fill empty saved fields; never overwrite. A new customer's name is their phone (ingest-inbound.ts).
-  const name = cart.state.customerName;
-  const logradouro = delivery ? address.logradouro : null;
-  await tx`
-    update public.customers set
-      name = case when name = phone and ${name}::text is not null then ${name}::text else name end,
-      numero = case when logradouro is null and ${logradouro}::text is not null then ${delivery ? address.numero : null}::text else numero end,
-      complemento = case when logradouro is null and ${logradouro}::text is not null then ${delivery ? address.complemento : null}::text else complemento end,
-      logradouro = coalesce(logradouro, ${logradouro}::text),
-      bairro = coalesce(bairro, ${delivery ? address.bairro : null}::text)
-    where id = ${scope.customerId} and restaurant_id = ${scope.restaurantId}
-  `;
+  // FR-187: fill empty saved address fields from a delivery cart; a saved value is never replaced.
+  if (delivery) {
+    await tx`
+      update public.customers set
+        logradouro = coalesce(logradouro, ${address.logradouro}::text),
+        numero = coalesce(numero, ${address.numero}::text),
+        complemento = coalesce(complemento, ${address.complemento}::text),
+        bairro = coalesce(bairro, ${address.bairro}::text)
+      where id = ${scope.customerId} and restaurant_id = ${scope.restaurantId}
+    `;
+  }
   const settings = await loadOrderSettings(tx, scope.restaurantId);
   return ok({
     code: created.code,

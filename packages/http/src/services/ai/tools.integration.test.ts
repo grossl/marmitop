@@ -54,6 +54,12 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await db`delete from public.ai_carts where restaurant_id = ${a.restaurantId}`;
+  // Each test starts with no customer reply after NOW and with the seed customer's saved fields.
+  await db`delete from public.messages
+           where conversation_id = ${a.conversationId} and direction = 'in' and created_at >= ${NOW}`;
+  await db`update public.customers set name = 'Maria', logradouro = 'Rua das Flores', numero = '342',
+             complemento = null, bairro = 'Vila Madalena'
+           where id = ${a.customerId}`;
   const [r] = await db<{ id: string }[]>`
     insert into public.ai_runs (restaurant_id, conversation_id, trigger_message_id, status)
     values (${a.restaurantId}, ${a.conversationId}, ${a.messageId}, 'running') returning id`;
@@ -164,6 +170,116 @@ describe("summary and place_order", () => {
       items: [{ menu_item_id: a.menuItemId, size_id: a.menuItemSizeId, quantity: 3, notes: null }],
     });
     expect(await run("place_order", {})).toMatchObject({ ok: false, errorCode: "not_confirmed" });
+  });
+});
+
+describe("cart lifetime (database clock)", () => {
+  test("a placed cart older than 30 minutes does not answer a new place_order", async () => {
+    await db`insert into public.ai_carts (restaurant_id, conversation_id, status, fulfillment, order_id, updated_at)
+             values (${a.restaurantId}, ${a.conversationId}, 'placed', 'pickup', ${a.orderId}, now() - interval '31 minutes')`;
+    const r = await run("place_order", {});
+    expect(r).toMatchObject({ ok: false, errorCode: "not_confirmed" });
+  });
+
+  test("a placed cart within 30 minutes answers with its order", async () => {
+    await db`insert into public.ai_carts (restaurant_id, conversation_id, status, fulfillment, order_id, updated_at)
+             values (${a.restaurantId}, ${a.conversationId}, 'placed', 'pickup', ${a.orderId}, now() - interval '29 minutes')`;
+    const r = await run("place_order", {});
+    expect(r.ok).toBe(true);
+    expect(json(r.content).code).toBe("ORD-001");
+  });
+
+  test("an open cart older than 6 hours is abandoned and update_cart starts a fresh cart", async () => {
+    const [old] = await db<{ id: string }[]>`
+      insert into public.ai_carts (restaurant_id, conversation_id, status, fulfillment, logradouro, bairro, version, updated_at)
+      values (${a.restaurantId}, ${a.conversationId}, 'open', 'delivery', 'Rua Velha', 'Centro', 4, now() - interval '6 hours 1 minute')
+      returning id`;
+    const r = await run("update_cart", cartInput("pickup"));
+    expect(r.ok).toBe(true);
+    expect(json(r.content).address).toEqual({ logradouro: null, numero: null, bairro: null, complemento: null });
+    const rows = await db<{ id: string; status: string; logradouro: string | null }[]>`
+      select id, status, logradouro from public.ai_carts where conversation_id = ${a.conversationId} order by created_at`;
+    expect(rows.find((c) => c.id === old!.id)?.status).toBe("abandoned");
+    const open = rows.filter((c) => c.status === "open");
+    expect(open).toHaveLength(1);
+    expect(open[0]?.id).not.toBe(old!.id);
+    expect(open[0]?.logradouro).toBeNull();
+  });
+});
+
+describe("customer back-fill (FR-187)", () => {
+  type Customer = {
+    name: string;
+    phone: string;
+    logradouro: string | null;
+    numero: string | null;
+    complemento: string | null;
+    bairro: string | null;
+  };
+  const customer = async () =>
+    (
+      await db<Customer[]>`
+      select name, phone, logradouro, numero, complemento, bairro from public.customers where id = ${a.customerId}`
+    )[0]!;
+
+  async function placeWith(input: ReturnType<typeof cartInput>, customerName: string | null): Promise<string> {
+    await run("update_cart", { ...input, customer_name: customerName });
+    expect((await run("send_order_summary", {})).ok).toBe(true);
+    await inbound("sim", new Date(NOW.getTime() + 1000));
+    const placed = await run("place_order", {});
+    expect(placed.ok).toBe(true);
+    return json(placed.content).code as string;
+  }
+
+  test("a name equal to the phone is filled before the order, so order_received greets by name", async () => {
+    await db`update public.customers set name = phone where id = ${a.customerId}`;
+    await db`insert into public.automatic_messages (restaurant_id, kind, enabled, body)
+             values (${a.restaurantId}, 'order_received', true, 'Oi {{nome}}, recebemos o pedido {{pedido}}.')
+             on conflict (restaurant_id, kind) do update set enabled = true, body = excluded.body`;
+    const { phone } = await customer();
+    const code = await placeWith(cartInput("pickup"), "João");
+    expect((await customer()).name).toBe("João");
+    const [m] = await db<{ body: string }[]>`
+      select m.body from public.messages m join public.orders o on o.id = m.order_id
+      where o.restaurant_id = ${a.restaurantId} and o.code = ${code} and m.automatic_kind = 'order_received'`;
+    expect(m?.body).toContain("João");
+    expect(m?.body).not.toContain(phone);
+    await db`update public.automatic_messages set enabled = false where restaurant_id = ${a.restaurantId} and kind = 'order_received'`;
+  });
+
+  test("a saved name is kept", async () => {
+    await placeWith(cartInput("pickup"), "João");
+    expect((await customer()).name).toBe("Maria");
+  });
+
+  test("a saved address is kept", async () => {
+    await placeWith(
+      cartInput("delivery", { logradouro: "Rua Nova", numero: "9", bairro: "Centro", complemento: "ap 2" }),
+      null,
+    );
+    expect(await customer()).toMatchObject({
+      logradouro: "Rua das Flores",
+      numero: "342",
+      complemento: "ap 2",
+      bairro: "Vila Madalena",
+    });
+  });
+
+  test("a pickup order leaves saved numero and complemento alone", async () => {
+    await db`update public.customers set logradouro = null, numero = '10', complemento = 'casa 3' where id = ${a.customerId}`;
+    await placeWith(cartInput("pickup"), null);
+    expect(await customer()).toMatchObject({ logradouro: null, numero: "10", complemento: "casa 3" });
+  });
+
+  test("a delivery cart with a street but no numero never erases a saved numero", async () => {
+    await db`update public.customers set logradouro = null, numero = '10', complemento = null where id = ${a.customerId}`;
+    await placeWith(cartInput("delivery", { logradouro: "Rua Nova", numero: null, bairro: "Centro" }), null);
+    expect(await customer()).toMatchObject({
+      logradouro: "Rua Nova",
+      numero: "10",
+      complemento: null,
+      bairro: "Vila Madalena",
+    });
   });
 });
 

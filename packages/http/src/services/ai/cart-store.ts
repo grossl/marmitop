@@ -63,23 +63,30 @@ const NEW_CART: StoredCart = {
   orderId: null,
 };
 
+// Cart lifetime runs on ONE clock, the database's: the trigger stamps `updated_at` with now(),
+// so the 30-minute placed window and the 6-hour abandonment compare against now() too.
+const PLACED_WINDOW_SECONDS = AI_SUMMARY_TTL_MS / 1000;
+const ABANDON_AFTER_SECONDS = AI_CART_ABANDON_MS / 1000;
+
 /**
  * The open cart; else a cart placed in the last 30 minutes (so a repeated place_order returns the
- * same order); else a new empty cart. An older placed cart never answers a later "sim".
+ * same order); else a new empty cart. An older placed cart never answers a later "sim". An open
+ * cart untouched for 6 hours becomes `abandoned` and a new empty cart takes its place.
  */
-export async function loadCart(tx: Tx, restaurantId: string, conversationId: string, now: Date): Promise<StoredCart> {
-  const placedSince = new Date(now.getTime() - AI_SUMMARY_TTL_MS);
-  const [r] = await tx<Row[]>`
+export async function loadCart(tx: Tx, restaurantId: string, conversationId: string): Promise<StoredCart> {
+  const [r] = await tx<(Row & { expired: boolean })[]>`
     select id, status, items, fulfillment, customer_name, logradouro, numero, complemento, bairro,
-      version, summary_message_id, summary_version, summary_sent_at, order_id, updated_at
+      version, summary_message_id, summary_version, summary_sent_at, order_id, updated_at,
+      (status = 'open' and updated_at < now() - make_interval(secs => ${ABANDON_AFTER_SECONDS}::double precision)) as expired
     from public.ai_carts
     where restaurant_id = ${restaurantId} and conversation_id = ${conversationId}
-      and (status = 'open' or (status = 'placed' and updated_at > ${placedSince}))
+      and (status = 'open'
+        or (status = 'placed' and updated_at > now() - make_interval(secs => ${PLACED_WINDOW_SECONDS}::double precision)))
     order by (status = 'open') desc, updated_at desc limit 1
     for update
   `;
   if (r === undefined) return NEW_CART;
-  if (r.status === "open" && now.getTime() - r.updated_at.getTime() > AI_CART_ABANDON_MS) {
+  if (r.expired) {
     await tx`update public.ai_carts set status = 'abandoned' where id = ${r.id} and restaurant_id = ${restaurantId}`;
     return NEW_CART;
   }
