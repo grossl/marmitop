@@ -1,5 +1,6 @@
 // AI assistant schemas (12.ai-order-assistant.md, FR-180..FR-199). Tool input schemas mirror
-// AI_TOOL_SPECS in @mt/core and validate every model tool call before it runs.
+// AI_TOOL_SPECS in @mt/core and validate every model tool call before it runs. The JSON Schemas
+// state their limits in descriptions (strict tool use has no length or range keywords); Zod enforces them.
 
 import { z } from "zod";
 
@@ -18,7 +19,12 @@ export type AiTurnJob = z.infer<typeof aiTurnJobSchema>;
 export const saveAiSettingsSchema = z.object({
   enabled: z.boolean(),
   personaName: z.string().trim().min(1).max(40),
-  extraInstructions: z.string().trim().max(1000).nullable(),
+  extraInstructions: z
+    .string()
+    .trim()
+    .max(1000)
+    .nullable()
+    .transform((v) => (v === "" ? null : v)),
   autoResumeMinutes: z.number().int().min(0).max(10080),
   allowOverage: z.boolean(),
   monthlyHardCap: z.number().int().min(1).max(1_000_000),

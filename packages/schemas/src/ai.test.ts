@@ -39,6 +39,7 @@ describe("AI schemas", () => {
       monthlyHardCap: 20000,
     };
     expect(saveAiSettingsSchema.parse(base)).toEqual(base);
+    expect(saveAiSettingsSchema.parse({ ...base, extraInstructions: "   " }).extraInstructions).toBeNull();
     expect(() => saveAiSettingsSchema.parse({ ...base, personaName: "" })).toThrow();
     expect(() => saveAiSettingsSchema.parse({ ...base, extraInstructions: "x".repeat(1001) })).toThrow();
   });

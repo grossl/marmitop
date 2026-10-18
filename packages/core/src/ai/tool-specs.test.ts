@@ -25,4 +25,18 @@ describe("AI_TOOL_SPECS", () => {
     for (const banned of ["restaurant", "customer_id", "conversation", "phone", "price"])
       expect(text).not.toContain(`"${banned}`);
   });
+
+  test("uses no keyword that strict tool use rejects", () => {
+    const banned = ["minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems", "multipleOf"];
+    const walk = (node: unknown, path: string): string[] => {
+      if (Array.isArray(node)) return node.flatMap((n, i) => walk(n, `${path}[${i}]`));
+      if (node === null || typeof node !== "object") return [];
+      return Object.entries(node).flatMap(([k, v]) => [
+        ...(banned.includes(k) ? [`${path}.${k}`] : []),
+        ...walk(v, `${path}.${k}`),
+      ]);
+    };
+    const found = AI_TOOL_SPECS.flatMap((t) => walk(t.inputSchema, t.name));
+    expect(found).toEqual([]);
+  });
 });
