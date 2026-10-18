@@ -4,11 +4,14 @@
 // BillingProvider port (NullBillingProvider in v1, ADR-008). Usage is the
 // current local month of `usage_events`. Limits are shown, never enforced.
 
-import { DEFAULT_TIMEZONE } from "@mt/schemas";
 import { type BillingInvoice, NullBillingProvider, type Plan } from "@mt/core";
+import { DEFAULT_TIMEZONE } from "@mt/schemas";
 import { z } from "zod";
 
 import { defineService } from "../../service";
+import { loadAiQuota } from "../ai/quota";
+import { loadAiSettings } from "../ai/settings";
+import { monthStartFor } from "../billing/period";
 
 export interface UsageLine {
   readonly used: number;
@@ -21,6 +24,11 @@ export interface PlanAndUsage {
     readonly orders: UsageLine;
     readonly messages: UsageLine;
     readonly invoices: UsageLine;
+    readonly aiReplies: UsageLine & {
+      readonly extra: number;
+      readonly amountCents: number;
+      readonly allowOverage: boolean;
+    };
   };
   /** Start of the counted month (instant), for display. */
   readonly periodStart: string;
@@ -64,30 +72,38 @@ export const getPlanAndUsage = defineService({
     const plan = await provider.getPlan(ctx.restaurantId);
     const invoiceHistory = await provider.listInvoices(ctx.restaurantId);
 
-    const [settings] = await tx<{ timezone: string }[]>`
-      select timezone from public.restaurant_settings where restaurant_id = ${ctx.restaurantId}
-    `;
-    const timezone = settings?.timezone ?? DEFAULT_TIMEZONE;
-    const now = deps.clock.now().toISOString();
-    const [bounds] = await tx<{ start: Date; next: Date }[]>`
-      select (date_trunc('month', ${now}::timestamptz at time zone ${timezone}) at time zone ${timezone}) as start,
-             ((date_trunc('month', ${now}::timestamptz at time zone ${timezone}) + interval '1 month') at time zone ${timezone}) as next
+    const now = deps.clock.now();
+    const start = await monthStartFor(tx, ctx.restaurantId, now);
+    const [bounds] = await tx<{ next: Date }[]>`
+      select (${start}::timestamptz at time zone tz + interval '1 month') at time zone tz as next
+      from (select coalesce(s.timezone, ${DEFAULT_TIMEZONE}) as tz
+            from public.restaurants r left join public.restaurant_settings s on s.restaurant_id = r.id
+            where r.id = ${ctx.restaurantId}) t
     `;
     const counts = await tx<{ kind: string; n: number }[]>`
       select kind, count(*)::int as n from public.usage_events
-      where restaurant_id = ${ctx.restaurantId} and occurred_at >= ${bounds?.start ?? new Date(0)}
+      where restaurant_id = ${ctx.restaurantId} and occurred_at >= ${start}
         and occurred_at < ${bounds?.next ?? new Date(8.64e15)}
       group by kind
     `;
     const used = (kind: string) => counts.find((c) => c.kind === kind)?.n ?? 0;
+    const aiSettings = await loadAiSettings(tx, ctx.restaurantId);
+    const ai = await loadAiQuota(tx, ctx.restaurantId, now, aiSettings);
     return {
       plan,
       usage: {
         orders: { used: used("order.created"), included: plan?.includedOrdersMonth ?? 0 },
         messages: { used: used("message.sent"), included: plan?.includedMessagesMonth ?? 0 },
         invoices: { used: used("invoice.issued"), included: plan?.includedInvoicesMonth ?? 0 },
+        aiReplies: {
+          used: ai.used,
+          included: ai.included,
+          extra: ai.extra,
+          amountCents: ai.amountCents,
+          allowOverage: aiSettings.allowOverage,
+        },
       },
-      periodStart: (bounds?.start ?? new Date(0)).toISOString(),
+      periodStart: start.toISOString(),
       invoiceHistory,
     };
   },

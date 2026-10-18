@@ -1,6 +1,6 @@
 // BillingProvider port (ADR-008; FR-150..FR-156). v1 has one adapter: NullBillingProvider.
 
-export type UsageKind = "order.created" | "message.sent" | "invoice.issued";
+export type UsageKind = "order.created" | "message.sent" | "invoice.issued" | "ai.reply";
 
 export interface UsageEvent {
   readonly restaurantId: string;

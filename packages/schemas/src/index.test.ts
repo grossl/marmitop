@@ -35,6 +35,13 @@ describe("@mt/schemas public surface", () => {
       "outboundMessageJobSchema",
       "invoiceJobSchema",
       "cpfCnpjSchema",
+      "aiTurnJobSchema",
+      "saveAiSettingsSchema",
+      "setConversationAiModeSchema",
+      "searchMenuInputSchema",
+      "updateCartInputSchema",
+      "handoffInputSchema",
+      "emptyToolInputSchema",
       "cepSchema",
       "ufSchema",
     ]) {
