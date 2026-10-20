@@ -39,4 +39,25 @@ describe("AI_TOOL_SPECS", () => {
     const found = AI_TOOL_SPECS.flatMap((t) => walk(t.inputSchema, t.name));
     expect(found).toEqual([]);
   });
+
+  // The Messages API rejects `enum` next to a type array ("Enum value 'pickup' does not match
+  // declared type"). A nullable enum must be `anyOf: [{ type, enum }, { type: "null" }]`.
+  test("no enum sits next to a type array", () => {
+    const walk = (node: unknown, path: string): string[] => {
+      if (Array.isArray(node)) return node.flatMap((n, i) => walk(n, `${path}[${i}]`));
+      if (node === null || typeof node !== "object") return [];
+      const o = node as Record<string, unknown>;
+      const here = "enum" in o && Array.isArray(o.type) ? [path] : [];
+      return [...here, ...Object.entries(o).flatMap(([k, v]) => walk(v, `${path}.${k}`))];
+    };
+    expect(AI_TOOL_SPECS.flatMap((t) => walk(t.inputSchema, t.name))).toEqual([]);
+  });
+
+  test("update_cart.fulfillment is pickup, delivery, or null", () => {
+    const cart = AI_TOOL_SPECS.find((t) => t.name === "update_cart");
+    const props = cart?.inputSchema.properties as Record<string, unknown>;
+    expect(props.fulfillment).toMatchObject({
+      anyOf: [{ type: "string", enum: ["pickup", "delivery"] }, { type: "null" }],
+    });
+  });
 });

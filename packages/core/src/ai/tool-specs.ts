@@ -51,10 +51,10 @@ export const AI_TOOL_SPECS: readonly AssistantToolSpec[] = [
             additionalProperties: false,
           },
         },
+        // A nullable enum is `anyOf`: the API rejects `enum` next to a `["string", "null"]` type array.
         fulfillment: {
-          type: ["string", "null"],
-          enum: ["pickup", "delivery", null],
-          description: "Retirada = pickup, Entrega = delivery.",
+          anyOf: [{ type: "string", enum: ["pickup", "delivery"] }, { type: "null" }],
+          description: "Retirada = pickup, Entrega = delivery, or null to keep the current value.",
         },
         address: {
           type: ["object", "null"],
