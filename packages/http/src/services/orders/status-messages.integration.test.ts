@@ -171,6 +171,37 @@ describe("status messages on a status move (FR-201, FR-205)", () => {
     expect(await jobsFor(rows.map((r) => r.id))).toBe(0);
   });
 
+  test("a failed status message counts as sent: back step and forward again add no second row (FR-203)", async () => {
+    await db`update public.conversations set last_inbound_at = null where id = ${a.conversationId}`;
+    const o = await newOrder("delivery");
+    await move(o.id, "confirmado");
+    await db`update public.conversations set last_inbound_at = ${new Date(NOW.getTime() - 60_000)}
+      where id = ${a.conversationId}`;
+    await move(o.id, "aguardando");
+    await move(o.id, "confirmado");
+    const rows = await statusMessages(o.id);
+    expect(rows.map((r) => [r.automatic_kind, r.status])).toEqual([["order_confirmed", "failed"]]);
+  });
+
+  test("outside the window with a template: a template row and one job (FR-204)", async () => {
+    await db`
+      update public.automatic_messages set template_name = 'pedido_saiu', template_language = 'pt_BR'
+      where restaurant_id = ${a.restaurantId} and kind = 'order_out_for_delivery'`;
+    await db`update public.conversations set last_inbound_at = ${new Date(NOW.getTime() - 30 * 3_600_000)}
+      where id = ${a.conversationId}`;
+    const o = await newOrder("delivery");
+    await move(o.id, "saiu");
+    const rows = await db<
+      { id: string; status: string; template_name: string | null; template_language: string | null }[]
+    >`
+      select id, status, template_name, template_language from public.messages
+      where order_id = ${o.id} and automatic_kind = 'order_out_for_delivery'`;
+    expect(rows.map((r) => [r.status, r.template_name, r.template_language])).toEqual([
+      ["pending", "pedido_saiu", "pt_BR"],
+    ]);
+    expect(await jobsFor(rows.map((r) => r.id))).toBe(1);
+  });
+
   test("a status change through the public API sends (api_key actor)", async () => {
     const o = await newOrder("delivery");
     await apiChangeOrderStatus(deps, keyCtx(), { id: o.code, status: "saiu" });
