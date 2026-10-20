@@ -1,4 +1,4 @@
-// covers FR-081, FR-082, FR-083, FR-084, FR-092, FR-093, FR-096, FR-098, FR-150, FR-151, FR-154, FR-155
+// covers FR-081, FR-082, FR-083, FR-084, FR-200, FR-092, FR-093, FR-096, FR-098, FR-150, FR-151, FR-154, FR-155
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { AppError } from "@mt/core";
 import type { Db } from "@mt/db";
@@ -30,12 +30,22 @@ afterAll(async () => {
 });
 
 describe("getSettings", () => {
-  test("returns profile, preferences, seven hour rows, three messages, and secret states without plaintext", async () => {
+  test("returns profile, preferences, seven hour rows, nine messages, and secret states without plaintext", async () => {
     const s = await getSettings(deps, admin(), undefined);
     expect(s.profile.id).toBe(a.restaurantId);
     expect(s.hours).toHaveLength(7);
     expect(s.hours[1]).toMatchObject({ weekday: 1, enabled: true, opensAt: "08:00", closesAt: "18:00" });
-    expect(s.automaticMessages.map((m) => m.kind)).toEqual(["welcome", "closed", "order_received"]);
+    expect(s.automaticMessages.map((m) => m.kind)).toEqual([
+      "welcome",
+      "closed",
+      "order_received",
+      "order_confirmed",
+      "order_preparing",
+      "order_ready",
+      "order_out_for_delivery",
+      "order_delivered",
+      "order_cancelled",
+    ]);
     expect(s.integrations.whatsapp?.apiKey).toEqual({ configured: true, last4: "abcd" });
     expect(s.integrations.webhook?.secret.configured).toBe(true);
     const json = JSON.stringify(s);
@@ -132,6 +142,23 @@ describe("saveAutomaticMessage", () => {
       templateLanguage: "pt_BR",
     });
     expect(saved).toMatchObject({ templateName: "pedido_recebido", templateLanguage: "pt_BR" });
+  });
+
+  test("a status kind saves a body and a template (ADR-026)", async () => {
+    const saved = await saveAutomaticMessage(deps, admin(), {
+      kind: "order_out_for_delivery",
+      enabled: true,
+      body: "Seu pedido {{pedido}} saiu!",
+      templateName: "pedido_saiu",
+      templateLanguage: "pt_BR",
+    });
+    expect(saved).toMatchObject({ kind: "order_out_for_delivery", templateName: "pedido_saiu" });
+    const s = await getSettings(deps, admin(), undefined);
+    expect(s.automaticMessages.find((m) => m.kind === "order_out_for_delivery")).toMatchObject({
+      enabled: true,
+      body: "Seu pedido {{pedido}} saiu!",
+      templateLanguage: "pt_BR",
+    });
   });
 
   test("a template on welcome, or a name without a language, is refused", async () => {

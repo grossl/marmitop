@@ -3,6 +3,7 @@
 // Status moves and cancel (FR-021, FR-022, FR-023, FR-026, FR-028; ADR-017;
 // Appendix A `changeOrderStatus`, `cancelOrder`). The core status machine
 // decides; the database trigger is the backstop and writes the history row.
+// A forward move or a cancel also writes the status message (FR-201–205, ADR-026).
 
 import { AppError, applyTransition, type Fulfillment, type OrderStatus } from "@mt/core";
 import type { Tx } from "@mt/db";
@@ -10,6 +11,7 @@ import { cancelOrderActionSchema, changeOrderStatusActionSchema } from "@mt/sche
 
 import { defineService } from "../../service";
 import { emitEvent } from "../webhooks/emit";
+import { enqueueOrderStatusMessage } from "../whatsapp/automatic";
 
 export interface OrderStatusResult {
   readonly id: string;
@@ -29,8 +31,17 @@ export async function changeOrderStatusInTx(
   now: Date,
 ): Promise<OrderStatusResult> {
   // The row lock serializes two attendants dragging the same card.
-  const [order] = await tx<{ id: string; code: string; status: OrderStatus; fulfillment: Fulfillment }[]>`
-    select id, code, status, fulfillment from public.orders
+  const [order] = await tx<
+    {
+      id: string;
+      code: string;
+      status: OrderStatus;
+      fulfillment: Fulfillment;
+      conversation_id: string | null;
+      customer_id: string;
+    }[]
+  >`
+    select id, code, status, fulfillment, conversation_id, customer_id from public.orders
     where restaurant_id = ${ctx.restaurantId} and id = ${orderId}
     for update
   `;
@@ -80,6 +91,17 @@ export async function changeOrderStatusInTx(
     },
     { now },
   );
+  // FR-201–205, ADR-026: the customer's status message, in this transaction, for every actor.
+  await enqueueOrderStatusMessage(tx, ctx.restaurantId, {
+    orderId: order.id,
+    orderCode: order.code,
+    from: order.status,
+    to,
+    fulfillment: order.fulfillment,
+    conversationId: order.conversation_id,
+    customerId: order.customer_id,
+    now,
+  });
   return {
     id: order.id,
     code: order.code,

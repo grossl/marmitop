@@ -1,4 +1,4 @@
-// Automatic messages (FR-110..FR-115, FR-117; ADR-007, ADR-014, ADR-015).
+// Automatic messages (FR-110..FR-115, FR-117, FR-200..FR-205; ADR-007, ADR-014, ADR-015, ADR-026).
 //
 // The decisions are pure (`@mt/core` automatic-messages.ts). This file loads
 // their inputs and stores the result inside the caller's transaction: a
@@ -11,6 +11,11 @@ import {
   type BusinessHoursRow,
   decideInboundAutoMessage,
   decideOrderReceived,
+  decideOrderStatusMessage,
+  type Fulfillment,
+  ORDER_STATUS_MESSAGE_KINDS,
+  type OrderStatus,
+  orderStatusMessageKind,
 } from "@mt/core";
 import { QUEUES, sendJob, type Tx } from "@mt/db";
 import type { OutboundMessageJob } from "@mt/schemas";
@@ -18,7 +23,7 @@ import type { OutboundMessageJob } from "@mt/schemas";
 import type { ServiceDeps } from "../../deps";
 import { previewOf } from "../messaging/helpers";
 
-const KINDS: readonly AutomaticKind[] = ["welcome", "closed", "order_received"];
+const KINDS: readonly AutomaticKind[] = ["welcome", "closed", "order_received", ...ORDER_STATUS_MESSAGE_KINDS];
 
 export interface AutomationSettings {
   readonly config: AutomaticMessagesConfig;
@@ -80,7 +85,7 @@ export interface AutomaticRowInput {
   readonly body: string;
   readonly orderId?: string | null;
   readonly template?: { readonly name: string; readonly language: string } | null;
-  /** Set for an `order_received` that cannot go out (FR-117): stored `failed`, never enqueued. */
+  /** Set for an order message that cannot go out (FR-117, FR-204): stored `failed`, never enqueued. */
   readonly failure?: { readonly code: string; readonly message: string } | null;
   readonly at: Date;
 }
@@ -226,6 +231,78 @@ export async function enqueueOrderReceived(
       decision.action === "send_template" ? { name: decision.templateName, language: decision.templateLanguage } : null,
     failure: decision.action === "fail" ? { code: decision.errorCode, message: OUTSIDE_WINDOW_MESSAGE } : null,
     at: now,
+  });
+  return { action: decision.action, messageId };
+}
+
+export interface OrderStatusMessageInput {
+  readonly orderId: string;
+  readonly orderCode: string;
+  readonly from: OrderStatus;
+  readonly to: OrderStatus;
+  readonly fulfillment: Fulfillment;
+  /** The order's WhatsApp conversation; null for a counter order. */
+  readonly conversationId: string | null;
+  readonly customerId: string;
+  readonly now: Date;
+}
+
+export type OrderStatusMessageOutcome =
+  | { readonly action: "skip"; readonly reason: "no_message" | "no_conversation" | "disabled" | "already_sent" }
+  | { readonly action: "send_text" | "send_template" | "fail"; readonly messageId: string };
+
+/**
+ * FR-201 to FR-205, ADR-026. Runs in the status change's transaction, after the
+ * order update. The caller holds the order row lock, so two moves of one order
+ * cannot both pass the once-per-kind check (FR-203).
+ */
+export async function enqueueOrderStatusMessage(
+  tx: Tx,
+  restaurantId: string,
+  input: OrderStatusMessageInput,
+): Promise<OrderStatusMessageOutcome> {
+  // Cheap exits first: most moves need no lookups.
+  const kind = orderStatusMessageKind(input.from, input.to, input.fulfillment);
+  if (kind === null) return { action: "skip", reason: "no_message" };
+  if (input.conversationId === null) return { action: "skip", reason: "no_conversation" };
+
+  const settings = await loadAutomationSettings(tx, restaurantId);
+  if (!settings.config[kind].enabled) return { action: "skip", reason: "disabled" };
+
+  const [sent] = await tx<{ n: number }[]>`
+    select count(*)::int as n from public.messages
+    where restaurant_id = ${restaurantId} and order_id = ${input.orderId} and automatic_kind = ${kind}
+  `;
+  const [conv] = await tx<{ last_inbound_at: Date | null }[]>`
+    select last_inbound_at from public.conversations
+    where id = ${input.conversationId} and restaurant_id = ${restaurantId}
+  `;
+  const [customer] = await tx<{ name: string }[]>`
+    select name from public.customers where restaurant_id = ${restaurantId} and id = ${input.customerId}
+  `;
+  const decision = decideOrderStatusMessage({
+    config: settings.config,
+    from: input.from,
+    to: input.to,
+    fulfillment: input.fulfillment,
+    hasConversation: conv !== undefined,
+    alreadySent: (sent?.n ?? 0) > 0,
+    lastInboundAt: conv?.last_inbound_at ?? null,
+    now: input.now,
+    orderCode: input.orderCode,
+    customerName: customer?.name ?? "",
+    restaurantName: settings.restaurantName,
+  });
+  if (decision.action === "skip") return decision;
+  const messageId = await storeAutomaticMessage(tx, restaurantId, {
+    conversationId: input.conversationId,
+    kind: decision.kind,
+    body: decision.body,
+    orderId: input.orderId,
+    template:
+      decision.action === "send_template" ? { name: decision.templateName, language: decision.templateLanguage } : null,
+    failure: decision.action === "fail" ? { code: decision.errorCode, message: OUTSIDE_WINDOW_MESSAGE } : null,
+    at: input.now,
   });
   return { action: decision.action, messageId };
 }

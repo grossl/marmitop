@@ -48,7 +48,7 @@ export interface SettingsView {
   readonly preferences: OrderPreferences;
   /** Seven entries, weekday 0 (Sunday) to 6. Missing days come back disabled. */
   readonly hours: BusinessHoursDay[];
-  /** Always the three kinds, in order. A missing row comes back disabled with an empty body. */
+  /** Always the nine kinds of AUTOMATIC_MESSAGE_KINDS, in order. A missing row comes back disabled with an empty body. */
   readonly automaticMessages: AutomaticMessageSetting[];
   readonly integrations: IntegrationsState;
 }
