@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Bot, Check, Clock3, Copy, CreditCard, KeyRound, Link2, MessageSquareText, Receipt, Save, Settings2 } from "lucide-react";
 import type { AiQuota, AiSettings, ApiKeyListItem, PlanAndUsage, SettingsView, UatisWebhookStatus, WebhookDeliveryView } from "@mt/http";
+import { TEMPLATE_MESSAGE_KINDS } from "@mt/schemas";
 import { Button } from "@mt/ui/components/button";
 import { Input } from "@mt/ui/components/input";
 import { Label } from "@mt/ui/components/label";
@@ -511,12 +512,21 @@ function HoursSettings({ settings }: { settings: SettingsView }) {
   );
 }
 
-// ─── Mensagens automáticas (FR-084, ADR-014) ──────────────────────────────────
+// ─── Mensagens automáticas (FR-084, FR-200, ADR-014, ADR-026) ─────────────────
 
 const MESSAGE_COPY = {
   welcome: { title: "Mensagem de boas-vindas", description: "Enviada quando um novo cliente inicia uma conversa." },
   closed: { title: "Fora do horário", description: "Enviada automaticamente quando o restaurante está fechado." },
   order_received: { title: "Pedido recebido", description: "Confirma o recebimento de um novo pedido." },
+  order_confirmed: { title: "Pedido confirmado", description: "Enviada quando o pedido é confirmado." },
+  order_preparing: { title: "Pedido em preparo", description: "Enviada quando o pedido entra em preparo." },
+  order_ready: {
+    title: "Pedido pronto para retirada",
+    description: "Enviada quando o pedido fica pronto. Só para pedidos de retirada.",
+  },
+  order_out_for_delivery: { title: "Saiu para entrega", description: "Enviada quando o pedido sai para entrega." },
+  order_delivered: { title: "Pedido entregue", description: "Enviada quando o pedido é entregue." },
+  order_cancelled: { title: "Pedido cancelado", description: "Enviada quando o pedido é cancelado." },
 } as const;
 
 function AutomationSettings({ settings }: { settings: SettingsView }) {
@@ -535,6 +545,7 @@ function AutomationSettings({ settings }: { settings: SettingsView }) {
 
 function AutomaticMessageCard({ message }: { message: SettingsView["automaticMessages"][number] }) {
   const copy = MESSAGE_COPY[message.kind];
+  const usesTemplate = TEMPLATE_MESSAGE_KINDS.includes(message.kind);
   const [enabled, setEnabled] = useState(message.enabled);
   const [body, setBody] = useState(message.body);
   const [templateName, setTemplateName] = useState(message.templateName ?? "");
@@ -552,7 +563,7 @@ function AutomaticMessageCard({ message }: { message: SettingsView["automaticMes
               kind: message.kind,
               enabled,
               body,
-              ...(message.kind === "order_received" ? { templateName, templateLanguage } : {}),
+              ...(usesTemplate ? { templateName, templateLanguage } : {}),
             }),
           `${copy.title} salva.`,
         );
@@ -567,7 +578,7 @@ function AutomaticMessageCard({ message }: { message: SettingsView["automaticMes
       </div>
       <Textarea value={body} onChange={(e) => setBody(e.target.value)} className="mt-3 min-h-20 text-sm" aria-label={`Texto: ${copy.title}`} />
       {section.errors.body && <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-300">{section.errors.body}</p>}
-      {message.kind === "order_received" && (
+      {usesTemplate && (
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <Field label="Modelo do WhatsApp (opcional)" error={section.errors.templateName}>
             <Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="nome_do_modelo" />
