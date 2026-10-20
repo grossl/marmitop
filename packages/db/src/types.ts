@@ -23,7 +23,17 @@ export type Json = string | number | boolean | null | Json[] | { [key: string]: 
 
 export type MemberRole = "admin" | "attendant";
 export type ActorRole = MemberRole;
-export type AutomaticMessageKind = "welcome" | "closed" | "order_received";
+export type AutomaticMessageKind =
+  | "welcome"
+  | "closed"
+  | "order_received"
+  // ADR-026, migration 0021
+  | "order_confirmed"
+  | "order_preparing"
+  | "order_ready"
+  | "order_out_for_delivery"
+  | "order_delivered"
+  | "order_cancelled";
 export type SecretKind =
   | "uatis_api_key"
   | "uatis_webhook_secret"

@@ -23,8 +23,41 @@ export interface RestaurantContent {
     deliveryFeeCents: number;
   };
   hours: BusinessDay[];
-  automaticMessages: { kind: "welcome" | "closed" | "order_received"; enabled: boolean; body: string }[];
+  automaticMessages: { kind: AutomaticMessageKind; enabled: boolean; body: string }[];
 }
+
+type AutomaticMessageKind =
+  | "welcome"
+  | "closed"
+  | "order_received"
+  | "order_confirmed"
+  | "order_preparing"
+  | "order_ready"
+  | "order_out_for_delivery"
+  | "order_delivered"
+  | "order_cancelled";
+
+/** The six order status messages with the ADR-026 defaults, as migration 0021 inserts them. */
+export const ORDER_STATUS_MESSAGE_DEFAULTS: RestaurantContent["automaticMessages"] = [
+  {
+    kind: "order_confirmed",
+    enabled: true,
+    body: "Olá {{nome}}! Seu pedido {{pedido}} foi confirmado e logo entra em preparo.",
+  },
+  { kind: "order_preparing", enabled: false, body: "Seu pedido {{pedido}} está sendo preparado." },
+  {
+    kind: "order_ready",
+    enabled: true,
+    body: "Seu pedido {{pedido}} está pronto! Pode vir retirar no {{restaurante}}.",
+  },
+  { kind: "order_out_for_delivery", enabled: true, body: "Seu pedido {{pedido}} saiu para entrega!" },
+  { kind: "order_delivered", enabled: false, body: "Pedido {{pedido}} entregue. Obrigado pela preferência, {{nome}}!" },
+  {
+    kind: "order_cancelled",
+    enabled: true,
+    body: "Seu pedido {{pedido}} foi cancelado. Se tiver dúvidas, responda esta mensagem.",
+  },
+];
 
 export const CASA: RestaurantContent = {
   settings: {
@@ -51,6 +84,7 @@ export const CASA: RestaurantContent = {
       body: "Olá! Estamos fora do nosso horário de atendimento. Retornaremos assim que abrirmos.",
     },
     { kind: "order_received", enabled: true, body: "Recebemos seu pedido! Em breve confirmaremos os detalhes." },
+    ...ORDER_STATUS_MESSAGE_DEFAULTS,
   ],
 };
 
@@ -75,5 +109,6 @@ export const MINAS: RestaurantContent = {
     { kind: "welcome", enabled: true, body: "Uai, {{nome}}! Bem-vindo ao {{restaurante}}. O que vai ser hoje?" },
     { kind: "closed", enabled: true, body: "Estamos fechados agora. Abrimos de terça a domingo, a partir das 11h." },
     { kind: "order_received", enabled: false, body: "Pedido {{pedido}} recebido! Já vamos preparar." },
+    ...ORDER_STATUS_MESSAGE_DEFAULTS,
   ],
 };

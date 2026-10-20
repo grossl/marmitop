@@ -205,15 +205,22 @@ function restaurants(models: RestaurantModel[]): string {
       str(h.closes),
     ]),
   );
+  // The three FR-084 kinds first, then the ADR-026 status kinds, so the
+  // first six ids stay the same as before migration 0021.
   let autoN = 0;
-  const autos = models.flatMap(({ restaurant: r, content: c }) =>
-    c.automaticMessages.map((a) => [
-      str(devUuid(UUID_FAMILY.autoMessage, ++autoN)),
-      str(r.id),
-      str(a.kind),
-      String(a.enabled),
-      str(a.body),
-    ]),
+  const isStatusKind = (kind: string) => kind.startsWith("order_") && kind !== "order_received";
+  const autos = [false, true].flatMap((statusPass) =>
+    models.flatMap(({ restaurant: r, content: c }) =>
+      c.automaticMessages
+        .filter((a) => isStatusKind(a.kind) === statusPass)
+        .map((a) => [
+          str(devUuid(UUID_FAMILY.autoMessage, ++autoN)),
+          str(r.id),
+          str(a.kind),
+          String(a.enabled),
+          str(a.body),
+        ]),
+    ),
   );
   return (
     section("restaurants, members, settings, hours, automatic messages (FR-009, FR-080–084)") +
