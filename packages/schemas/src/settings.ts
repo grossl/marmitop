@@ -1,10 +1,17 @@
 // Settings requests (Appendix A, FR-080..FR-084, FR-096).
 
+import { ORDER_STATUS_MESSAGE_KINDS } from "@mt/core";
 import { z } from "zod";
 import { centsSchema, ibgeCodeSchema, optionalOf, ufSchema } from "./common";
 
 export const DEFAULT_TIMEZONE = "America/Sao_Paulo";
-export const AUTOMATIC_MESSAGE_KINDS = ["welcome", "closed", "order_received"] as const;
+/** Settings order: the three FR-084 kinds, then the six status kinds of ADR-026. */
+export const AUTOMATIC_MESSAGE_KINDS = ["welcome", "closed", "order_received", ...ORDER_STATUS_MESSAGE_KINDS] as const;
+/** Kinds that may carry an approved WhatsApp template for use outside the 24-hour window (ADR-014, ADR-026). */
+export const TEMPLATE_MESSAGE_KINDS: readonly (typeof AUTOMATIC_MESSAGE_KINDS)[number][] = [
+  "order_received",
+  ...ORDER_STATUS_MESSAGE_KINDS,
+];
 
 /** A real IANA zone name. */
 export const timezoneSchema = z
@@ -71,7 +78,7 @@ export const saveBusinessHoursSchema = z.object({ days: z.array(hoursDay).length
   }
 });
 
-/** `saveAutomaticMessage` (FR-084). A template applies to `order_received` only (ADR-014). */
+/** `saveAutomaticMessage` (FR-084, FR-200). A template applies to `order_received` and the status kinds (ADR-014, ADR-026). */
 export const saveAutomaticMessageSchema = z
   .object({
     kind: z.enum(AUTOMATIC_MESSAGE_KINDS),
@@ -88,11 +95,11 @@ export const saveAutomaticMessageSchema = z
         message: "Informe o modelo e o idioma juntos.",
       });
     }
-    if (v.kind !== "order_received" && v.templateName !== null) {
+    if (!TEMPLATE_MESSAGE_KINDS.includes(v.kind) && v.templateName !== null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["templateName"],
-        message: "Só a mensagem de pedido recebido usa modelo.",
+        message: "Só as mensagens de pedido usam modelo.",
       });
     }
   });

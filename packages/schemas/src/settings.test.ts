@@ -1,6 +1,7 @@
-// covers FR-080, FR-081, FR-082, FR-083, FR-084, FR-095, FR-096
+// covers FR-080, FR-081, FR-082, FR-083, FR-084, FR-095, FR-096, FR-200
 import { describe, expect, test } from "bun:test";
 import {
+  AUTOMATIC_MESSAGE_KINDS,
   saveAutomaticMessageSchema,
   saveBusinessHoursSchema,
   saveOrderPreferencesSchema,
@@ -122,7 +123,40 @@ describe("saveAutomaticMessageSchema (FR-084)", () => {
       }).success,
     ).toBe(false);
   });
-  test("templates apply to order_received only", () => {
+  test("every order status kind accepts a template (ADR-026)", () => {
+    for (const kind of [
+      "order_confirmed",
+      "order_preparing",
+      "order_ready",
+      "order_out_for_delivery",
+      "order_delivered",
+      "order_cancelled",
+    ]) {
+      expect(
+        saveAutomaticMessageSchema.safeParse({
+          kind,
+          enabled: true,
+          body: "x",
+          templateName: "a",
+          templateLanguage: "pt_BR",
+        }).success,
+      ).toBe(true);
+    }
+  });
+  test("AUTOMATIC_MESSAGE_KINDS lists the nine kinds in settings order (FR-084, FR-200)", () => {
+    expect([...AUTOMATIC_MESSAGE_KINDS]).toEqual([
+      "welcome",
+      "closed",
+      "order_received",
+      "order_confirmed",
+      "order_preparing",
+      "order_ready",
+      "order_out_for_delivery",
+      "order_delivered",
+      "order_cancelled",
+    ]);
+  });
+  test("templates do not apply to welcome or closed", () => {
     expect(
       saveAutomaticMessageSchema.safeParse({
         kind: "welcome",
