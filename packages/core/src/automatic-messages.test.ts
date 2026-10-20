@@ -2,9 +2,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   type AutomaticMessageConfig,
+  type AutomaticMessagesConfig,
   CLOSED_NOTICE_INTERVAL_MS,
   decideInboundAutoMessage,
   decideOrderReceived,
+  ORDER_STATUS_MESSAGE_KINDS,
   renderMessage,
 } from "./automatic-messages";
 import type { BusinessHoursRow } from "./business-hours";
@@ -16,29 +18,37 @@ const hours: BusinessHoursRow[] = [1, 2, 3, 4, 5].map((weekday) => ({
   opensAt: "09:00",
   closesAt: "18:00",
 }));
-const cfg = (over: Partial<Record<"welcome" | "closed" | "order_received", Partial<AutomaticMessageConfig>>> = {}) => ({
-  welcome: {
-    enabled: true,
-    body: "Oi {{nome}}, bem-vindo ao {{restaurante}}!",
-    templateName: null,
-    templateLanguage: null,
-    ...over.welcome,
-  },
-  closed: {
-    enabled: true,
-    body: "Fechado agora, {{nome}}.",
-    templateName: null,
-    templateLanguage: null,
-    ...over.closed,
-  },
-  order_received: {
-    enabled: true,
-    body: "Pedido {{pedido}} recebido, {{nome}}!",
-    templateName: null,
-    templateLanguage: null,
-    ...over.order_received,
-  },
-});
+const cfg = (over: Partial<Record<"welcome" | "closed" | "order_received", Partial<AutomaticMessageConfig>>> = {}) =>
+  ({
+    welcome: {
+      enabled: true,
+      body: "Oi {{nome}}, bem-vindo ao {{restaurante}}!",
+      templateName: null,
+      templateLanguage: null,
+      ...over.welcome,
+    },
+    closed: {
+      enabled: true,
+      body: "Fechado agora, {{nome}}.",
+      templateName: null,
+      templateLanguage: null,
+      ...over.closed,
+    },
+    order_received: {
+      enabled: true,
+      body: "Pedido {{pedido}} recebido, {{nome}}!",
+      templateName: null,
+      templateLanguage: null,
+      ...over.order_received,
+    },
+    // ADR-026 status kinds: off, and not read by the decisions under test here.
+    ...Object.fromEntries(
+      ORDER_STATUS_MESSAGE_KINDS.map((k) => [
+        k,
+        { enabled: false, body: "x", templateName: null, templateLanguage: null },
+      ]),
+    ),
+  }) as AutomaticMessagesConfig;
 const OPEN = new Date("2026-10-12T15:00:00Z"); // Monday 12:00 local
 const CLOSED = new Date("2026-10-12T23:30:00Z"); // Monday 20:30 local
 const base = {

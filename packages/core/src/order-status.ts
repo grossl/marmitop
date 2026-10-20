@@ -42,6 +42,17 @@ export function canTransition(from: OrderStatus, to: OrderStatus, fulfillment: F
   return toIdx > fromIdx || toIdx === fromIdx - 1;
 }
 
+/**
+ * True for a legal forward move (a skip included) or a cancel; false for a back
+ * step, a no-op, or an illegal move. ADR-026 sends a status message only then.
+ */
+export function isForwardOrCancel(from: OrderStatus, to: OrderStatus, fulfillment: Fulfillment): boolean {
+  if (!canTransition(from, to, fulfillment)) return false;
+  if (to === "cancelado") return true;
+  const flow = flowFor(fulfillment);
+  return flow.indexOf(to) > flow.indexOf(from);
+}
+
 export function allowedTargets(from: OrderStatus, fulfillment: Fulfillment): OrderStatus[] {
   return ORDER_STATUSES.filter((to) => canTransition(from, to, fulfillment));
 }
