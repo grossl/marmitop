@@ -39,12 +39,13 @@ beforeAll(async () => {
   }
 });
 
+// The database drop can wait on a checkpoint while other suites run, so the hook gets 30 s.
 afterAll(async () => {
   await db?.end({ timeout: 5 });
   if (dir !== "") rmSync(dir, { recursive: true, force: true });
   await admin?.unsafe(`drop database if exists ${DB_NAME} with (force)`);
   await admin?.end({ timeout: 5 });
-});
+}, 30_000);
 
 test("0021 inserts the six status messages per existing restaurant with the ADR-026 defaults", async () => {
   const quiet = { dir, log: () => {} };

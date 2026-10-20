@@ -36,11 +36,12 @@ beforeAll(async () => {
   cpSync(MIGRATIONS_DIR, dir, { recursive: true });
 });
 
+// The database drop can wait on a checkpoint while other suites run, so the hook gets 30 s.
 afterAll(async () => {
   if (dir !== "") rmSync(dir, { recursive: true, force: true });
   await admin?.unsafe(`drop database if exists ${DB_NAME} with (force)`);
   await admin?.end({ timeout: 5 });
-});
+}, 30_000);
 
 test("applies every migration once, then nothing; a changed file is drift", async () => {
   const files = readMigrations(dir).map((f) => f.version);
