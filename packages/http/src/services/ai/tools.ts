@@ -174,7 +174,10 @@ async function sendOrderSummary(tx: Tx, deps: ServiceDeps, scope: AiToolScope, r
     update public.ai_carts set summary_message_id = ${messageId}, summary_version = version, summary_sent_at = ${now}
     where id = ${cart.id} and restaurant_id = ${scope.restaurantId}
   `;
-  return ok({ sent: true });
+  return ok({
+    sent: true,
+    note: 'The customer received the summary. It already asks them to answer "sim". End your turn with no text.',
+  });
 }
 
 async function placeOrder(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: unknown): Promise<AiToolResult> {
@@ -253,6 +256,7 @@ async function placeOrder(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: un
       notes: null,
       source: "whatsapp",
       conversationId: scope.conversationId,
+      requireConfirmation: true,
     });
   } catch (e) {
     if (e instanceof AppError) return fail(codeOf(e), "The order was refused. Check the items and the address.");

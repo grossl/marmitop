@@ -1,4 +1,4 @@
-// covers FR-182, FR-183, FR-186, FR-187, FR-191, FR-192, FR-196, FR-198
+// covers FR-182, FR-183, FR-186, FR-187, FR-191, FR-192, FR-196, FR-198, FR-210, FR-211
 import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { AssistantModelError, type AssistantRequest, ScriptedAssistantModel } from "@mt/core";
 import type { Db } from "@mt/db";
@@ -115,6 +115,60 @@ describe("runAiTurn", () => {
     const [o] = await db<{ source: string; ai_run_id: string; payment_method: string | null }[]>`
       select source, ai_run_id, payment_method from public.orders where restaurant_id = ${a.restaurantId} and ai_run_id = ${out.runId}`;
     expect(o).toEqual({ source: "whatsapp", ai_run_id: out.runId, payment_method: null });
+  });
+
+  test("a turn that sent the summary sends no second text (FR-210)", async () => {
+    const model = new ScriptedAssistantModel([]);
+    const item = { menu_item_id: a.menuItemId, size_id: a.menuItemSizeId, quantity: 1, notes: null };
+    const trigger = await inbound("1 marmita para retirar");
+    model.push(
+      {
+        tools: [
+          { name: "update_cart", input: { items: [item], fulfillment: "pickup", address: null, customer_name: null } },
+        ],
+      },
+      { tools: [{ name: "send_order_summary", input: {} }] },
+      { text: "Pedido: 1 marmita, retirada. Posso confirmar?" },
+    );
+    const out = await runAiTurn(deps, model, job(trigger));
+    expect(out).toMatchObject({ kind: "done", status: "replied" });
+    const sent = await db<{ body: string }[]>`
+      select body from public.messages where ai_run_id = ${out.runId} and direction = 'out'`;
+    expect(sent.length).toBe(1);
+    expect(sent[0]?.body).toContain("Responda *sim*");
+  });
+
+  test("an AI order starts as aguardando even with auto-accept on (FR-211)", async () => {
+    await db`update public.restaurant_settings set auto_accept = true where restaurant_id = ${a.restaurantId}`;
+    try {
+      const model = new ScriptedAssistantModel([]);
+      const item = { menu_item_id: a.menuItemId, size_id: a.menuItemSizeId, quantity: 1, notes: null };
+      const t1 = await inbound("1 marmita para retirar");
+      model.push(
+        {
+          tools: [
+            {
+              name: "update_cart",
+              input: { items: [item], fulfillment: "pickup", address: null, customer_name: null },
+            },
+          ],
+        },
+        { tools: [{ name: "send_order_summary", input: {} }] },
+        { text: "" },
+      );
+      await runAiTurn(deps, model, job(t1));
+      const t2 = await inbound("sim");
+      model.push({ tools: [{ name: "place_order", input: {} }] }, { text: "Pedido recebido!" });
+      const out = await runAiTurn(deps, model, job(t2));
+      const [o] = await db<{ id: string; status: string }[]>`
+        select id, status from public.orders where ai_run_id = ${out.runId}`;
+      expect(o?.status).toBe("aguardando");
+      const history = await db<{ from_status: string | null; to_status: string }[]>`
+        select from_status, to_status from public.order_status_history where order_id = ${o!.id}`;
+      expect([...history]).toEqual([{ from_status: null, to_status: "aguardando" }]);
+    } finally {
+      await db`update public.restaurant_settings set auto_accept = false where restaurant_id = ${a.restaurantId}`;
+    }
   });
 
   test("a burst: only the job of the latest inbound runs", async () => {

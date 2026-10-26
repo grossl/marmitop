@@ -65,3 +65,9 @@ Option 2.
 The `closed` and `order_received` texts come from the dev seed. The seed's `welcome` texts name a restaurant's style ("Bem-vindo à", "Uai"), so `welcome` gets a neutral text.
 
 Migration 0022 does not back-fill the three older kinds for existing restaurants. A missing `welcome` or `closed` row means the restaurant never turned that message on; a back-fill would start sending messages that the restaurant did not choose.
+
+## Amendment 2 — every status kind on by default (2026-10-26)
+
+**Question.** The owner wants the customer to follow every status move. `order_preparing` and `order_delivered` were off by default.
+
+**Choice.** All six status kinds default to on (ADR-027). Migration 0023 changes `mt.insert_default_automatic_messages` and turns on existing `order_preparing` and `order_delivered` rows that are off and still hold the default text. A row with an edited text keeps its switch, because an admin chose it.

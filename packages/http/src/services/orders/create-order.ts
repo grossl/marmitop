@@ -44,6 +44,8 @@ const blank = (v: string | null | undefined) => (v === undefined || v === null |
 export type CreateOrderInput = Omit<z.output<typeof createOrderActionSchema>, "source" | "paymentMethod"> & {
   readonly source: OrderSourceCode;
   readonly paymentMethod: PaymentMethod | null;
+  /** True starts the order as `aguardando` even with auto-accept on (FR-211, ADR-027: AI orders). */
+  readonly requireConfirmation?: boolean;
 };
 
 export const createOrder = defineService({
@@ -186,7 +188,7 @@ export async function createOrderInTx(
     });
   }
 
-  const status = initialStatus(settings.autoAccept);
+  const status = initialStatus(settings.autoAccept && input.requireConfirmation !== true);
   const [codeRow] = await tx<{ code: string }[]>`select mt.next_order_code(${ctx.restaurantId}::uuid) as code`;
   if (codeRow === undefined) throw new Error("mt.next_order_code returned no row");
 

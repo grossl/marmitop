@@ -1,6 +1,6 @@
 // packages/db/src/restaurant-defaults.integration.test.ts
 //
-// covers FR-084, FR-200, ADR-026 Amendment 1
+// covers FR-084, FR-200, ADR-026 Amendment 1, ADR-027
 //
 // A restaurant from mt.create_restaurant (onboarding) gets one automatic_messages
 // row for each of the nine kinds, with the default texts and on/off values.
@@ -24,9 +24,9 @@ const EXPECTED: [string, boolean, string][] = [
   ["closed", true, "Olá! Estamos fora do nosso horário de atendimento. Retornaremos assim que abrirmos."],
   ["order_cancelled", true, "Seu pedido {{pedido}} foi cancelado. Se tiver dúvidas, responda esta mensagem."],
   ["order_confirmed", true, "Olá {{nome}}! Seu pedido {{pedido}} foi confirmado e logo entra em preparo."],
-  ["order_delivered", false, "Pedido {{pedido}} entregue. Obrigado pela preferência, {{nome}}!"],
+  ["order_delivered", true, "Pedido {{pedido}} entregue. Obrigado pela preferência, {{nome}}!"],
   ["order_out_for_delivery", true, "Seu pedido {{pedido}} saiu para entrega!"],
-  ["order_preparing", false, "Seu pedido {{pedido}} está sendo preparado."],
+  ["order_preparing", true, "Seu pedido {{pedido}} está sendo preparado."],
   ["order_ready", true, "Seu pedido {{pedido}} está pronto! Pode vir retirar no {{restaurante}}."],
   ["order_received", true, "Recebemos seu pedido! Em breve confirmaremos os detalhes."],
   ["welcome", true, "Olá! Aqui é {{restaurante}}. Como podemos ajudar?"],
