@@ -28,6 +28,7 @@ export const saveAiSettingsSchema = z.object({
   autoResumeMinutes: z.number().int().min(0).max(10080),
   allowOverage: z.boolean(),
   monthlyHardCap: z.number().int().min(1).max(1_000_000),
+  autoConfirmOrders: z.boolean(),
 });
 
 export const setConversationAiModeSchema = z.object({

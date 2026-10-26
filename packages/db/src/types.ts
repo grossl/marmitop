@@ -584,6 +584,7 @@ export interface AiSettingsRow {
   auto_resume_minutes: number;
   allow_overage: boolean;
   monthly_hard_cap: number;
+  auto_confirm_orders: boolean;
   updated_at: Date;
 }
 

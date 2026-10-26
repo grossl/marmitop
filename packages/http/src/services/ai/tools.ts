@@ -17,12 +17,14 @@ import { emptyToolInputSchema, handoffInputSchema, searchMenuInputSchema, update
 import type { ZodIssue, ZodTypeAny, z } from "zod";
 
 import type { ServiceDeps } from "../../deps";
+import { changeOrderStatusInTx } from "../orders/change-status";
 import { createOrderInTx } from "../orders/create-order";
 import { loadOrderSettings } from "../orders/order-settings";
 import { systemCtx } from "../whatsapp/connection";
 import { loadCart, saveCart } from "./cart-store";
 import { isRestaurantOpen, loadTodayMenu } from "./menu";
 import { pauseConversation, storeAiMessage } from "./messages";
+import { loadAiSettings } from "./settings";
 
 export interface AiToolScope {
   readonly restaurantId: string;
@@ -35,6 +37,8 @@ export interface AiToolResult {
   readonly ok: boolean;
   readonly content: string;
   readonly errorCode: string | null;
+  /** The customer already got this turn's answer from the system (FR-210, FR-212): the turn sends no text. */
+  readonly silencesReply?: boolean;
 }
 
 type Parsed<T> = { readonly ok: true; readonly data: T } | { readonly ok: false; readonly result: AiToolResult };
@@ -174,10 +178,13 @@ async function sendOrderSummary(tx: Tx, deps: ServiceDeps, scope: AiToolScope, r
     update public.ai_carts set summary_message_id = ${messageId}, summary_version = version, summary_sent_at = ${now}
     where id = ${cart.id} and restaurant_id = ${scope.restaurantId}
   `;
-  return ok({
-    sent: true,
-    note: 'The customer received the summary. It already asks them to answer "sim". End your turn with no text.',
-  });
+  return {
+    ...ok({
+      sent: true,
+      note: 'The customer received the summary. It already asks them to answer "sim". End your turn with no text.',
+    }),
+    silencesReply: true,
+  };
 }
 
 async function placeOrder(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: unknown): Promise<AiToolResult> {
@@ -191,7 +198,13 @@ async function placeOrder(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: un
     const [o] = await tx<{ code: string; status: string; total_cents: number }[]>`
       select code, status, total_cents from public.orders
       where id = ${cart.orderId} and restaurant_id = ${scope.restaurantId}`;
-    if (o !== undefined) return ok({ code: o.code, status: o.status, total: formatBRL(o.total_cents) });
+    if (o !== undefined) {
+      const notified = await customerNotified(tx, scope.restaurantId, cart.orderId);
+      return {
+        ...ok({ code: o.code, status: o.status, total: formatBRL(o.total_cents), customer_notified: notified }),
+        silencesReply: notified,
+      };
+    }
   }
   const fulfillment = cart.state.fulfillment;
   if (cart.id === null || fulfillment === null) {
@@ -278,13 +291,40 @@ async function placeOrder(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: un
       where id = ${scope.customerId} and restaurant_id = ${scope.restaurantId}
     `;
   }
+  // FR-213: auto-confirm is a real status move, so order_confirmed goes out (FR-201).
+  let status = created.status;
+  if ((await loadAiSettings(tx, scope.restaurantId)).autoConfirmOrders) {
+    const moved = await changeOrderStatusInTx(
+      tx,
+      { restaurantId: scope.restaurantId, actorType: "system" },
+      created.id,
+      "confirmado",
+      undefined,
+      now,
+    );
+    status = moved.status;
+  }
+  const notified = await customerNotified(tx, scope.restaurantId, created.id);
   const settings = await loadOrderSettings(tx, scope.restaurantId);
-  return ok({
-    code: created.code,
-    status: created.status,
-    total: formatBRL(created.totalCents),
-    delivery_estimate_minutes: settings.showDeliveryEstimate ? settings.deliveryEstimateMinutes : null,
-  });
+  return {
+    ...ok({
+      code: created.code,
+      status,
+      total: formatBRL(created.totalCents),
+      delivery_estimate_minutes: settings.showDeliveryEstimate ? settings.deliveryEstimateMinutes : null,
+      customer_notified: notified,
+    }),
+    silencesReply: notified,
+  };
+}
+
+/** FR-212: an automatic message for the order (order_received, order_confirmed) is queued, not failed. */
+async function customerNotified(tx: Tx, restaurantId: string, orderId: string): Promise<boolean> {
+  const [r] = await tx<{ n: number }[]>`
+    select count(*)::int as n from public.messages
+    where restaurant_id = ${restaurantId} and order_id = ${orderId}
+      and automatic_kind is not null and status <> 'failed'`;
+  return (r?.n ?? 0) > 0;
 }
 
 async function handoff(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: unknown): Promise<AiToolResult> {

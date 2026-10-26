@@ -37,6 +37,7 @@ describe("AI schemas", () => {
       autoResumeMinutes: 360,
       allowOverage: false,
       monthlyHardCap: 20000,
+      autoConfirmOrders: false,
     };
     expect(saveAiSettingsSchema.parse(base)).toEqual(base);
     expect(saveAiSettingsSchema.parse({ ...base, extraInstructions: "   " }).extraInstructions).toBeNull();

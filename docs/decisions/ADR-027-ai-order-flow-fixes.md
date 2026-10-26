@@ -48,3 +48,13 @@ Option 2 in all three cases.
 * FR-200 and FR-029 change. New FR-210 and FR-211.
 * 12.ai-order-assistant.md "Reply", "Tools", and the system prompt change.
 * The prompt snapshot test changes.
+
+## Amendment 1 — no AI text after the order, and an auto-confirm option (2026-10-26)
+
+**Question.** After "sim", the customer got two messages that said the same thing: `order_received` ("Recebemos seu pedido!") and the AI's own "Pedido recebido! Seu código é…". The owner wants the customer to hear "confirmado" only from a status move, and wants an option that confirms AI orders without a person.
+
+**Choice.**
+
+* After a successful `place_order`, the turn sends no text reply when an automatic message for that order went out (`order_received`, or `order_confirmed` from auto-confirm). The run stays `replied`. When no automatic message went out, for example with `order_received` off, the model still gives the order code (FR-212).
+* `ai_settings.auto_confirm_orders` (default off) is a new switch in Configurações → Atendente IA: "Confirmar pedidos da IA automaticamente". When it is on, `place_order` creates the order as `aguardando` and then moves it to `confirmado` with actor `system`, in the same transaction, through `changeOrderStatusInTx`. That move sends `order_confirmed` (FR-201), so the customer hears "confirmado" from a status move in both modes. The restaurant setting "Aceitar pedidos automaticamente" still does not apply to AI orders (FR-211, FR-213).
+* Migration 0024 adds the column.

@@ -317,8 +317,8 @@ export async function runAiTurn(
     tools: [],
     stopReason: null,
   };
-  // FR-210: the summary already asks for "sim", so a turn that sent it adds no text.
-  let summarySent = false;
+  // FR-210, FR-212: after the summary or the order's automatic message, the turn adds no text.
+  let replySent = false;
 
   try {
     while (tally.modelCalls < AI_MAX_MODEL_CALLS) {
@@ -337,9 +337,9 @@ export async function runAiTurn(
           .join("\n")
           .trim()
           .slice(0, AI_REPLY_MAX_CHARS);
-        const reply = summarySent ? "" : text;
+        const reply = replySent ? "" : text;
         const status = await finish(deps, job, runId, tally, {
-          status: reply || summarySent ? "replied" : "silent",
+          status: reply || replySent ? "replied" : "silent",
           reply: reply || null,
           pause: null,
           errorCode: null,
@@ -354,7 +354,7 @@ export async function runAiTurn(
         if (block.type !== "tool_use") continue;
         const r = await tx(deps, job.restaurantId, (t) => runAiTool(t, deps, scope, block.name, block.input));
         tally.tools.push({ name: block.name, ok: r.ok, error_code: r.errorCode });
-        if (block.name === "send_order_summary" && r.ok) summarySent = true;
+        if (r.silencesReply === true) replySent = true;
         results.push({ type: "tool_result", toolUseId: block.id, content: r.content, isError: !r.ok });
       }
       request.messages.push({ role: "user", content: results });

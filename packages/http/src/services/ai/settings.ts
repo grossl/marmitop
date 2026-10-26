@@ -14,6 +14,8 @@ export interface AiSettings {
   readonly autoResumeMinutes: number;
   readonly allowOverage: boolean;
   readonly monthlyHardCap: number;
+  /** FR-213: AI orders move to confirmado right after place_order. */
+  readonly autoConfirmOrders: boolean;
 }
 
 export const AI_SETTINGS_DEFAULTS: AiSettings = {
@@ -23,6 +25,7 @@ export const AI_SETTINGS_DEFAULTS: AiSettings = {
   autoResumeMinutes: 360,
   allowOverage: false,
   monthlyHardCap: 20000,
+  autoConfirmOrders: false,
 };
 
 export async function loadAiSettings(tx: Tx, restaurantId: string): Promise<AiSettings> {
@@ -34,9 +37,11 @@ export async function loadAiSettings(tx: Tx, restaurantId: string): Promise<AiSe
       auto_resume_minutes: number;
       allow_overage: boolean;
       monthly_hard_cap: number;
+      auto_confirm_orders: boolean;
     }[]
   >`
-    select enabled, persona_name, extra_instructions, auto_resume_minutes, allow_overage, monthly_hard_cap
+    select enabled, persona_name, extra_instructions, auto_resume_minutes, allow_overage, monthly_hard_cap,
+      auto_confirm_orders
     from public.ai_settings where restaurant_id = ${restaurantId}
   `;
   if (r === undefined) return AI_SETTINGS_DEFAULTS;
@@ -47,6 +52,7 @@ export async function loadAiSettings(tx: Tx, restaurantId: string): Promise<AiSe
     autoResumeMinutes: r.auto_resume_minutes,
     allowOverage: r.allow_overage,
     monthlyHardCap: r.monthly_hard_cap,
+    autoConfirmOrders: r.auto_confirm_orders,
   };
 }
 
@@ -67,13 +73,15 @@ export const saveAiSettings = defineService({
   run: async ({ tx, ctx, input }): Promise<AiSettings> => {
     await tx`
       insert into public.ai_settings
-        (restaurant_id, enabled, persona_name, extra_instructions, auto_resume_minutes, allow_overage, monthly_hard_cap)
+        (restaurant_id, enabled, persona_name, extra_instructions, auto_resume_minutes, allow_overage, monthly_hard_cap,
+         auto_confirm_orders)
       values (${ctx.restaurantId}, ${input.enabled}, ${input.personaName}, ${input.extraInstructions},
-              ${input.autoResumeMinutes}, ${input.allowOverage}, ${input.monthlyHardCap})
+              ${input.autoResumeMinutes}, ${input.allowOverage}, ${input.monthlyHardCap}, ${input.autoConfirmOrders})
       on conflict (restaurant_id) do update set
         enabled = excluded.enabled, persona_name = excluded.persona_name,
         extra_instructions = excluded.extra_instructions, auto_resume_minutes = excluded.auto_resume_minutes,
-        allow_overage = excluded.allow_overage, monthly_hard_cap = excluded.monthly_hard_cap
+        allow_overage = excluded.allow_overage, monthly_hard_cap = excluded.monthly_hard_cap,
+        auto_confirm_orders = excluded.auto_confirm_orders
     `;
     return input;
   },

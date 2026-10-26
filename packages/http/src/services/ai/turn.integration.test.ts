@@ -1,4 +1,4 @@
-// covers FR-182, FR-183, FR-186, FR-187, FR-191, FR-192, FR-196, FR-198, FR-210, FR-211
+// covers FR-182, FR-183, FR-186, FR-187, FR-191, FR-192, FR-196, FR-198, FR-210, FR-211, FR-212, FR-213
 import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { AssistantModelError, type AssistantRequest, ScriptedAssistantModel } from "@mt/core";
 import type { Db } from "@mt/db";
@@ -138,37 +138,89 @@ describe("runAiTurn", () => {
     expect(sent[0]?.body).toContain("Responda *sim*");
   });
 
-  test("an AI order starts as aguardando even with auto-accept on (FR-211)", async () => {
-    await db`update public.restaurant_settings set auto_accept = true where restaurant_id = ${a.restaurantId}`;
+  // Two turns: the cart and summary, then "sim" and place_order with a closing text.
+  async function placeAiOrder(closingText: string) {
+    const model = new ScriptedAssistantModel([]);
+    const item = { menu_item_id: a.menuItemId, size_id: a.menuItemSizeId, quantity: 1, notes: null };
+    const t1 = await inbound("1 marmita para retirar");
+    model.push(
+      {
+        tools: [
+          { name: "update_cart", input: { items: [item], fulfillment: "pickup", address: null, customer_name: null } },
+        ],
+      },
+      { tools: [{ name: "send_order_summary", input: {} }] },
+      { text: "" },
+    );
+    await runAiTurn(deps, model, job(t1));
+    const t2 = await inbound("sim");
+    model.push({ tools: [{ name: "place_order", input: {} }] }, { text: closingText });
+    const out = await runAiTurn(deps, model, job(t2));
+    const [o] = await db<{ id: string; status: string }[]>`
+      select id, status from public.orders where ai_run_id = ${out.runId}`;
+    const history = await db<{ from_status: string | null; to_status: string; actor_type: string }[]>`
+      select from_status, to_status, actor_type from public.order_status_history
+      where order_id = ${o!.id} order by changed_at, from_status nulls first`;
+    const aiTexts = await db<{ body: string }[]>`
+      select body from public.messages where ai_run_id = ${out.runId} and direction = 'out'`;
+    const automatic = await db<{ automatic_kind: string }[]>`
+      select automatic_kind from public.messages where order_id = ${o!.id} and automatic_kind is not null
+      order by created_at, automatic_kind`;
+    return {
+      out,
+      order: o!,
+      history: [...history],
+      aiTexts: aiTexts.map((m) => m.body),
+      automatic: automatic.map((m) => m.automatic_kind),
+    };
+  }
+  async function withAutomatic(kinds: string[], fn: () => Promise<void>): Promise<void> {
+    for (const kind of kinds)
+      await db`insert into public.automatic_messages (restaurant_id, kind, enabled, body)
+               values (${a.restaurantId}, ${kind}, true, 'Pedido {{pedido}}')
+               on conflict (restaurant_id, kind) do update set enabled = true`;
     try {
-      const model = new ScriptedAssistantModel([]);
-      const item = { menu_item_id: a.menuItemId, size_id: a.menuItemSizeId, quantity: 1, notes: null };
-      const t1 = await inbound("1 marmita para retirar");
-      model.push(
-        {
-          tools: [
-            {
-              name: "update_cart",
-              input: { items: [item], fulfillment: "pickup", address: null, customer_name: null },
-            },
-          ],
-        },
-        { tools: [{ name: "send_order_summary", input: {} }] },
-        { text: "" },
-      );
-      await runAiTurn(deps, model, job(t1));
-      const t2 = await inbound("sim");
-      model.push({ tools: [{ name: "place_order", input: {} }] }, { text: "Pedido recebido!" });
-      const out = await runAiTurn(deps, model, job(t2));
-      const [o] = await db<{ id: string; status: string }[]>`
-        select id, status from public.orders where ai_run_id = ${out.runId}`;
-      expect(o?.status).toBe("aguardando");
-      const history = await db<{ from_status: string | null; to_status: string }[]>`
-        select from_status, to_status from public.order_status_history where order_id = ${o!.id}`;
-      expect([...history]).toEqual([{ from_status: null, to_status: "aguardando" }]);
+      await fn();
     } finally {
+      await db`delete from public.automatic_messages where restaurant_id = ${a.restaurantId} and kind <> 'welcome'`;
+      await db`update public.ai_settings set auto_confirm_orders = false where restaurant_id = ${a.restaurantId}`;
       await db`update public.restaurant_settings set auto_accept = false where restaurant_id = ${a.restaurantId}`;
     }
+  }
+
+  test("an AI order starts as aguardando even with auto-accept on (FR-211)", async () => {
+    await withAutomatic([], async () => {
+      await db`update public.restaurant_settings set auto_accept = true where restaurant_id = ${a.restaurantId}`;
+      const r = await placeAiOrder("Pedido recebido! Código ORD.");
+      expect(r.order.status).toBe("aguardando");
+      expect(r.history).toEqual([{ from_status: null, to_status: "aguardando", actor_type: "system" }]);
+      // FR-212: no automatic message went out, so the AI gives the code.
+      expect(r.automatic).toEqual([]);
+      expect(r.aiTexts).toEqual(["Pedido recebido! Código ORD."]);
+    });
+  });
+
+  test("order_received went out, so the AI adds no text after place_order (FR-212)", async () => {
+    await withAutomatic(["order_received"], async () => {
+      const r = await placeAiOrder("Pedido recebido! Código ORD.");
+      expect(r.out).toMatchObject({ kind: "done", status: "replied" });
+      expect(r.automatic).toEqual(["order_received"]);
+      expect(r.aiTexts).toEqual([]);
+    });
+  });
+
+  test("auto-confirm moves the AI order to confirmado and sends order_confirmed (FR-213)", async () => {
+    await withAutomatic(["order_received", "order_confirmed"], async () => {
+      await db`update public.ai_settings set auto_confirm_orders = true where restaurant_id = ${a.restaurantId}`;
+      const r = await placeAiOrder("Pedido confirmado!");
+      expect(r.order.status).toBe("confirmado");
+      expect(r.history).toEqual([
+        { from_status: null, to_status: "aguardando", actor_type: "system" },
+        { from_status: "aguardando", to_status: "confirmado", actor_type: "system" },
+      ]);
+      expect([...r.automatic].sort()).toEqual(["order_confirmed", "order_received"]);
+      expect(r.aiTexts).toEqual([]);
+    });
   });
 
   test("a burst: only the job of the latest inbound runs", async () => {

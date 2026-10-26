@@ -25,6 +25,7 @@ export function AiAssistantCard({ ai }: { ai: AiSettings & { quota: AiQuota } })
     autoResumeMinutes: ai.autoResumeMinutes,
     allowOverage: ai.allowOverage,
     monthlyHardCap: ai.monthlyHardCap,
+    autoConfirmOrders: ai.autoConfirmOrders,
   });
   const [raw, setRaw] = useState({
     autoResumeMinutes: String(ai.autoResumeMinutes),
@@ -120,6 +121,21 @@ export function AiAssistantCard({ ai }: { ai: AiSettings & { quota: AiQuota } })
           onChange={(e) => setRaw((r) => ({ ...r, autoResumeMinutes: e.target.value }))}
         />
         {fieldError("autoResumeMinutes")}
+      </div>
+
+      <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3 text-sm">
+        <div>
+          <p className="font-medium">Confirmar pedidos da IA automaticamente</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            O pedido entra como confirmado e o cliente recebe a mensagem de confirmação. Desligado, o pedido fica
+            aguardando até a equipe confirmar.
+          </p>
+        </div>
+        <Switch
+          checked={form.autoConfirmOrders}
+          onCheckedChange={(v) => set("autoConfirmOrders", v)}
+          aria-label="Confirmar pedidos da IA automaticamente"
+        />
       </div>
 
       <div className="space-y-3 rounded-md border border-border p-3 text-sm">

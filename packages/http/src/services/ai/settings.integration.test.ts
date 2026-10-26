@@ -1,4 +1,4 @@
-// covers FR-180, FR-194, FR-196, FR-197
+// covers FR-180, FR-194, FR-196, FR-197, FR-213
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { AppError } from "@mt/core";
 import type { Db } from "@mt/db";
@@ -20,6 +20,7 @@ const settings = {
   autoResumeMinutes: 60,
   allowOverage: false,
   monthlyHardCap: 20000,
+  autoConfirmOrders: false,
 };
 
 async function addReplies(n: number): Promise<void> {
@@ -44,6 +45,7 @@ describe("AI settings", () => {
       autoResumeMinutes: 360,
       allowOverage: false,
       monthlyHardCap: 20000,
+      autoConfirmOrders: false,
     });
     expect(s.quota).toMatchObject({ state: "included", used: 0, included: 300 });
   });
@@ -59,6 +61,10 @@ describe("AI settings", () => {
     await addReplies(150);
     const q = (await getAiSettings(deps, admin(), undefined)).quota;
     expect(q).toMatchObject({ state: "overage", used: 450, extra: 150, amountCents: 1000 });
+  });
+  test("admin turns on auto-confirm (FR-213)", async () => {
+    await saveAiSettings(deps, admin(), { ...settings, allowOverage: true, autoConfirmOrders: true });
+    expect((await getAiSettings(deps, admin(), undefined)).autoConfirmOrders).toBe(true);
   });
   test("the plan tab shows AI replies", async () => {
     const plan = await getPlanAndUsage(deps, admin(), undefined);
