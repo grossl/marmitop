@@ -200,7 +200,7 @@ export interface ApiCustomerRow {
   created_at: Date;
 }
 
-/** Same totals rule as the dashboard (FR-044, ADR-015): count skips cancelado, spent counts entregue. */
+/** Same totals rule as the dashboard (FR-044, ADR-015): count skips cancelado, spent counts finalizado. */
 export function apiCustomerColumns(tx: Tx) {
   return tx`
     c.id, c.name, c.phone, c.email, c.cpf_cnpj, c.cep, c.logradouro, c.numero, c.complemento, c.bairro,
@@ -208,7 +208,7 @@ export function apiCustomerColumns(tx: Tx) {
     (select count(*)::int from public.orders o
       where o.restaurant_id = c.restaurant_id and o.customer_id = c.id and o.status <> 'cancelado') as orders_count,
     (select coalesce(sum(o.total_cents), 0)::bigint from public.orders o
-      where o.restaurant_id = c.restaurant_id and o.customer_id = c.id and o.status = 'entregue') as total_spent_cents
+      where o.restaurant_id = c.restaurant_id and o.customer_id = c.id and o.status = 'finalizado') as total_spent_cents
   `;
 }
 

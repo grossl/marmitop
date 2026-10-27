@@ -5,6 +5,8 @@
 // Migration 0021 inserts the six order status messages, with the ADR-026 texts
 // and on/off defaults, for every restaurant that exists when it runs. Applies
 // 0000–0020 to a throwaway database, adds two restaurants, then applies 0021.
+// Migration 0025 (ADR-028) later removes order_preparing and order_delivered,
+// leaving seven kinds; status-flow-migration.integration.test.ts covers that.
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { cpSync, mkdtempSync, readdirSync, rmSync } from "node:fs";

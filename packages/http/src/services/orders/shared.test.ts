@@ -64,12 +64,12 @@ describe("toBoardOrder (FR-021, ADR-017)", () => {
   test("a pickup order never lists saiu as a target", () => {
     const view = toBoardOrder(base);
     expect(view.allowedStatuses).not.toContain("saiu");
-    expect(view.allowedStatuses).toContain("preparando");
+    expect(view.allowedStatuses).toContain("pronto");
     expect(view.addressLine).toBe("Retirada no balcão");
     expect(view.createdAt).toBe("2026-10-13T15:00:00.000Z");
   });
   test("a final order has no targets", () => {
-    expect(toBoardOrder({ ...base, status: "entregue" }).allowedStatuses).toEqual([]);
+    expect(toBoardOrder({ ...base, status: "finalizado" }).allowedStatuses).toEqual([]);
   });
   test("the card carries the latest invoice status for the badge (FR-139)", () => {
     expect(toBoardOrder(base).invoiceStatus).toBeNull();

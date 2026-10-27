@@ -3,7 +3,7 @@
 /** Invoice statuses that hold the order's one live invoice (FR-132): issuing again is skipped. */
 const LIVE_INVOICE = new Set(["queued", "received", "processing", "authorized"]);
 /** Order statuses that may issue an invoice (FR-121). */
-const INVOICEABLE = new Set(["pronto", "saiu", "entregue"]);
+const INVOICEABLE = new Set(["pronto", "saiu", "finalizado"]);
 
 export const INVOICE_STATE_OPTIONS = [
   { value: "all", label: "Todas" },

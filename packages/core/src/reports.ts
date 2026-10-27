@@ -1,5 +1,5 @@
 // Report aggregations (FR-070..FR-078, ADR-015). Pure functions over plain arrays that
-// packages/db feeds. A "counted" order is `entregue`; its report date is `delivered_at`
+// packages/db feeds. A "counted" order is `finalizado` (ADR-028); its report date is `delivered_at`
 // in the restaurant timezone. Money is integer cents.
 
 import { localDay, localParts } from "./business-hours";
@@ -40,7 +40,7 @@ interface Counted {
 function counted(orders: readonly ReportOrder[], timezone: string): Counted[] {
   const out: Counted[] = [];
   for (const order of orders) {
-    if (order.status === "entregue" && order.deliveredAt) {
+    if (order.status === "finalizado" && order.deliveredAt) {
       out.push({ order, day: localDay(order.deliveredAt, timezone) });
     }
   }

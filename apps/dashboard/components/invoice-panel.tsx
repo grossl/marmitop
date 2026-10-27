@@ -38,7 +38,7 @@ import {
   refreshInvoiceAction,
 } from "@/app/(app)/orders/invoice-actions";
 
-const INVOICEABLE = new Set(["pronto", "saiu", "entregue"]);
+const INVOICEABLE = new Set(["pronto", "saiu", "finalizado"]);
 const POLL_MS = 5000;
 const MIN_JUSTIFICATIVA = 15;
 

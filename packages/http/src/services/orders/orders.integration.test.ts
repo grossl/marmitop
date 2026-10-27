@@ -170,14 +170,14 @@ describe("order view fromAi (FR-193)", () => {
 describe("changeOrderStatus / cancelOrder", () => {
   test("a forward skip writes one history row; a final status cannot move (FR-021, FR-022, FR-023, FR-028)", async () => {
     const o = await createOrder(deps, att(), base());
-    const moved = await changeOrderStatus(deps, att(), { orderId: o.id, toStatus: "preparando" });
-    expect(moved).toMatchObject({ status: "preparando", changed: true });
-    const delivered = await changeOrderStatus(deps, att(), { orderId: o.id, toStatus: "entregue" });
+    const moved = await changeOrderStatus(deps, att(), { orderId: o.id, toStatus: "pronto" });
+    expect(moved).toMatchObject({ status: "pronto", changed: true });
+    const delivered = await changeOrderStatus(deps, att(), { orderId: o.id, toStatus: "finalizado" });
     expect(delivered.deliveredAt).not.toBeNull();
-    const back = await changeOrderStatus(deps, att(), { orderId: o.id, toStatus: "preparando" }).catch((e) => e);
+    const back = await changeOrderStatus(deps, att(), { orderId: o.id, toStatus: "pronto" }).catch((e) => e);
     expect(code(back)).toBe("invalid_status_transition");
     const detail = await getOrder(deps, att(), { orderId: o.id });
-    expect(detail.history.map((h) => h.toStatus)).toEqual(["aguardando", "preparando", "entregue"]);
+    expect(detail.history.map((h) => h.toStatus)).toEqual(["aguardando", "pronto", "finalizado"]);
   });
 
   test("the same status is a no-op without history (FR-022)", async () => {
@@ -195,18 +195,18 @@ describe("changeOrderStatus / cancelOrder", () => {
 
   test("cancel keeps the order and records the reason (FR-026)", async () => {
     const o = await createOrder(deps, att(), base());
-    await changeOrderStatus(deps, att(), { orderId: o.id, toStatus: "preparando" });
+    await changeOrderStatus(deps, att(), { orderId: o.id, toStatus: "pronto" });
     const r = await cancelOrder(deps, att(), { orderId: o.id, reason: "Cliente desistiu" });
     expect(r).toMatchObject({ status: "cancelado", changed: true });
     const detail = await getOrder(deps, att(), { orderId: o.id });
     expect(detail).toMatchObject({ status: "cancelado", cancelReason: "Cliente desistiu" });
     expect(detail.cancelledAt).not.toBeNull();
-    expect(detail.history.at(-1)).toMatchObject({ fromStatus: "preparando", toStatus: "cancelado" });
+    expect(detail.history.at(-1)).toMatchObject({ fromStatus: "pronto", toStatus: "cancelado" });
   });
 
-  test("cancelling a delivered order is rejected (FR-026)", async () => {
+  test("cancelling a finalizado order is rejected (FR-026)", async () => {
     const o = await createOrder(deps, att(), base());
-    await changeOrderStatus(deps, att(), { orderId: o.id, toStatus: "entregue" });
+    await changeOrderStatus(deps, att(), { orderId: o.id, toStatus: "finalizado" });
     expect(code(await cancelOrder(deps, att(), { orderId: o.id }).catch((e) => e))).toBe("invalid_status_transition");
   });
 
@@ -244,7 +244,7 @@ describe("listOrders / getOrderKpis", () => {
     expect(board.timezone).toBe("America/Sao_Paulo");
     expect(board.orders.some((r) => r.id === o.id)).toBe(true);
     const mine = board.orders.find((r) => r.id === o.id);
-    expect(mine?.allowedStatuses).toContain("preparando");
+    expect(mine?.allowedStatuses).toContain("pronto");
   });
 
   test("the board never shows another restaurant's orders (FR-008)", async () => {
@@ -255,7 +255,7 @@ describe("listOrders / getOrderKpis", () => {
   test("KPIs count today's delivered revenue only (FR-025, ADR-015)", async () => {
     const before = await getOrderKpis(deps, att(), { day: DAY });
     const o = await createOrder(deps, att(), base({ fulfillment: "pickup" }));
-    await changeOrderStatus(deps, att(), { orderId: o.id, toStatus: "entregue" });
+    await changeOrderStatus(deps, att(), { orderId: o.id, toStatus: "finalizado" });
     // The status trigger stamps delivered_at with the database clock, not the
     // service FixedClock, so pin it to the test day.
     await db`update public.orders set delivered_at = '2026-10-13T15:00:00Z' where id = ${o.id}`;

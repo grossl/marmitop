@@ -285,12 +285,12 @@ describe("customers", () => {
     expect((await listCustomers(deps, attendant(), { q: "5521999990000" })).items).toHaveLength(1);
   });
 
-  test("total orders skips cancelado; total spent counts entregue only (FR-044, ADR-015)", async () => {
+  test("total orders skips cancelado; total spent counts finalizado only (FR-044, ADR-015)", async () => {
     const before = await getCustomer(deps, attendant(), { customerId: a.customerId });
     expect(before.customer.ordersCount).toBe(1);
     expect(before.customer.totalSpentCents).toBe(0);
     expect(before.orders[0]).toMatchObject({ code: "ORD-001", totalCents: 4280 });
-    for (const status of ["confirmado", "preparando", "pronto", "saiu", "entregue"]) {
+    for (const status of ["confirmado", "pronto", "saiu", "finalizado"]) {
       await db`update public.orders set status = ${status} where id = ${a.orderId}`;
     }
     const delivered = await getCustomer(deps, attendant(), { customerId: a.customerId });

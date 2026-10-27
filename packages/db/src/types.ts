@@ -27,13 +27,13 @@ export type AutomaticMessageKind =
   | "welcome"
   | "closed"
   | "order_received"
-  // ADR-026, migration 0021
+  // ADR-026 (migration 0021), narrowed by ADR-028 (migration 0025)
   | "order_confirmed"
-  | "order_preparing"
   | "order_ready"
   | "order_out_for_delivery"
-  | "order_delivered"
   | "order_cancelled";
+/** `messages.automatic_kind` keeps the two kinds ADR-028 removed: sent messages are a record. */
+export type MessageAutomaticKind = AutomaticMessageKind | "order_preparing" | "order_delivered";
 export type SecretKind =
   | "uatis_api_key"
   | "uatis_webhook_secret"
@@ -49,7 +49,7 @@ export type MenuItemKind = "meal" | "drink";
 export type MealCategory = "proteinas" | "vegetariano" | "fit" | "executiva" | "especial";
 export type DrinkCategory = "refrigerantes" | "sucos" | "agua" | "alcoolicas" | "quentes";
 export type MenuCategory = MealCategory | DrinkCategory;
-export type OrderStatus = "aguardando" | "confirmado" | "preparando" | "pronto" | "saiu" | "entregue" | "cancelado";
+export type OrderStatus = "aguardando" | "confirmado" | "pronto" | "saiu" | "finalizado" | "cancelado";
 export type Fulfillment = "delivery" | "pickup";
 export type PaymentMethod = "pix" | "dinheiro" | "cartao_credito" | "cartao_debito";
 export type OrderSource = "counter" | "phone" | "whatsapp" | "api";
@@ -323,7 +323,7 @@ export interface MessageRow {
   external_id: string | null;
   order_id: string | null;
   sent_by: string | null;
-  automatic_kind: AutomaticMessageKind | null;
+  automatic_kind: MessageAutomaticKind | null;
   template_name: string | null;
   template_language: string | null;
   /** Set by the send consumer right before the call; at-most-once (ADR-017 #4, migration 0015). */
@@ -404,7 +404,7 @@ export interface OrderRow extends AddressColumns {
   delivered_at: Date | null;
   cancelled_at: Date | null;
   cancel_reason: string | null;
-  /** ADR-020: set on `entregue` when null, or by "Marcar como pago". Paid = set and not `cancelado`. */
+  /** ADR-020: set on `finalizado` when null, or by "Marcar como pago". Paid = set and not `cancelado`. */
   paid_at: Date | null;
   paid_by: string | null;
   /** The AI run that placed this order (FR-193, migration 0020). */

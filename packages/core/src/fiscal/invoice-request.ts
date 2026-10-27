@@ -182,7 +182,7 @@ const MSG = {
   v8: "O total do pedido não confere com os itens. Revise o pedido.",
   v9: "O valor para troco é menor que o total.",
   v10: "NF-e exige CNPJ, razão social e endereço completo.",
-  v11: "Só é possível emitir nota de pedidos prontos, em entrega ou entregues.",
+  v11: "Só é possível emitir nota de pedidos prontos, em entrega ou finalizados.",
   v12: "Este pedido já tem uma nota em andamento ou emitida.",
   v13: "Item com quantidade ou preço inválido.",
   v14: "O pedido tem total zero. Não há nota a emitir.",
@@ -426,7 +426,7 @@ function analyze(
   }
 
   // V11
-  if (!(order.status === "pronto" || order.status === "saiu" || order.status === "entregue")) {
+  if (!(order.status === "pronto" || order.status === "saiu" || order.status === "finalizado")) {
     add("order.status", "invoice_not_allowed", MSG.v11);
   }
   // V12

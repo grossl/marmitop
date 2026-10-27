@@ -39,7 +39,7 @@ export function fixtureRequest(reference: string) {
   const built = buildInvoiceRequest(
     {
       code: "ORD-E2E",
-      status: "entregue",
+      status: "finalizado",
       fulfillment: "pickup",
       paymentMethod: "pix",
       changeForCents: null,

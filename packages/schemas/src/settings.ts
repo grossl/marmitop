@@ -5,7 +5,7 @@ import { z } from "zod";
 import { centsSchema, ibgeCodeSchema, optionalOf, ufSchema } from "./common";
 
 export const DEFAULT_TIMEZONE = "America/Sao_Paulo";
-/** Settings order: the three FR-084 kinds, then the six status kinds of ADR-026. */
+/** Settings order: the three FR-084 kinds, then the four status kinds of ADR-026 and ADR-028. */
 export const AUTOMATIC_MESSAGE_KINDS = ["welcome", "closed", "order_received", ...ORDER_STATUS_MESSAGE_KINDS] as const;
 /** Kinds that may carry an approved WhatsApp template for use outside the 24-hour window (ADR-014, ADR-026). */
 export const TEMPLATE_MESSAGE_KINDS: readonly (typeof AUTOMATIC_MESSAGE_KINDS)[number][] = [

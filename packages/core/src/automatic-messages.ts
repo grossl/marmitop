@@ -1,4 +1,4 @@
-// Automatic messages (FR-110..FR-115, FR-117, FR-200..FR-205, ADR-014, ADR-015, ADR-026).
+// Automatic messages (FR-110..FR-115, FR-117, FR-200..FR-205, ADR-014, ADR-015, ADR-026, ADR-028).
 // Pure decisions: the service stores the message row and enqueues the job in the same
 // transaction.
 
@@ -6,26 +6,22 @@ import { type BusinessHoursRow, isOpenAt } from "./business-hours";
 import { type Fulfillment, isForwardOrCancel, type OrderStatus } from "./order-status";
 import { decideServiceWindow } from "./service-window";
 
-/** ADR-026: one kind per target status, in board order. */
+/** ADR-026, ADR-028: one kind per target status, in board order. `finalizado` sends none. */
 export const ORDER_STATUS_MESSAGE_KINDS = [
   "order_confirmed",
-  "order_preparing",
   "order_ready",
   "order_out_for_delivery",
-  "order_delivered",
   "order_cancelled",
 ] as const;
 export type OrderStatusMessageKind = (typeof ORDER_STATUS_MESSAGE_KINDS)[number];
 
 export type AutomaticKind = "welcome" | "closed" | "order_received" | OrderStatusMessageKind;
 
-/** The target status of each status message. `aguardando` has none: `order_received` covers creation. */
+/** The target status of each status message. `aguardando` has none: `order_received` covers creation. `finalizado` has none (ADR-028). */
 const KIND_BY_STATUS: Readonly<Partial<Record<OrderStatus, OrderStatusMessageKind>>> = {
   confirmado: "order_confirmed",
-  preparando: "order_preparing",
   pronto: "order_ready",
   saiu: "order_out_for_delivery",
-  entregue: "order_delivered",
   cancelado: "order_cancelled",
 };
 
@@ -173,7 +169,8 @@ export function decideOrderReceived(input: OrderReceivedInput): OrderReceivedDec
 
 /**
  * FR-201, FR-202. The status message kind for a move, or null when the move sends
- * none: a back step, a no-op, an illegal move, or `pronto` on a delivery order.
+ * none: a back step, a no-op, an illegal move, `pronto` on a delivery order, or
+ * `finalizado` (ADR-028).
  * A forward skip gives only the target's kind.
  */
 export function orderStatusMessageKind(

@@ -1,6 +1,6 @@
 // packages/db/src/orders.integration.test.ts
 //
-// covers FR-021, FR-022, FR-023, FR-026, FR-028, FR-037, FR-038, NFR-001
+// covers FR-021, FR-022, FR-023, FR-026, FR-028, FR-037, FR-038, NFR-001, ADR-028
 //
 // The database backstops for orders (05.data-model.md "Order code", "Order
 // status transitions", ADR-006, ADR-017): mt.next_order_code, the
@@ -150,34 +150,32 @@ describe("mt.next_order_code (FR-038)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Status transitions (ADR-017)
+// Status transitions (ADR-017, ADR-028)
 // ---------------------------------------------------------------------------
 
-const STATUSES: OrderStatus[] = ["aguardando", "confirmado", "preparando", "pronto", "saiu", "entregue", "cancelado"];
+const STATUSES: OrderStatus[] = ["aguardando", "confirmado", "pronto", "saiu", "finalizado", "cancelado"];
 
 /** 05.data-model.md "Allowed moves", transcribed. */
 const ALLOWED: Record<Fulfillment, Partial<Record<OrderStatus, OrderStatus[]>>> = {
   delivery: {
-    aguardando: ["confirmado", "preparando", "pronto", "saiu", "entregue", "cancelado"],
-    confirmado: ["preparando", "pronto", "saiu", "entregue", "aguardando", "cancelado"],
-    preparando: ["pronto", "saiu", "entregue", "confirmado", "cancelado"],
-    pronto: ["saiu", "entregue", "preparando", "cancelado"],
-    saiu: ["entregue", "pronto", "cancelado"],
-    entregue: [],
+    aguardando: ["confirmado", "pronto", "saiu", "finalizado", "cancelado"],
+    confirmado: ["pronto", "saiu", "finalizado", "aguardando", "cancelado"],
+    pronto: ["saiu", "finalizado", "confirmado", "cancelado"],
+    saiu: ["finalizado", "pronto", "cancelado"],
+    finalizado: [],
     cancelado: [],
   },
   pickup: {
-    aguardando: ["confirmado", "preparando", "pronto", "entregue", "cancelado"],
-    confirmado: ["preparando", "pronto", "entregue", "aguardando", "cancelado"],
-    preparando: ["pronto", "entregue", "confirmado", "cancelado"],
-    pronto: ["entregue", "preparando", "cancelado"],
-    entregue: [],
+    aguardando: ["confirmado", "pronto", "finalizado", "cancelado"],
+    confirmado: ["pronto", "finalizado", "aguardando", "cancelado"],
+    pronto: ["finalizado", "confirmado", "cancelado"],
+    finalizado: [],
     cancelado: [],
   },
 };
 
-describe("orders_status_transition (FR-022, FR-026, ADR-017)", () => {
-  test("mt.order_transition_allowed agrees with the ADR-017 table on every triple", async () => {
+describe("orders_status_transition (FR-022, FR-026, ADR-017, ADR-028)", () => {
+  test("mt.order_transition_allowed agrees with the ADR-017 and ADR-028 table on every triple", async () => {
     const mismatches: string[] = [];
     const rows = await db<{ f: string; s: string; t: string; ok: boolean }[]>`
       select f, s, t, mt.order_transition_allowed(s, t, f) as ok
@@ -189,7 +187,7 @@ describe("orders_status_transition (FR-022, FR-026, ADR-017)", () => {
       const want = (ALLOWED[row.f as Fulfillment][row.s as OrderStatus] ?? []).includes(row.t as OrderStatus);
       if (row.ok !== want) mismatches.push(`${row.f} ${row.s} -> ${row.t}: expected ${want}`);
     }
-    expect(rows.length).toBe(2 * 7 * 6);
+    expect(rows.length).toBe(2 * 6 * 5);
     expect(mismatches).toEqual([]);
   });
 
@@ -202,7 +200,7 @@ describe("orders_status_transition (FR-022, FR-026, ADR-017)", () => {
     const disagreements = rows
       .filter((r) => canTransition(r.s as OrderStatus, r.t as OrderStatus, r.f as Fulfillment) !== r.ok)
       .map((r) => `${r.f} ${r.s} -> ${r.t}`);
-    expect(rows.length).toBe(2 * 7 * 7);
+    expect(rows.length).toBe(2 * 6 * 6);
     expect(disagreements).toEqual([]);
   });
 
@@ -233,7 +231,7 @@ describe("orders_status_transition (FR-022, FR-026, ADR-017)", () => {
   test("a forward skip writes one history row with the real from and to", async () => {
     await inRollback(a.attendantCtx, async (tx) => {
       const order = await createOrder(tx, a);
-      await tx`update public.orders set status = 'preparando' where id = ${order.id}`;
+      await tx`update public.orders set status = 'pronto' where id = ${order.id}`;
       const history = await tx<
         { from_status: string | null; to_status: string; changed_by: string; actor_type: string }[]
       >`
@@ -241,7 +239,7 @@ describe("orders_status_transition (FR-022, FR-026, ADR-017)", () => {
         where order_id = ${order.id} order by changed_at, from_status nulls first`;
       expect([...history]).toEqual([
         { from_status: null, to_status: "aguardando", changed_by: a.attendantId, actor_type: "user" },
-        { from_status: "aguardando", to_status: "preparando", changed_by: a.attendantId, actor_type: "user" },
+        { from_status: "aguardando", to_status: "pronto", changed_by: a.attendantId, actor_type: "user" },
       ]);
     });
   });
@@ -269,11 +267,11 @@ describe("orders_status_transition (FR-022, FR-026, ADR-017)", () => {
     });
   });
 
-  test("entregue sets delivered_at and cancelado sets cancelled_at", async () => {
+  test("finalizado sets delivered_at and cancelado sets cancelled_at", async () => {
     await inRollback(a.attendantCtx, async (tx) => {
       const delivered = await createOrder(tx, a);
       const cancelled = await createOrder(tx, a);
-      await tx`update public.orders set status = 'entregue' where id = ${delivered.id}`;
+      await tx`update public.orders set status = 'finalizado' where id = ${delivered.id}`;
       await tx`update public.orders set status = 'cancelado', cancel_reason = 'cliente desistiu' where id = ${cancelled.id}`;
       const rows = await tx<{ id: string; delivered_at: Date | null; cancelled_at: Date | null }[]>`
         select id, delivered_at, cancelled_at from public.orders where id in (${delivered.id}, ${cancelled.id})`;

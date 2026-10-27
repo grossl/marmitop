@@ -41,20 +41,18 @@ export function initials(name: string): string {
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   aguardando: "Aguardando",
   confirmado: "Confirmado",
-  preparando: "Preparando",
   pronto: "Pronto",
   saiu: "Saiu para entrega",
-  entregue: "Entregue",
+  finalizado: "Finalizado",
   cancelado: "Cancelado",
 };
 
 export const ORDER_STATUS_STYLES: Record<string, string> = {
   aguardando: "bg-yellow-100 dark:bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-500/30",
   confirmado: "bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30",
-  preparando: "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30",
   pronto: "bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300 border-green-200 dark:border-green-500/30",
   saiu: "bg-purple-100 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-500/30",
-  entregue: "bg-slate-100 dark:bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-500/30",
+  finalizado: "bg-slate-100 dark:bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-500/30",
   cancelado: "bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 border-red-200 dark:border-red-500/30",
 };
 

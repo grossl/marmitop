@@ -23,7 +23,6 @@ import {
   CreditCard,
   Package,
   Bike,
-  UtensilsCrossed,
   AlertCircle,
   CheckCircle2,
   CheckCheck,
@@ -103,16 +102,6 @@ const COLUMNS: {
     dropClass: "bg-blue-100/60 dark:bg-blue-500/20 border-blue-300 dark:border-blue-500/30",
   },
   {
-    status: "preparando",
-    label: "Em Preparo",
-    icon: UtensilsCrossed,
-    accent: "text-orange-600 dark:text-orange-300",
-    badgeClass: "bg-orange-50 dark:bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-500/30",
-    headerClass: "border-orange-300 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/15",
-    colClass: "border-orange-200 dark:border-orange-500/30 bg-orange-50/30 dark:bg-orange-500/15",
-    dropClass: "bg-orange-100/60 dark:bg-orange-500/20 border-orange-300 dark:border-orange-500/30",
-  },
-  {
     status: "pronto",
     label: "Pronto",
     icon: Package,
@@ -133,8 +122,8 @@ const COLUMNS: {
     dropClass: "bg-purple-100/60 dark:bg-purple-500/20 border-purple-300 dark:border-purple-500/30",
   },
   {
-    status: "entregue",
-    label: "Entregue",
+    status: "finalizado",
+    label: "Finalizado",
     icon: CheckCheck,
     accent: "text-slate-500 dark:text-slate-400",
     badgeClass: "bg-slate-100 dark:bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-500/30",
@@ -804,19 +793,19 @@ export function OrdersPage({
       </div>
 
       <div className="flex flex-col flex-1 overflow-hidden px-6 py-4 gap-4">
-        {/* KPIs (FR-025): the restaurant's current day; revenue counts entregue only (ADR-015) */}
+        {/* KPIs (FR-025): the restaurant's current day; revenue counts finalizado only (ADR-015, ADR-028) */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 shrink-0">
           <KpiCard
-            label="Faturamento entregue"
+            label="Faturamento finalizado"
             value={formatCents(kpis.deliveredRevenueCents)}
-            sub={`${kpis.deliveredCount} pedido(s) entregue(s)`}
+            sub={`${kpis.deliveredCount} pedido(s) finalizado(s)`}
             icon={DollarSign}
             color="bg-primary/10 text-primary"
           />
           <KpiCard
             label="Em andamento"
             value={String(kpis.inProgressCount)}
-            sub="aguardando + confirmado + preparo"
+            sub="aguardando + confirmado"
             icon={Clock}
             color="bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300"
           />

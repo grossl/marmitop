@@ -31,27 +31,23 @@ type AutomaticMessageKind =
   | "closed"
   | "order_received"
   | "order_confirmed"
-  | "order_preparing"
   | "order_ready"
   | "order_out_for_delivery"
-  | "order_delivered"
   | "order_cancelled";
 
-/** The six order status messages with the ADR-026 defaults (all on since ADR-027, migration 0023). */
+/** The four order status messages with the ADR-026 defaults (all on since ADR-027; ADR-028 removed two). */
 export const ORDER_STATUS_MESSAGE_DEFAULTS: RestaurantContent["automaticMessages"] = [
   {
     kind: "order_confirmed",
     enabled: true,
     body: "Olá {{nome}}! Seu pedido {{pedido}} foi confirmado e logo entra em preparo.",
   },
-  { kind: "order_preparing", enabled: true, body: "Seu pedido {{pedido}} está sendo preparado." },
   {
     kind: "order_ready",
     enabled: true,
     body: "Seu pedido {{pedido}} está pronto! Pode vir retirar no {{restaurante}}.",
   },
   { kind: "order_out_for_delivery", enabled: true, body: "Seu pedido {{pedido}} saiu para entrega!" },
-  { kind: "order_delivered", enabled: true, body: "Pedido {{pedido}} entregue. Obrigado pela preferência, {{nome}}!" },
   {
     kind: "order_cancelled",
     enabled: true,

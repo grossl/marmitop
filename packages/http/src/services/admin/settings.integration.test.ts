@@ -40,10 +40,8 @@ describe("getSettings", () => {
       "closed",
       "order_received",
       "order_confirmed",
-      "order_preparing",
       "order_ready",
       "order_out_for_delivery",
-      "order_delivered",
       "order_cancelled",
     ]);
     expect(s.integrations.whatsapp?.apiKey).toEqual({ configured: true, last4: "abcd" });

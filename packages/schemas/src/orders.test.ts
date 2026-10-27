@@ -40,7 +40,7 @@ describe("createOrderBodySchema (06.api-spec.md)", () => {
     for (const extra of [
       { source: "whatsapp" },
       { total_cents: 1 },
-      { status: "entregue" },
+      { status: "finalizado" },
       { delivery_fee_cents: 0 },
     ]) {
       expect(createOrderBodySchema.safeParse({ ...apiOrder, ...extra }).success).toBe(false);

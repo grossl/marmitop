@@ -132,10 +132,10 @@ afterAll(async () => {
   await db.end();
 });
 
-describe("paid_at on entregue (FR-160)", () => {
-  test("delivery marks an unpaid order paid, by the user who moved it", async () => {
+describe("paid_at on finalizado (FR-160, ADR-028)", () => {
+  test("finalizado marks an unpaid order paid, by the user who moved it", async () => {
     const { orderId } = await makeOrder(a, { status: "pronto" });
-    await changeOrderStatus(deps, attendant(), { orderId, toStatus: "entregue" });
+    await changeOrderStatus(deps, attendant(), { orderId, toStatus: "finalizado" });
     const [row] = await db<{ paid_at: Date | null; paid_by: string | null; delivered_at: Date }[]>`
       select paid_at, paid_by, delivered_at from public.orders where id = ${orderId}`;
     expect(row?.paid_at).not.toBeNull();
@@ -144,10 +144,10 @@ describe("paid_at on entregue (FR-160)", () => {
     expect((await getOrder(deps, attendant(), { orderId })).paidAt).toBe(row?.paid_at?.toISOString() ?? "x");
   });
 
-  test("a payment marked before delivery keeps its time", async () => {
+  test("a payment marked before finalizado keeps its time", async () => {
     const { orderId } = await makeOrder(a, { status: "pronto" });
     await markOrderPaid(deps, attendant(), { orderId });
-    await changeOrderStatus(deps, attendant(), { orderId, toStatus: "entregue" });
+    await changeOrderStatus(deps, attendant(), { orderId, toStatus: "finalizado" });
     const [row] = await db<{ paid_at: Date }[]>`select paid_at from public.orders where id = ${orderId}`;
     expect(row?.paid_at.toISOString()).toBe(NOW.toISOString());
   });
@@ -155,7 +155,7 @@ describe("paid_at on entregue (FR-160)", () => {
 
 describe("markOrderPaid / unmarkOrderPaid (FR-161..FR-163)", () => {
   test("an attendant marks an order; a second mark changes nothing and writes no audit row", async () => {
-    const { orderId } = await makeOrder(a, { status: "preparando" });
+    const { orderId } = await makeOrder(a, { status: "confirmado" });
     const first = await markOrderPaid(deps, attendant(), { orderId });
     expect(first).toEqual({ paidAt: NOW.toISOString(), changed: true });
     const [row] = await db<{ paid_by: string }[]>`select paid_by from public.orders where id = ${orderId}`;
@@ -230,24 +230,24 @@ describe("listPaidOrders / getFinanceTotals (FR-164..FR-166, FR-169)", () => {
     // Restaurant P holds only these orders, so the expectations are exact.
     customer = await makeCustomer(p, "Cliente Fiel", CPF);
     ids.oct1 = (
-      await makeOrder(p, { status: "entregue", paidAt: "2026-10-01T03:00:00Z", method: "pix", customerId: customer })
+      await makeOrder(p, { status: "finalizado", paidAt: "2026-10-01T03:00:00Z", method: "pix", customerId: customer })
     ).orderId;
     // 23:30 on 31 October in São Paulo is 02:30 UTC on 1 November.
     ids.oct31late = (
-      await makeOrder(p, { status: "entregue", paidAt: "2026-11-01T02:30:00Z", method: "dinheiro" })
+      await makeOrder(p, { status: "finalizado", paidAt: "2026-11-01T02:30:00Z", method: "dinheiro" })
     ).orderId;
-    ids.nov1 = (await makeOrder(p, { status: "entregue", paidAt: "2026-11-01T03:30:00Z", method: "pix" })).orderId;
+    ids.nov1 = (await makeOrder(p, { status: "finalizado", paidAt: "2026-11-01T03:30:00Z", method: "pix" })).orderId;
     ids.advance = (
-      await makeOrder(p, { status: "preparando", paidAt: "2026-10-10T15:00:00Z", method: "cartao_credito" })
+      await makeOrder(p, { status: "confirmado", paidAt: "2026-10-10T15:00:00Z", method: "cartao_credito" })
     ).orderId;
     ids.unpaid = (await makeOrder(p, { status: "pronto" })).orderId;
     ids.cancelledPaid = (await makeOrder(p, { status: "cancelado", paidAt: "2026-10-05T15:00:00Z" })).orderId;
     ids.issued = (
-      await makeOrder(p, { status: "entregue", paidAt: "2026-10-20T15:00:00Z", method: "cartao_debito" })
+      await makeOrder(p, { status: "finalizado", paidAt: "2026-10-20T15:00:00Z", method: "cartao_debito" })
     ).orderId;
-    ids.failed = (await makeOrder(p, { status: "entregue", paidAt: "2026-10-21T15:00:00Z", method: "pix" })).orderId;
+    ids.failed = (await makeOrder(p, { status: "finalizado", paidAt: "2026-10-21T15:00:00Z", method: "pix" })).orderId;
     ids.cancelledInvoice = (
-      await makeOrder(p, { status: "entregue", paidAt: "2026-10-22T15:00:00Z", method: "pix" })
+      await makeOrder(p, { status: "finalizado", paidAt: "2026-10-22T15:00:00Z", method: "pix" })
     ).orderId;
     await db`
       insert into public.order_invoices (restaurant_id, order_id, kind, status, numero)
@@ -349,7 +349,7 @@ describe("pagination (FR-164)", () => {
     for (let i = 0; i < FINANCE_PAGE_SIZE + 7; i += 1) {
       // Pairs share a payment time; microseconds must survive the cursor.
       const paidAt = `2026-10-12T12:00:00.${String(100000 + Math.floor(i / 2)).slice(1)}Z`;
-      made.push((await makeOrder(f, { status: "entregue", paidAt })).orderId);
+      made.push((await makeOrder(f, { status: "finalizado", paidAt })).orderId);
     }
     const range = { from: "2026-10-01", to: "2026-10-31" };
     const first = await listPaidOrders(deps, admin(f), range);
@@ -369,10 +369,10 @@ describe("pagination (FR-164)", () => {
 
 describe("issueInvoicesBatch (FR-167, FR-168)", () => {
   test("each order gets its own result: issued, blocked with missing fields, skipped, not found", async () => {
-    const ready = await makeOrder(a, { status: "entregue", fulfillment: "pickup", paidAt: "2026-10-13T14:00:00Z" });
-    const noCpf = await makeOrder(a, { status: "entregue", fulfillment: "delivery", paidAt: "2026-10-13T14:00:00Z" });
-    const already = await makeOrder(a, { status: "entregue", fulfillment: "pickup", paidAt: "2026-10-13T14:00:00Z" });
-    const foreign = await makeOrder(b, { status: "entregue", fulfillment: "pickup", paidAt: "2026-10-13T14:00:00Z" });
+    const ready = await makeOrder(a, { status: "finalizado", fulfillment: "pickup", paidAt: "2026-10-13T14:00:00Z" });
+    const noCpf = await makeOrder(a, { status: "finalizado", fulfillment: "delivery", paidAt: "2026-10-13T14:00:00Z" });
+    const already = await makeOrder(a, { status: "finalizado", fulfillment: "pickup", paidAt: "2026-10-13T14:00:00Z" });
+    const foreign = await makeOrder(b, { status: "finalizado", fulfillment: "pickup", paidAt: "2026-10-13T14:00:00Z" });
     const firstIssue = await issueInvoicesBatch(deps, admin(), { orderIds: [already.orderId] });
     expect(firstIssue.results[0]?.outcome).toBe("issued");
     await truncateQueues(db);

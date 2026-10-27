@@ -56,7 +56,7 @@ beforeAll(async () => {
   // The fixture's own invoice row holds the fixture order; free it.
   await db`update public.order_invoices set status = 'failed' where id = ${a.orderInvoiceId}`;
   // One step at a time: the transition trigger refuses jumps.
-  for (const status of ["confirmado", "preparando", "pronto"]) {
+  for (const status of ["confirmado", "pronto"]) {
     await db`update public.orders set status = ${status} where id = ${a.orderId}`;
   }
 });

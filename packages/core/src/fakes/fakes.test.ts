@@ -107,7 +107,7 @@ describe("FakeInvoiceGateway", () => {
     const r = buildInvoiceRequest(
       {
         code: "ORD-1",
-        status: "entregue",
+        status: "finalizado",
         fulfillment: "pickup",
         paymentMethod: "pix",
         changeForCents: null,

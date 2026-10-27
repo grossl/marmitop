@@ -262,7 +262,7 @@ export class MemoryPublicApi {
         async changeOrderStatus(ctx, id, body) {
           self.calls.push("changeOrderStatus");
           const row = self.find(self.orders, ctx, id, "Order");
-          if (row.value.status === "entregue" || row.value.status === "cancelado") {
+          if (row.value.status === "finalizado" || row.value.status === "cancelado") {
             throw new AppError("invalid_status_transition", "Final status.", {
               details: [{ path: "status", code: "invalid_status_transition", message: "Allowed: nenhum." }],
             });

@@ -17,10 +17,9 @@ export function paymentLabel(method: string | null): string {
 export const STATUS_LABELS: Record<string, string> = {
   aguardando: "Aguardando",
   confirmado: "Confirmado",
-  preparando: "Em Preparo",
   pronto: "Pronto",
   saiu: "Saiu para Entrega",
-  entregue: "Entregue",
+  finalizado: "Finalizado",
   cancelado: "Cancelado",
 };
 

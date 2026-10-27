@@ -114,7 +114,7 @@ describe("issueInvoice (FR-120..FR-125)", () => {
   });
 
   test("an order before pronto is blocked by V11 and creates nothing (FR-121)", async () => {
-    const { orderId } = await makeOrder("preparando", "pickup");
+    const { orderId } = await makeOrder("confirmado", "pickup");
     const r = await issueInvoice(deps, attendant(), { orderId });
     expect(r.outcome).toBe("blocked");
     if (r.outcome === "blocked") expect(r.problems.map((p) => p.code)).toContain("invoice_not_allowed");
@@ -122,7 +122,7 @@ describe("issueInvoice (FR-120..FR-125)", () => {
   });
 
   test("a second Emitir NF while one is live is blocked (FR-132)", async () => {
-    const { orderId } = await makeOrder("entregue", "pickup");
+    const { orderId } = await makeOrder("finalizado", "pickup");
     expect((await issueInvoice(deps, attendant(), { orderId })).outcome).toBe("queued");
     const again = await issueInvoice(deps, attendant(), { orderId });
     expect(again.outcome).toBe("blocked");
@@ -130,7 +130,7 @@ describe("issueInvoice (FR-120..FR-125)", () => {
   });
 
   test("after an ambiguous failure, Emitir novamente resends the same row with the same key and body", async () => {
-    const { orderId } = await makeOrder("entregue", "pickup");
+    const { orderId } = await makeOrder("finalizado", "pickup");
     const first = await issueInvoice(deps, attendant(), { orderId });
     if (first.outcome !== "queued") throw new Error("expected queued");
     const [before] = await db<
@@ -152,7 +152,7 @@ describe("issueInvoice (FR-120..FR-125)", () => {
   });
 
   test("after a definitive failure (validation_failed) a new row with a new key is created", async () => {
-    const { orderId } = await makeOrder("entregue", "pickup");
+    const { orderId } = await makeOrder("finalizado", "pickup");
     const first = await issueInvoice(deps, attendant(), { orderId });
     if (first.outcome !== "queued") throw new Error("expected queued");
     await db`update public.order_invoices set status = 'failed', error_code = 'validation_failed' where id = ${first.invoice.id}`;
@@ -162,7 +162,7 @@ describe("issueInvoice (FR-120..FR-125)", () => {
   });
 
   test("after a rejected invoice the order can issue again with a new key (FR-132)", async () => {
-    const { orderId } = await makeOrder("entregue", "pickup");
+    const { orderId } = await makeOrder("finalizado", "pickup");
     const first = await issueInvoice(deps, attendant(), { orderId });
     if (first.outcome !== "queued") throw new Error("expected queued");
     await db`update public.order_invoices set status = 'rejected' where id = ${first.invoice.id}`;
@@ -221,7 +221,7 @@ describe("issueInvoice (FR-120..FR-125)", () => {
   });
 
   test("NF-e needs a CNPJ customer (FR-122, V10)", async () => {
-    const { orderId, customerId } = await makeOrder("entregue", "pickup");
+    const { orderId, customerId } = await makeOrder("finalizado", "pickup");
     const blocked = await issueInvoice(deps, attendant(), { orderId, kind: "nfe" });
     expect(blocked.outcome).toBe("blocked");
     await db`update public.customers set cpf_cnpj = ${CNPJ} where id = ${customerId}`;
@@ -242,7 +242,7 @@ describe("issueInvoice (FR-120..FR-125)", () => {
 
 describe("applyInvoiceUpdate and the webhook (FR-126, FR-127, FR-136)", () => {
   async function queued(): Promise<string> {
-    const { orderId } = await makeOrder("entregue", "pickup");
+    const { orderId } = await makeOrder("finalizado", "pickup");
     const r = await issueInvoice(deps, attendant(), { orderId });
     if (r.outcome !== "queued") throw new Error("expected queued");
     await db`update public.order_invoices set external_id = ${`ext-${r.invoice.id}`} where id = ${r.invoice.id}`;
@@ -277,7 +277,7 @@ describe("applyInvoiceUpdate and the webhook (FR-126, FR-127, FR-136)", () => {
   });
 
   test("a signed invoice.authorized delivery lands through the reference before external_id is known", async () => {
-    const { orderId } = await makeOrder("entregue", "pickup");
+    const { orderId } = await makeOrder("finalizado", "pickup");
     const r = await issueInvoice(deps, attendant(), { orderId });
     if (r.outcome !== "queued") throw new Error("expected queued");
     const body = JSON.stringify({
@@ -326,7 +326,7 @@ describe("applyInvoiceUpdate and the webhook (FR-126, FR-127, FR-136)", () => {
 
 describe("refresh, files, and cancel (FR-127, FR-129, FR-130, FR-135)", () => {
   async function authorized(): Promise<string> {
-    const { orderId } = await makeOrder("entregue", "pickup");
+    const { orderId } = await makeOrder("finalizado", "pickup");
     const r = await issueInvoice(deps, attendant(), { orderId });
     if (r.outcome !== "queued") throw new Error("expected queued");
     const created = await gateway.createInvoice(
@@ -376,7 +376,7 @@ describe("refresh, files, and cancel (FR-127, FR-129, FR-130, FR-135)", () => {
   });
 
   test("a queued invoice cannot be cancelled", async () => {
-    const { orderId } = await makeOrder("entregue", "pickup");
+    const { orderId } = await makeOrder("finalizado", "pickup");
     const r = await issueInvoice(deps, attendant(), { orderId });
     if (r.outcome !== "queued") throw new Error("expected queued");
     await expect(
@@ -385,7 +385,7 @@ describe("refresh, files, and cancel (FR-127, FR-129, FR-130, FR-135)", () => {
   });
 
   test("getOrder lists the invoices and the card badge (FR-128, FR-139)", async () => {
-    const { orderId } = await makeOrder("entregue", "pickup");
+    const { orderId } = await makeOrder("finalizado", "pickup");
     await issueInvoice(deps, attendant(), { orderId });
     const detail = await getOrder(deps, attendant(), { orderId });
     expect(detail.invoices).toHaveLength(1);

@@ -1,27 +1,20 @@
-// Order status machine (ADR-017, FR-021..FR-029, 05.data-model.md "Order status transitions").
+// Order status machine (ADR-017, ADR-028, FR-021..FR-029, 05.data-model.md "Order status transitions").
 // The database trigger enforces the same table as a backstop.
 
 import { AppError } from "./errors";
 
-export const ORDER_STATUSES = [
-  "aguardando",
-  "confirmado",
-  "preparando",
-  "pronto",
-  "saiu",
-  "entregue",
-  "cancelado",
-] as const;
+export const ORDER_STATUSES = ["aguardando", "confirmado", "pronto", "saiu", "finalizado", "cancelado"] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 export type Fulfillment = "delivery" | "pickup";
 export type ActorType = "user" | "api_key" | "system";
 
-const FLOW_DELIVERY: readonly OrderStatus[] = ["aguardando", "confirmado", "preparando", "pronto", "saiu", "entregue"];
-const FLOW_PICKUP: readonly OrderStatus[] = ["aguardando", "confirmado", "preparando", "pronto", "entregue"];
+// ADR-028: no `preparando`; `finalizado` closes the order.
+const FLOW_DELIVERY: readonly OrderStatus[] = ["aguardando", "confirmado", "pronto", "saiu", "finalizado"];
+const FLOW_PICKUP: readonly OrderStatus[] = ["aguardando", "confirmado", "pronto", "finalizado"];
 
 export function isFinalStatus(status: OrderStatus): boolean {
-  return status === "entregue" || status === "cancelado";
+  return status === "finalizado" || status === "cancelado";
 }
 
 function flowFor(fulfillment: Fulfillment): readonly OrderStatus[] {
@@ -119,7 +112,8 @@ export function applyTransition(
       actorType: actor.actorType,
       changedAt: at,
     },
-    deliveredAt: to === "entregue" ? at : null,
+    // `delivered_at` keeps its name; it is the time the order was finalized (ADR-028).
+    deliveredAt: to === "finalizado" ? at : null,
     cancelledAt: to === "cancelado" ? at : null,
   };
 }

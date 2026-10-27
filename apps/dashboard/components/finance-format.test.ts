@@ -5,13 +5,13 @@ import { canIssueRow, countBatch, formatRange, pluralOrders } from "./finance-fo
 
 describe("finance display helpers", () => {
   test("Emitir NF shows for an invoiceable order without a live invoice", () => {
-    expect(canIssueRow({ status: "entregue", invoice: null })).toBe(true);
-    expect(canIssueRow({ status: "entregue", invoice: { status: "rejected" } })).toBe(true);
-    expect(canIssueRow({ status: "entregue", invoice: { status: "cancelled" } })).toBe(true);
-    expect(canIssueRow({ status: "entregue", invoice: { status: "authorized" } })).toBe(false);
+    expect(canIssueRow({ status: "finalizado", invoice: null })).toBe(true);
+    expect(canIssueRow({ status: "finalizado", invoice: { status: "rejected" } })).toBe(true);
+    expect(canIssueRow({ status: "finalizado", invoice: { status: "cancelled" } })).toBe(true);
+    expect(canIssueRow({ status: "finalizado", invoice: { status: "authorized" } })).toBe(false);
     expect(canIssueRow({ status: "saiu", invoice: { status: "processing" } })).toBe(false);
     // Pix paid in advance, still in the kitchen (FR-121).
-    expect(canIssueRow({ status: "preparando", invoice: null })).toBe(false);
+    expect(canIssueRow({ status: "confirmado", invoice: null })).toBe(false);
   });
 
   test("batch counts by outcome", () => {

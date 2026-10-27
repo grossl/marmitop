@@ -512,20 +512,18 @@ function HoursSettings({ settings }: { settings: SettingsView }) {
   );
 }
 
-// ─── Mensagens automáticas (FR-084, FR-200, ADR-014, ADR-026) ─────────────────
+// ─── Mensagens automáticas (FR-084, FR-200, ADR-014, ADR-026, ADR-028) ────────
 
 const MESSAGE_COPY = {
   welcome: { title: "Mensagem de boas-vindas", description: "Enviada quando um novo cliente inicia uma conversa." },
   closed: { title: "Fora do horário", description: "Enviada automaticamente quando o restaurante está fechado." },
   order_received: { title: "Pedido recebido", description: "Confirma o recebimento de um novo pedido." },
   order_confirmed: { title: "Pedido confirmado", description: "Enviada quando o pedido é confirmado." },
-  order_preparing: { title: "Pedido em preparo", description: "Enviada quando o pedido entra em preparo." },
   order_ready: {
     title: "Pedido pronto para retirada",
     description: "Enviada quando o pedido fica pronto. Só para pedidos de retirada.",
   },
   order_out_for_delivery: { title: "Saiu para entrega", description: "Enviada quando o pedido sai para entrega." },
-  order_delivered: { title: "Pedido entregue", description: "Enviada quando o pedido é entregue." },
   order_cancelled: { title: "Pedido cancelado", description: "Enviada quando o pedido é cancelado." },
 } as const;
 

@@ -3,7 +3,7 @@
 // No delete (ADR-018).
 //
 // Totals: `ordersCount` skips `cancelado` (FR-044). `totalSpentCents` counts
-// only `entregue` orders, the same rule as revenue (ADR-015).
+// only `finalizado` orders, the same rule as revenue (ADR-015).
 
 import { AppError } from "@mt/core";
 import type { Tx } from "@mt/db";
@@ -90,7 +90,7 @@ const SELECT_CUSTOMER = (tx: Tx) => tx`
   (select count(*) from public.orders o
     where o.restaurant_id = c.restaurant_id and o.customer_id = c.id and o.status <> 'cancelado') as orders_count,
   (select coalesce(sum(o.total_cents), 0)::bigint from public.orders o
-    where o.restaurant_id = c.restaurant_id and o.customer_id = c.id and o.status = 'entregue') as total_spent_cents
+    where o.restaurant_id = c.restaurant_id and o.customer_id = c.id and o.status = 'finalizado') as total_spent_cents
 `;
 
 async function loadCustomer(tx: Tx, restaurantId: string, customerId: string): Promise<CustomerDto> {

@@ -1,4 +1,4 @@
-// covers FR-200, FR-201, FR-202, FR-203, FR-204, FR-205, FR-114, FR-117, ADR-026
+// covers FR-200, FR-201, FR-202, FR-203, FR-204, FR-205, FR-114, FR-117, ADR-026, ADR-028
 // Needs the local stack (`bun run dev:stack`) or TEST_DATABASE_URL.
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { FixedClock, type OrderStatus } from "@mt/core";
@@ -15,10 +15,8 @@ import { createOrder } from "./create-order";
 const NOW = new Date("2026-10-13T15:00:00Z");
 const STATUS_KINDS: Record<string, string> = {
   order_confirmed: "Olá {{nome}}! Pedido {{pedido}} confirmado.",
-  order_preparing: "Pedido {{pedido}} em preparo.",
   order_ready: "Pedido {{pedido}} pronto no {{restaurante}}.",
   order_out_for_delivery: "Pedido {{pedido}} saiu.",
-  order_delivered: "Pedido {{pedido}} entregue.",
   order_cancelled: "Pedido {{pedido}} cancelado.",
 };
 
@@ -103,15 +101,23 @@ describe("status messages on a status move (FR-201, FR-205)", () => {
 
   test("a forward skip sends only the target's message", async () => {
     const o = await newOrder("delivery");
-    await move(o.id, "preparando");
-    expect((await statusMessages(o.id)).map((r) => r.automatic_kind)).toEqual(["order_preparing"]);
+    await move(o.id, "saiu");
+    expect((await statusMessages(o.id)).map((r) => r.automatic_kind)).toEqual(["order_out_for_delivery"]);
   });
 
   test("a back step sends nothing", async () => {
-    const o = await newOrder("delivery");
-    await move(o.id, "preparando");
+    const o = await newOrder("pickup");
+    await move(o.id, "pronto");
     await move(o.id, "confirmado");
-    expect((await statusMessages(o.id)).map((r) => r.automatic_kind)).toEqual(["order_preparing"]);
+    expect((await statusMessages(o.id)).map((r) => r.automatic_kind)).toEqual(["order_ready"]);
+  });
+
+  test("finalizado sends no message (ADR-028)", async () => {
+    for (const fulfillment of ["delivery", "pickup"] as const) {
+      const o = await newOrder(fulfillment);
+      await move(o.id, "finalizado");
+      expect(await statusMessages(o.id)).toEqual([]);
+    }
   });
 
   test("a no-op move sends nothing", async () => {
@@ -120,10 +126,10 @@ describe("status messages on a status move (FR-201, FR-205)", () => {
     expect(await statusMessages(o.id)).toEqual([]);
   });
 
-  test("each kind goes out once per order: pronto → preparando → pronto on pickup (FR-203)", async () => {
+  test("each kind goes out once per order: pronto → confirmado → pronto on pickup (FR-203)", async () => {
     const o = await newOrder("pickup");
     await move(o.id, "pronto");
-    await move(o.id, "preparando");
+    await move(o.id, "confirmado");
     await move(o.id, "pronto");
     const rows = await statusMessages(o.id);
     expect(rows.map((r) => r.automatic_kind)).toEqual(["order_ready"]);
@@ -141,7 +147,7 @@ describe("status messages on a status move (FR-201, FR-205)", () => {
   test("a counter order with no conversation sends nothing", async () => {
     const o = await newOrder("pickup", false);
     await move(o.id, "confirmado");
-    await move(o.id, "entregue");
+    await move(o.id, "finalizado");
     expect(await statusMessages(o.id)).toEqual([]);
   });
 
@@ -211,16 +217,9 @@ describe("status messages on a status move (FR-201, FR-205)", () => {
   test("a system actor sends too", async () => {
     const o = await newOrder("pickup");
     await asService(db, { restaurantId: a.restaurantId, actorType: "system" }, (tx) =>
-      changeOrderStatusInTx(
-        tx,
-        { restaurantId: a.restaurantId, actorType: "system" },
-        o.id,
-        "entregue",
-        undefined,
-        NOW,
-      ),
+      changeOrderStatusInTx(tx, { restaurantId: a.restaurantId, actorType: "system" }, o.id, "pronto", undefined, NOW),
     );
-    expect((await statusMessages(o.id)).map((r) => r.automatic_kind)).toEqual(["order_delivered"]);
+    expect((await statusMessages(o.id)).map((r) => r.automatic_kind)).toEqual(["order_ready"]);
   });
 
   test("a rolled-back status change leaves no row and no job", async () => {

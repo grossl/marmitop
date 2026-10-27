@@ -49,15 +49,15 @@ beforeAll(async () => {
     insert into public.customers (restaurant_id, name, phone)
     values (${a.restaurantId}, 'João', '+5511900000001') returning id`;
   const c2id = c2?.id as string;
-  await seedOrder(a, "ORD-101", a.customerId, "entregue", "2026-10-10T15:00:00Z", [{ name: "Frango", qty: 2, priceCents: 1500 }]);
-  await seedOrder(a, "ORD-102", c2id, "entregue", "2026-10-12T15:00:00Z", [
+  await seedOrder(a, "ORD-101", a.customerId, "finalizado", "2026-10-10T15:00:00Z", [{ name: "Frango", qty: 2, priceCents: 1500 }]);
+  await seedOrder(a, "ORD-102", c2id, "finalizado", "2026-10-12T15:00:00Z", [
     { name: "Frango", qty: 1, priceCents: 1000 },
     { name: "Suco", qty: 1, priceCents: 1000 },
   ]);
   await seedOrder(a, "ORD-103", c2id, "confirmado", null, [{ name: "Frango", qty: 9, priceCents: 1000 }]);
-  await seedOrder(a, "ORD-104", a.customerId, "entregue", "2026-09-20T15:00:00Z", [{ name: "Frango", qty: 1, priceCents: 4000 }]);
+  await seedOrder(a, "ORD-104", a.customerId, "finalizado", "2026-09-20T15:00:00Z", [{ name: "Frango", qty: 1, priceCents: 4000 }]);
   // Restaurant B has a delivered order that A must never see.
-  await seedOrder(b, "ORD-201", b.customerId, "entregue", "2026-10-11T15:00:00Z", [{ name: "Bife", qty: 5, priceCents: 9000 }]);
+  await seedOrder(b, "ORD-201", b.customerId, "finalizado", "2026-10-11T15:00:00Z", [{ name: "Bife", qty: 5, priceCents: 9000 }]);
 });
 
 afterAll(async () => {

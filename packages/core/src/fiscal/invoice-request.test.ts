@@ -1,4 +1,4 @@
-// covers FR-058, FR-120, FR-122, FR-123, FR-124, FR-125, ADR-013, ADR-016
+// covers FR-058, FR-120, FR-122, FR-123, FR-124, FR-125, ADR-013, ADR-016, ADR-028
 import { describe, expect, test } from "bun:test";
 import {
   buildInvoiceRequest,
@@ -51,7 +51,7 @@ const meal: InvoiceOrderItem = {
 };
 const pickupOrder: InvoiceOrder = {
   code: "ORD-042",
-  status: "entregue",
+  status: "finalizado",
   fulfillment: "pickup",
   paymentMethod: "pix",
   changeForCents: null,
@@ -550,8 +550,8 @@ describe("pre-send rules V1..V14 (each failing and passing)", () => {
     expect(run({ kind: "nfe", customer: { ...company, name: "" } }).map((p) => p.path)).toContain("customer.name");
   });
 
-  test("V11 only pronto, saiu, and entregue orders can be invoiced", () => {
-    for (const status of ["pronto", "saiu", "entregue"] as const) {
+  test("V11 only pronto, saiu, and finalizado orders can be invoiced", () => {
+    for (const status of ["pronto", "saiu", "finalizado"] as const) {
       expect(
         run({
           order: {
@@ -562,12 +562,12 @@ describe("pre-send rules V1..V14 (each failing and passing)", () => {
         }),
       ).toEqual([]);
     }
-    for (const status of ["aguardando", "confirmado", "preparando", "cancelado"] as const) {
+    for (const status of ["aguardando", "confirmado", "cancelado"] as const) {
       expect(run({ order: { status } })).toEqual([
         {
           path: "order.status",
           code: "invoice_not_allowed",
-          message: "Só é possível emitir nota de pedidos prontos, em entrega ou entregues.",
+          message: "Só é possível emitir nota de pedidos prontos, em entrega ou finalizados.",
         },
       ]);
     }

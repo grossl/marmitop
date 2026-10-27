@@ -50,13 +50,13 @@ export const getReports = defineService({
     >`
       select id, customer_id, total_cents, delivered_at
       from public.orders
-      where restaurant_id = ${ctx.restaurantId} and status = 'entregue' and delivered_at >= ${since}
+      where restaurant_id = ${ctx.restaurantId} and status = 'finalizado' and delivered_at >= ${since}
     `;
     const itemRows = await tx<{ order_id: string; name: string; qty: number }[]>`
       select i.order_id, i.name, i.qty
       from public.order_items i
       join public.orders o on o.restaurant_id = i.restaurant_id and o.id = i.order_id
-      where i.restaurant_id = ${ctx.restaurantId} and o.status = 'entregue' and o.delivered_at >= ${since}
+      where i.restaurant_id = ${ctx.restaurantId} and o.status = 'finalizado' and o.delivered_at >= ${since}
     `;
     const itemsByOrder = new Map<string, { name: string; qty: number }[]>();
     for (const r of itemRows) {
@@ -67,7 +67,7 @@ export const getReports = defineService({
     const orders = orderRows.map((r) => ({
       id: r.id,
       customerId: r.customer_id,
-      status: "entregue" as const,
+      status: "finalizado" as const,
       totalCents: r.total_cents,
       deliveredAt: r.delivered_at,
       items: itemsByOrder.get(r.id) ?? [],

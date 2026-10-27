@@ -141,12 +141,12 @@ export function ReportsPage({
           <KpiCard
             label="Faturamento"
             value={formatBRL(summary.revenueCents)}
-            sub="pedidos entregues no período"
+            sub="pedidos finalizados no período"
             icon={DollarSign}
             iconClass="bg-primary/10 text-primary"
           />
           <KpiCard
-            label="Pedidos entregues"
+            label="Pedidos finalizados"
             value={String(summary.orderCount)}
             sub="no período"
             icon={ShoppingBag}
@@ -162,7 +162,7 @@ export function ReportsPage({
           <KpiCard
             label="Clientes ativos"
             value={String(summary.activeCustomers)}
-            sub="com pedido entregue no período"
+            sub="com pedido finalizado no período"
             icon={Users}
             iconClass="bg-blue-100 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300"
           />
@@ -267,7 +267,7 @@ export function ReportsPage({
           </div>
           <div className="space-y-3">
             {topItems.length === 0 && (
-              <p className="text-sm text-muted-foreground">Nenhum pedido entregue no período.</p>
+              <p className="text-sm text-muted-foreground">Nenhum pedido finalizado no período.</p>
             )}
             {topItems.map((item, index) => {
               const maxQty = topItems[0]?.qty ?? 1;

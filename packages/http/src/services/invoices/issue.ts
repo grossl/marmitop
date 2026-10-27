@@ -217,7 +217,7 @@ async function requeueAmbiguous(
         {
           path: "order.status",
           code: "invoice_not_allowed",
-          message: "Só é possível emitir nota de pedidos prontos, em entrega ou entregues.",
+          message: "Só é possível emitir nota de pedidos prontos, em entrega ou finalizados.",
         },
       ],
       missingFields: [],

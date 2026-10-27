@@ -125,17 +125,13 @@ insert into public.automatic_messages (
   ('bbbb0004-0000-4000-8000-000000000005', 'bbbb0001-0000-4000-8000-000000000002', 'closed', true, 'Estamos fechados agora. Abrimos de terça a domingo, a partir das 11h.'),
   ('bbbb0004-0000-4000-8000-000000000006', 'bbbb0001-0000-4000-8000-000000000002', 'order_received', false, 'Pedido {{pedido}} recebido! Já vamos preparar.'),
   ('bbbb0004-0000-4000-8000-000000000007', 'bbbb0001-0000-4000-8000-000000000001', 'order_confirmed', true, 'Olá {{nome}}! Seu pedido {{pedido}} foi confirmado e logo entra em preparo.'),
-  ('bbbb0004-0000-4000-8000-000000000008', 'bbbb0001-0000-4000-8000-000000000001', 'order_preparing', true, 'Seu pedido {{pedido}} está sendo preparado.'),
-  ('bbbb0004-0000-4000-8000-000000000009', 'bbbb0001-0000-4000-8000-000000000001', 'order_ready', true, 'Seu pedido {{pedido}} está pronto! Pode vir retirar no {{restaurante}}.'),
-  ('bbbb0004-0000-4000-8000-000000000010', 'bbbb0001-0000-4000-8000-000000000001', 'order_out_for_delivery', true, 'Seu pedido {{pedido}} saiu para entrega!'),
-  ('bbbb0004-0000-4000-8000-000000000011', 'bbbb0001-0000-4000-8000-000000000001', 'order_delivered', true, 'Pedido {{pedido}} entregue. Obrigado pela preferência, {{nome}}!'),
-  ('bbbb0004-0000-4000-8000-000000000012', 'bbbb0001-0000-4000-8000-000000000001', 'order_cancelled', true, 'Seu pedido {{pedido}} foi cancelado. Se tiver dúvidas, responda esta mensagem.'),
-  ('bbbb0004-0000-4000-8000-000000000013', 'bbbb0001-0000-4000-8000-000000000002', 'order_confirmed', true, 'Olá {{nome}}! Seu pedido {{pedido}} foi confirmado e logo entra em preparo.'),
-  ('bbbb0004-0000-4000-8000-000000000014', 'bbbb0001-0000-4000-8000-000000000002', 'order_preparing', true, 'Seu pedido {{pedido}} está sendo preparado.'),
-  ('bbbb0004-0000-4000-8000-000000000015', 'bbbb0001-0000-4000-8000-000000000002', 'order_ready', true, 'Seu pedido {{pedido}} está pronto! Pode vir retirar no {{restaurante}}.'),
-  ('bbbb0004-0000-4000-8000-000000000016', 'bbbb0001-0000-4000-8000-000000000002', 'order_out_for_delivery', true, 'Seu pedido {{pedido}} saiu para entrega!'),
-  ('bbbb0004-0000-4000-8000-000000000017', 'bbbb0001-0000-4000-8000-000000000002', 'order_delivered', true, 'Pedido {{pedido}} entregue. Obrigado pela preferência, {{nome}}!'),
-  ('bbbb0004-0000-4000-8000-000000000018', 'bbbb0001-0000-4000-8000-000000000002', 'order_cancelled', true, 'Seu pedido {{pedido}} foi cancelado. Se tiver dúvidas, responda esta mensagem.');
+  ('bbbb0004-0000-4000-8000-000000000008', 'bbbb0001-0000-4000-8000-000000000001', 'order_ready', true, 'Seu pedido {{pedido}} está pronto! Pode vir retirar no {{restaurante}}.'),
+  ('bbbb0004-0000-4000-8000-000000000009', 'bbbb0001-0000-4000-8000-000000000001', 'order_out_for_delivery', true, 'Seu pedido {{pedido}} saiu para entrega!'),
+  ('bbbb0004-0000-4000-8000-000000000010', 'bbbb0001-0000-4000-8000-000000000001', 'order_cancelled', true, 'Seu pedido {{pedido}} foi cancelado. Se tiver dúvidas, responda esta mensagem.'),
+  ('bbbb0004-0000-4000-8000-000000000011', 'bbbb0001-0000-4000-8000-000000000002', 'order_confirmed', true, 'Olá {{nome}}! Seu pedido {{pedido}} foi confirmado e logo entra em preparo.'),
+  ('bbbb0004-0000-4000-8000-000000000012', 'bbbb0001-0000-4000-8000-000000000002', 'order_ready', true, 'Seu pedido {{pedido}} está pronto! Pode vir retirar no {{restaurante}}.'),
+  ('bbbb0004-0000-4000-8000-000000000013', 'bbbb0001-0000-4000-8000-000000000002', 'order_out_for_delivery', true, 'Seu pedido {{pedido}} saiu para entrega!'),
+  ('bbbb0004-0000-4000-8000-000000000014', 'bbbb0001-0000-4000-8000-000000000002', 'order_cancelled', true, 'Seu pedido {{pedido}} foi cancelado. Se tiver dúvidas, responda esta mensagem.');
 
 -- ---------------------------------------------------------------------------
 -- secrets and integrations (ADR-012, ADR-024)

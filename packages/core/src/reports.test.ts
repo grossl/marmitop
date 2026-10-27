@@ -1,4 +1,4 @@
-// covers FR-070, FR-071, FR-072, FR-073, FR-074, FR-075, FR-076, FR-077, FR-078
+// covers FR-070, FR-071, FR-072, FR-073, FR-074, FR-075, FR-076, FR-077, FR-078, ADR-028
 import { describe, expect, test } from "bun:test";
 import {
   averageTicketCents,
@@ -32,20 +32,20 @@ const order = (
 const NOW = new Date("2026-10-13T15:00:00Z");
 
 const orders: ReportOrder[] = [
-  order("1", "c1", "entregue", 5000, "2026-10-13T14:00:00Z", [{ name: "Marmita Fit", qty: 2 }]),
-  order("2", "c1", "entregue", 3001, "2026-10-12T20:00:00Z", [
+  order("1", "c1", "finalizado", 5000, "2026-10-13T14:00:00Z", [{ name: "Marmita Fit", qty: 2 }]),
+  order("2", "c1", "finalizado", 3001, "2026-10-12T20:00:00Z", [
     { name: "Marmita Fit", qty: 1 },
     { name: "Suco", qty: 1 },
   ]),
   order("3", "c2", "cancelado", 9999, null, [{ name: "Marmita Fit", qty: 9 }]),
-  order("4", "c3", "preparando", 7000, null, [{ name: "Suco", qty: 5 }]),
+  order("4", "c3", "confirmado", 7000, null, [{ name: "Suco", qty: 5 }]),
   order("5", "c4", "cancelado", 2000, null),
-  order("6", "c2", "entregue", 4500, "2026-09-30T01:00:00Z", [{ name: "Suco", qty: 3 }]), // Sep 29 22:00 local
+  order("6", "c2", "finalizado", 4500, "2026-09-30T01:00:00Z", [{ name: "Suco", qty: 3 }]), // Sep 29 22:00 local
 ];
 
 describe("summarize (FR-070..FR-073)", () => {
   const period = { fromDay: "2026-10-01", toDay: "2026-10-31" };
-  test("revenue counts entregue orders only; cancelled and open add nothing", () => {
+  test("revenue counts finalizado orders only; cancelled and open add nothing", () => {
     const s = summarize(orders, period, SP);
     expect(s.revenueCents).toBe(8001);
     expect(s.orderCount).toBe(2);
@@ -53,7 +53,7 @@ describe("summarize (FR-070..FR-073)", () => {
   test("average ticket is rounded to the cent (half up)", () => {
     expect(summarize(orders, period, SP).averageTicketCents).toBe(4001); // 8001/2 = 4000.5 -> 4001
   });
-  test("active customers: at least one entregue order in the period", () => {
+  test("active customers: at least one finalizado order in the period", () => {
     const s = summarize(orders, period, SP);
     expect(s.activeCustomers).toBe(1); // c1 only; c2 cancelled, c3 open
   });
@@ -74,8 +74,8 @@ describe("summarize (FR-070..FR-073)", () => {
       activeCustomers: 0,
     });
   });
-  test("an entregue order with no deliveredAt is ignored", () => {
-    const odd = [order("x", "c1", "entregue", 100, null)];
+  test("an finalizado order with no deliveredAt is ignored", () => {
+    const odd = [order("x", "c1", "finalizado", 100, null)];
     expect(summarize(odd, period, SP).orderCount).toBe(0);
   });
 });
@@ -108,7 +108,7 @@ describe("monthlyRevenue (FR-074)", () => {
     expect(m.map((x) => x.month)).toEqual(["2025-09", "2025-10", "2025-11", "2025-12", "2026-01", "2026-02"]);
   });
   test("uses the local month at a month boundary", () => {
-    const edge = [order("e", "c", "entregue", 100, "2026-11-01T02:00:00Z")]; // Oct 31 23:00 local
+    const edge = [order("e", "c", "finalizado", 100, "2026-11-01T02:00:00Z")]; // Oct 31 23:00 local
     const m = monthlyRevenue(edge, SP, NOW);
     expect(m[5]).toEqual({ month: "2026-10", revenueCents: 100 });
   });
@@ -125,7 +125,7 @@ describe("dailyOrders (FR-075)", () => {
     expect(d.find((x) => x.day === "2026-10-05")).toEqual({ day: "2026-10-05", orders: 0, revenueCents: 0 });
   });
   test("day boundaries use the restaurant timezone, not UTC", () => {
-    const late = [order("l", "c", "entregue", 100, "2026-10-13T02:30:00Z")]; // Oct 12 23:30 local
+    const late = [order("l", "c", "finalizado", 100, "2026-10-13T02:30:00Z")]; // Oct 12 23:30 local
     const d = dailyOrders(late, SP, NOW);
     expect(d.find((x) => x.day === "2026-10-12")?.orders).toBe(1);
     expect(d.find((x) => x.day === "2026-10-13")?.orders).toBe(0);
@@ -152,7 +152,7 @@ describe("dailyOrders (FR-075)", () => {
 });
 
 describe("topItems (FR-076)", () => {
-  test("sums quantity over entregue orders only, descending, ties by name", () => {
+  test("sums quantity over finalizado orders only, descending, ties by name", () => {
     const t = topItems(orders, { fromDay: "2026-09-01", toDay: "2026-10-31" }, SP);
     expect(t).toEqual([
       { name: "Suco", qty: 4 },
@@ -161,7 +161,7 @@ describe("topItems (FR-076)", () => {
   });
   test("ties break by name (pt collation), stable", () => {
     const o = [
-      order("a", "c", "entregue", 1, "2026-10-13T14:00:00Z", [
+      order("a", "c", "finalizado", 1, "2026-10-13T14:00:00Z", [
         { name: "Zebra", qty: 2 },
         { name: "Árvore", qty: 2 },
         { name: "Beta", qty: 2 },
@@ -175,7 +175,7 @@ describe("topItems (FR-076)", () => {
   });
   test("limited to eight rows by default", () => {
     const items = Array.from({ length: 12 }, (_, i) => ({ name: `Item ${String(i).padStart(2, "0")}`, qty: i + 1 }));
-    const o = [order("a", "c", "entregue", 1, "2026-10-13T14:00:00Z", items)];
+    const o = [order("a", "c", "finalizado", 1, "2026-10-13T14:00:00Z", items)];
     const t = topItems(o, { fromDay: "2026-10-01", toDay: "2026-10-31" }, SP);
     expect(t.length).toBe(8);
     expect(t[0]).toEqual({ name: "Item 11", qty: 12 });

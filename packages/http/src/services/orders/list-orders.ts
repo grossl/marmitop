@@ -46,7 +46,7 @@ async function queryBoard(
     where o.restaurant_id = ${restaurantId}
       and (
         (o.created_at at time zone ${timezone})::date = ${day}::date
-        or o.status not in ('entregue', 'cancelado')
+        or o.status not in ('finalizado', 'cancelado')
       )
       ${status ? tx`and o.status = ${status}` : tx``}
       ${
@@ -85,10 +85,10 @@ export const listOrders = defineService({
 
 export interface OrderKpis {
   readonly day: string;
-  /** `entregue` orders whose `delivered_at` falls on `day` (ADR-015). */
+  /** `finalizado` orders whose `delivered_at` falls on `day` (ADR-015). */
   readonly deliveredRevenueCents: number;
   readonly deliveredCount: number;
-  /** `aguardando`, `confirmado`, `preparando` right now, any creation day. */
+  /** `aguardando`, `confirmado` right now, any creation day (ADR-028). */
   readonly inProgressCount: number;
   readonly readyCount: number;
   readonly outForDeliveryCount: number;
@@ -98,10 +98,10 @@ async function queryKpis(tx: Tx, restaurantId: string, timezone: string, day: st
   const [row] = await tx<{ revenue: number; delivered: number; in_progress: number; ready: number; out: number }[]>`
     select
       coalesce(sum(total_cents) filter (
-        where status = 'entregue' and (delivered_at at time zone ${timezone})::date = ${day}::date), 0)::bigint as revenue,
+        where status = 'finalizado' and (delivered_at at time zone ${timezone})::date = ${day}::date), 0)::bigint as revenue,
       count(*) filter (
-        where status = 'entregue' and (delivered_at at time zone ${timezone})::date = ${day}::date)::int as delivered,
-      count(*) filter (where status in ('aguardando', 'confirmado', 'preparando'))::int as in_progress,
+        where status = 'finalizado' and (delivered_at at time zone ${timezone})::date = ${day}::date)::int as delivered,
+      count(*) filter (where status in ('aguardando', 'confirmado'))::int as in_progress,
       count(*) filter (where status = 'pronto')::int as ready,
       count(*) filter (where status = 'saiu')::int as out
     from public.orders

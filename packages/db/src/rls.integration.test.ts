@@ -296,7 +296,7 @@ const SPECS: TableSpec[] = [
     insert: "attendant",
     update: null,
     delete: null,
-    updateSet: "to_status = 'entregue'",
+    updateSet: "to_status = 'finalizado'",
     insertRow: (tx, f) => tx`
       insert into public.order_status_history (restaurant_id, order_id, from_status, to_status, actor_type)
       values (${f.restaurantId}, ${f.orderId}, 'aguardando', 'confirmado', 'user')`,
