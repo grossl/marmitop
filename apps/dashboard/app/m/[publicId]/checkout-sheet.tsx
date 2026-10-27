@@ -17,9 +17,9 @@ import { cartTotals, type PricedLine } from "./cart";
 import { whatsappLink } from "./public-menu-helpers";
 import { Stepper } from "./stepper";
 
-// Checkout for the public menu (ADR-031, FR-231). A full-height bottom sheet on a phone
-// (FR-237): one column, 16 px inputs with phone keyboards and autofill, and the send
-// button fixed at the bottom of the sheet.
+// Checkout for the public menu (ADR-031, FR-231). Responsive (FR-237): full screen on a
+// phone, a bottom sheet on a tablet, a side panel on a desktop. One column, 16 px inputs
+// with phone keyboards and autofill, and the send button fixed at the bottom.
 
 type Fulfillment = "delivery" | "pickup";
 type Payment = "pix" | "dinheiro" | "cartao_credito" | "cartao_debito";
@@ -71,6 +71,21 @@ function saveCustomer(form: CustomerForm): void {
   }
 }
 
+/** The `lg` breakpoint: from here the checkout is a side panel, below it a bottom sheet. */
+const DESKTOP_QUERY = "(min-width: 1024px)";
+
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const list = window.matchMedia(query);
+    const update = () => setMatches(list.matches);
+    update();
+    list.addEventListener("change", update);
+    return () => list.removeEventListener("change", update);
+  }, [query]);
+  return matches;
+}
+
 const orNull = (v: string) => (v.trim() === "" ? null : v.trim());
 
 interface Placed {
@@ -104,6 +119,7 @@ export function CheckoutSheet({
   const [formError, setFormError] = useState<string | null>(null);
   const [placed, setPlaced] = useState<Placed | null>(null);
   const [pending, startTransition] = useTransition();
+  const desktop = useMediaQuery(DESKTOP_QUERY);
 
   useEffect(() => setCustomer(loadCustomer()), []);
   // A closed sheet forgets the last result, so the next cart starts a new checkout.
@@ -159,8 +175,13 @@ export function CheckoutSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="bottom"
-        className="mx-auto h-[100dvh] max-w-2xl gap-0 rounded-none p-0 sm:h-[92dvh] sm:rounded-t-2xl [&>button:last-child]:hidden"
+        side={desktop ? "right" : "bottom"}
+        className={cn(
+          "gap-0 p-0 [&>button:last-child]:hidden",
+          desktop
+            ? "w-full sm:max-w-md"
+            : "mx-auto h-[100dvh] max-w-2xl rounded-none sm:h-[92dvh] sm:rounded-t-2xl sm:border-x",
+        )}
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
           <div className="min-w-0">

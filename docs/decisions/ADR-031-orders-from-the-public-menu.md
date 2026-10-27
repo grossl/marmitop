@@ -51,3 +51,13 @@ Identity option 2, rules option 2, first status option 2.
 * Public orders have no conversation. The status message rules for orders without a conversation apply (FR-200 to FR-205).
 * A wrong phone produces a real order that a person must cancel. A confirmation code (identity option 3) can come later.
 * The public API enum `source` gets `menu` (06.openapi.yaml).
+
+## Amendment 1 — 2026-10-27
+
+The first layout was a phone column, also on a computer. The owner wants the page to work in a desktop browser and a phone browser. The layout now follows three breakpoints (FR-237):
+
+* Phone (< 640 px): one column, the cart bar fixed at the bottom, checkout full screen.
+* Tablet (640–1023 px): items in two columns, the same cart bar, checkout as a bottom sheet.
+* Desktop (>= 1024 px): the page is up to 1152 px wide. Items are in two columns beside a sticky cart panel. Checkout opens as a side panel. There is no bottom bar.
+
+Category links stay under the header at every size and scroll sideways on a phone.
