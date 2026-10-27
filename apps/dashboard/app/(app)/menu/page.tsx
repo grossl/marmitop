@@ -1,4 +1,4 @@
-import { listMenuItems } from "@mt/http";
+import { getRestaurantProfile, listMenuItems } from "@mt/http";
 import type { Metadata } from "next";
 
 import { MenuPage } from "@/components/menu-page";
@@ -10,10 +10,14 @@ export const metadata: Metadata = { title: "Cardápio — Marmitop" };
 // Role gate on the server (FR-005): a screen the role cannot open is a 404.
 export default async function MenuRoute() {
   const ctx = await requireScreen("menu");
-  const items = await listMenuItems(requireDeps(), ctx, {});
+  const deps = requireDeps();
+  const [items, profile] = await Promise.all([
+    listMenuItems(deps, ctx, {}),
+    getRestaurantProfile(deps, ctx, undefined),
+  ]);
   return (
     <div className="flex-1 overflow-hidden">
-      <MenuPage items={items} restaurantId={ctx.restaurantId} />
+      <MenuPage items={items} restaurantId={ctx.restaurantId} publicId={profile.publicId} />
     </div>
   );
 }

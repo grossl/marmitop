@@ -10,6 +10,12 @@ import { HOME_PATH } from "@/lib/nav";
 // the user again on the server (lib/server/session.ts).
 
 const PUBLIC_PATHS = new Set(["/login"]);
+// The public menu page needs no session (ADR-030, FR-220).
+const PUBLIC_PREFIXES = ["/m/"];
+
+function isPublic(pathname: string): boolean {
+  return PUBLIC_PATHS.has(pathname) || PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
 
 export async function proxy(request: NextRequest) {
   const env = getPublicEnv();
@@ -35,7 +41,7 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
   const { pathname } = request.nextUrl;
 
-  if (!user && !PUBLIC_PATHS.has(pathname)) {
+  if (!user && !isPublic(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";

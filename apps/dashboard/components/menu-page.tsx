@@ -13,6 +13,7 @@ import {
   ChevronDown,
   RulerIcon,
   X,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@mt/ui/components/button";
 import { Input } from "@mt/ui/components/input";
@@ -1008,7 +1009,16 @@ function DrinkFormDialog({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export function MenuPage({ items, restaurantId }: { items: Item[]; restaurantId: string }) {
+export function MenuPage({
+  items,
+  restaurantId,
+  publicId,
+}: {
+  items: Item[];
+  restaurantId: string;
+  /** External id for the public menu link (ADR-030, FR-224). */
+  publicId: string;
+}) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState<Tab>("marmitas");
@@ -1116,14 +1126,23 @@ export function MenuPage({ items, restaurantId }: { items: Item[]; restaurantId:
             </button>
           </div>
 
-          {/* Add button */}
-          <Button
-            onClick={() => activeTab === "marmitas" ? setNewMenuOpen(true) : setNewDrinkOpen(true)}
-            className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="w-4 h-4" />
-            {activeTab === "marmitas" ? "Nova marmita" : "Nova bebida"}
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Public menu link (FR-224) */}
+            <Button asChild variant="outline" className="gap-2">
+              <a href={`/m/${publicId}`} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="w-4 h-4" /> Cardápio público
+              </a>
+            </Button>
+
+            {/* Add button */}
+            <Button
+              onClick={() => activeTab === "marmitas" ? setNewMenuOpen(true) : setNewDrinkOpen(true)}
+              className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="w-4 h-4" />
+              {activeTab === "marmitas" ? "Nova marmita" : "Nova bebida"}
+            </Button>
+          </div>
         </header>
 
         {/* Search bar */}

@@ -12,6 +12,8 @@ import { defineService } from "../service";
 
 export interface RestaurantProfile {
   readonly id: string;
+  /** External id for public links (ADR-030, FR-225). */
+  readonly publicId: string;
   readonly name: string;
   readonly phone: string | null;
   readonly email: string | null;
@@ -24,12 +26,13 @@ export interface RestaurantProfile {
 
 type ProfileRow = Pick<
   RestaurantRow,
-  "id" | "name" | "phone" | "email" | "address" | "cidade" | "uf" | "codigo_municipio" | "plan_code"
+  "id" | "public_id" | "name" | "phone" | "email" | "address" | "cidade" | "uf" | "codigo_municipio" | "plan_code"
 >;
 
 function toProfile(row: ProfileRow): RestaurantProfile {
   return {
     id: row.id,
+    publicId: row.public_id,
     name: row.name,
     phone: row.phone,
     email: row.email,
@@ -47,7 +50,7 @@ export const getRestaurantProfile = defineService({
   input: z.undefined(),
   run: async ({ tx, ctx }) => {
     const [row] = await tx<ProfileRow[]>`
-      select id, name, phone, email, address, cidade, uf, codigo_municipio, plan_code
+      select id, public_id, name, phone, email, address, cidade, uf, codigo_municipio, plan_code
       from public.restaurants where id = ${ctx.restaurantId}
     `;
     if (row === undefined) throw new AppError("not_found", "Restaurant not found.");
@@ -70,7 +73,7 @@ export const updateRestaurantProfile = defineService({
         uf = ${input.uf},
         codigo_municipio = ${input.codigoMunicipio}
       where id = ${ctx.restaurantId}
-      returning id, name, phone, email, address, cidade, uf, codigo_municipio, plan_code
+      returning id, public_id, name, phone, email, address, cidade, uf, codigo_municipio, plan_code
     `;
     // RLS hides the row when `mt.actor_role()` (read from data) is not admin,
     // even if the context claimed admin. The service check is the first line;

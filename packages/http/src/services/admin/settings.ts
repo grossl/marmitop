@@ -98,6 +98,7 @@ export const getSettings = defineService({
     const [r] = await tx<
       {
         id: string;
+        public_id: string;
         name: string;
         phone: string | null;
         email: string | null;
@@ -108,12 +109,13 @@ export const getSettings = defineService({
         plan_code: string;
       }[]
     >`
-      select id, name, phone, email, address, cidade, uf, codigo_municipio, plan_code
+      select id, public_id, name, phone, email, address, cidade, uf, codigo_municipio, plan_code
       from public.restaurants where id = ${ctx.restaurantId}
     `;
     if (r === undefined) throw new AppError("not_found", "Restaurant not found.");
     const profile: RestaurantProfile = {
       id: r.id,
+      publicId: r.public_id,
       name: r.name,
       phone: r.phone,
       email: r.email,

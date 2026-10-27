@@ -116,6 +116,8 @@ export interface PlanRow {
 
 export interface RestaurantRow {
   id: string;
+  /** External id for public links (ADR-030, FR-225). Never changes. */
+  public_id: string;
   name: string;
   phone: string | null;
   email: string | null;
