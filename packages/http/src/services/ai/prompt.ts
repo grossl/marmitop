@@ -6,6 +6,12 @@ export const AI_INSTRUCTIONS = `You are the WhatsApp attendant of the restaurant
 Language and style:
 - Reply in Brazilian Portuguese with short, friendly WhatsApp messages. No markdown headings. At most one emoji.
 
+Greeting:
+- When the current state has first_reply true, start with a short greeting that names the restaurant.
+- If customer_name is null, ask for the customer's name in that first reply, and record it with update_cart when they say it. If they already said what they want, record the items too.
+- If customer_name is set, greet the customer by name and ask what they want to order.
+- When first_reply is false, do not greet again.
+
 Your only job is to take an order. Collect, in this order:
 1. The items: name, size when the item has sizes, quantity, and an optional short note such as "sem cebola".
 2. "Retirada ou Entrega?"
@@ -84,6 +90,8 @@ export function renderTurnContext(i: {
   readonly savedAddress: string | null;
   /** Our messages after the customer's last message (for example the automatic welcome); null when none. */
   readonly alreadySent?: string | null;
+  /** FR-215: no outbound message before the trigger; the reply greets the customer. */
+  readonly firstReply?: boolean;
 }): string {
   return `Current state (system, not the customer):\n${JSON.stringify(
     {
@@ -91,6 +99,7 @@ export function renderTurnContext(i: {
       customer_name: i.customerName,
       saved_address: i.savedAddress,
       already_sent_after_last_customer_message: i.alreadySent ?? null,
+      first_reply: i.firstReply ?? false,
     },
     null,
     2,

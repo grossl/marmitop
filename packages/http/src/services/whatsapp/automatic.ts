@@ -22,6 +22,7 @@ import type { OutboundMessageJob } from "@mt/schemas";
 
 import type { ServiceDeps } from "../../deps";
 import { previewOf } from "../messaging/helpers";
+import { aiWillAnswer } from "../ai/trigger";
 
 const KINDS: readonly AutomaticKind[] = ["welcome", "closed", "order_received", ...ORDER_STATUS_MESSAGE_KINDS];
 
@@ -162,6 +163,8 @@ export async function runInboundAutomation(
     restaurantName: settings.restaurantName,
   });
   if (decision === null) return null;
+  // FR-214, ADR-029: the AI greets when it will answer this message, so no second greeting.
+  if (decision.kind === "welcome" && (await aiWillAnswer(tx, deps, restaurantId, input.conversationId))) return null;
   // The automatic reply sorts after the message that triggered it.
   const at = new Date(now.getTime() + 1);
   const messageId = await storeAutomaticMessage(tx, restaurantId, {

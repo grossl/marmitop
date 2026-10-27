@@ -131,6 +131,12 @@ async function updateCart(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: un
     throw e;
   }
   await saveCart(tx, scope.restaurantId, scope.conversationId, cart, next);
+  // FR-216: an empty saved name (it equals the phone) takes the name at once; a saved name stays.
+  if (input.customer_name !== null && input.customer_name.trim() !== "") {
+    await tx`
+      update public.customers set name = ${input.customer_name.trim()}
+      where id = ${scope.customerId} and restaurant_id = ${scope.restaurantId} and name = phone`;
+  }
   const delivery = next.fulfillment === "delivery";
   return ok({
     items: total.items.map((i) => ({

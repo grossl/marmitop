@@ -1,4 +1,4 @@
-// covers FR-182, FR-183, FR-186, FR-187, FR-191, FR-192, FR-196, FR-198, FR-210, FR-211, FR-212, FR-213
+// covers FR-182, FR-183, FR-186, FR-187, FR-191, FR-192, FR-196, FR-198, FR-210, FR-211, FR-212, FR-213, FR-215
 import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { AssistantModelError, type AssistantRequest, ScriptedAssistantModel } from "@mt/core";
 import type { Db } from "@mt/db";
@@ -79,6 +79,18 @@ describe("runAiTurn", () => {
     expect(u?.n).toBe(1);
     expect(model.requests[0]?.messages.at(-1)?.role).toBe("user");
     expect((await lastRun())?.billed_as).toBe("included");
+  });
+
+  test("first_reply is true only before any outbound message (FR-215)", async () => {
+    await db`delete from public.messages where conversation_id = ${a.conversationId} and direction = 'out'`;
+    const t1 = await inbound("oi");
+    const model = new ScriptedAssistantModel([{ text: "Olá! Qual é o seu nome?" }]);
+    await runAiTurn(deps, model, job(t1));
+    expect(model.requests[0]?.turnContext).toContain('"first_reply": true');
+    const t2 = await inbound("Ana");
+    model.push({ text: "Prazer, Ana! O que vai querer?" });
+    await runAiTurn(deps, model, job(t2));
+    expect(model.requests[1]?.turnContext).toContain('"first_reply": false');
   });
 
   test("full order across three turns", async () => {

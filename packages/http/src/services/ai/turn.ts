@@ -177,6 +177,12 @@ async function start(deps: ServiceDeps, job: AiTurnJob): Promise<Started | AiTur
     const order = await loadOrderSettings(t, job.restaurantId);
     const auto = await loadAutomationSettings(t, job.restaurantId);
     const cart = await loadCart(t, job.restaurantId, job.conversationId);
+    // FR-215: the first reply of a conversation greets; no outbound message before the trigger.
+    const [prior] = await t<{ n: number }[]>`
+      select count(*)::int as n from public.messages m
+      join public.messages trig on trig.id = ${job.triggerMessageId} and trig.restaurant_id = m.restaurant_id
+      where m.restaurant_id = ${job.restaurantId} and m.conversation_id = ${job.conversationId}
+        and m.direction = 'out' and m.created_at < trig.created_at`;
     const local = new Intl.DateTimeFormat("en-CA", {
       timeZone: auto.timezone,
       year: "numeric",
@@ -222,6 +228,7 @@ async function start(deps: ServiceDeps, job: AiTurnJob): Promise<Started | AiTur
           customerName: conv.name === conv.phone ? null : conv.name,
           savedAddress: conv.logradouro ? [conv.logradouro, conv.numero, conv.bairro].filter(Boolean).join(", ") : null,
           alreadySent: trailingAssistantText,
+          firstReply: (prior?.n ?? 0) === 0,
         }),
       },
     };

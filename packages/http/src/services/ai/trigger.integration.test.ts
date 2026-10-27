@@ -1,4 +1,4 @@
-// covers FR-181, FR-189, FR-190, FR-196
+// covers FR-181, FR-189, FR-190, FR-196, FR-214
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { Db } from "@mt/db";
 import { createTestDb, type RestaurantFixture, seedRestaurant, truncateQueues } from "@mt/db/test-harness";
@@ -66,6 +66,31 @@ describe("enqueueAiTurn through the inbound path", () => {
     const [c] = await db<{ ai_mode: string; ai_pause_reason: string }[]>`
       select ai_mode, ai_pause_reason from public.conversations where id = ${r.conversationId}`;
     expect(c).toEqual({ ai_mode: "paused", ai_pause_reason: "quota" });
+  });
+});
+
+describe("welcome and the AI greeting (FR-214, ADR-029)", () => {
+  const welcomeRows = async (conversationId: string) =>
+    (
+      await db<{ n: number }[]>`
+      select count(*)::int as n from public.messages where conversation_id = ${conversationId} and automatic_kind = 'welcome'`
+    )[0]?.n;
+  test("assistant on: a new conversation gets no welcome, only the AI turn", async () => {
+    const r = await simulateInboundMessage(deps, admin(), { phone: "+5511911113001", body: "oi" });
+    expect(await welcomeRows(r.conversationId)).toBe(0);
+    expect(await aiJobs()).toHaveLength(1);
+  });
+  test("assistant off: the welcome goes out", async () => {
+    await db`update public.ai_settings set enabled = false where restaurant_id = ${a.restaurantId}`;
+    const r = await simulateInboundMessage(deps, admin(), { phone: "+5511911113002", body: "oi" });
+    expect(await welcomeRows(r.conversationId)).toBe(1);
+    expect(await aiJobs()).toHaveLength(0);
+  });
+  test("quota blocked: the AI will not answer, so the welcome goes out", async () => {
+    await db`insert into public.usage_events (restaurant_id, kind, ref_id, occurred_at)
+             select ${a.restaurantId}, 'ai.reply', gen_random_uuid(), now() from generate_series(1, 300)`;
+    const r = await simulateInboundMessage(deps, admin(), { phone: "+5511911113003", body: "oi" });
+    expect(await welcomeRows(r.conversationId)).toBe(1);
   });
 });
 

@@ -515,7 +515,10 @@ function HoursSettings({ settings }: { settings: SettingsView }) {
 // ─── Mensagens automáticas (FR-084, FR-200, ADR-014, ADR-026, ADR-028) ────────
 
 const MESSAGE_COPY = {
-  welcome: { title: "Mensagem de boas-vindas", description: "Enviada quando um novo cliente inicia uma conversa." },
+  welcome: {
+    title: "Mensagem de boas-vindas",
+    description: "Enviada quando um novo cliente inicia uma conversa. Com a Atendente IA ligada, a IA faz a saudação.",
+  },
   closed: { title: "Fora do horário", description: "Enviada automaticamente quando o restaurante está fechado." },
   order_received: { title: "Pedido recebido", description: "Confirma o recebimento de um novo pedido." },
   order_confirmed: { title: "Pedido confirmado", description: "Enviada quando o pedido é confirmado." },

@@ -1,4 +1,4 @@
-// covers FR-184, FR-185, FR-186, FR-187, FR-190, FR-195, NFR-001
+// covers FR-184, FR-185, FR-186, FR-187, FR-190, FR-195, NFR-001, FR-216
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { FixedClock } from "@mt/core";
 import { type Db, withRestaurantContext } from "@mt/db";
@@ -245,6 +245,17 @@ describe("customer back-fill (FR-187)", () => {
     expect(m?.body).toContain("João");
     expect(m?.body).not.toContain(phone);
     await db`update public.automatic_messages set enabled = false where restaurant_id = ${a.restaurantId} and kind = 'order_received'`;
+  });
+
+  test("update_cart saves a new customer's name at once, before any order (FR-216)", async () => {
+    await db`update public.customers set name = phone where id = ${a.customerId}`;
+    await run("update_cart", { ...cartInput("pickup"), customer_name: "Ana" });
+    expect((await customer()).name).toBe("Ana");
+  });
+
+  test("update_cart never replaces a saved name (FR-216)", async () => {
+    await run("update_cart", { ...cartInput("pickup"), customer_name: "Bia" });
+    expect((await customer()).name).toBe("Maria");
   });
 
   test("a saved name is kept", async () => {
