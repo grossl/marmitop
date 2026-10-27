@@ -139,7 +139,7 @@ describe("summary and place_order", () => {
     const [s] = await db<{ body: string; ai_run_id: string }[]>`
       select body, ai_run_id from public.messages where conversation_id = ${a.conversationId} and direction = 'out'
       order by created_at desc limit 1`;
-    expect(s?.body).toContain("Posso confirmar?");
+    expect(s?.body).toContain("Posso confirmar o pedido?");
     expect(s?.ai_run_id).toBe(scope.runId);
 
     expect(await run("place_order", {})).toMatchObject({ ok: false, errorCode: "not_confirmed" });

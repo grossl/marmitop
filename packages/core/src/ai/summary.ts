@@ -30,6 +30,6 @@ export function renderOrderSummary(input: SummaryInput): string {
   lines.push(
     input.fulfillment === "delivery" ? `Entrega: ${formatAddressLine(input.address)}` : "Retirada no restaurante",
   );
-  lines.push("", "Posso confirmar? Responda *sim* para enviar o pedido.");
+  lines.push("", "Posso confirmar o pedido?");
   return lines.join("\n");
 }

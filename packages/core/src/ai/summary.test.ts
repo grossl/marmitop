@@ -49,7 +49,7 @@ describe("renderOrderSummary", () => {
         `*Total: ${formatBRL(5500)}*`,
         "Entrega: Rua das Flores, 120, apto 3 — Centro",
         "",
-        "Posso confirmar? Responda *sim* para enviar o pedido.",
+        "Posso confirmar o pedido?",
       ].join("\n"),
     );
   });

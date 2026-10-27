@@ -98,3 +98,9 @@ Choices:
 * Every place that reads `payment_method` handles null: the board card, the order detail, finance, reports, the public API (`payment_method: null`), outbound webhooks, and the invoice pre-check.
 * `ANTHROPIC_API_KEY` is a worker secret. It is never logged and never stored in the database.
 * Audio and image messages stay unsupported. The owner does not need them.
+
+## Amendment 1 — confirmation in any words (2026-10-27)
+
+**Question.** The summary ended with "Posso confirmar? Responda *sim* para enviar o pedido." Customers answer "pode mandar", "isso", "fechado", or 👍. The owner does not want to force the word "sim".
+
+**Choice.** The summary ends with "Posso confirmar o pedido?". The model reads the meaning of the customer's answer: a clear yes in any words calls `place_order`; a change updates the cart and sends a new summary; a question or a "não" gets an answer and no order. The server guard does not change (FR-186): it checks that the customer answered the latest summary version, within 30 minutes, while the restaurant is open. The eval suite has cases with confirmations other than "sim".

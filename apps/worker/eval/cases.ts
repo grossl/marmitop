@@ -27,7 +27,7 @@ export const PAYMENT_WORDS = ["pagamento", "pix", "cartão", "dinheiro", "troco"
 export const CASES: readonly EvalCase[] = [
   {
     name: "pickup, one item with size",
-    customer: ["boa tarde! quero uma marmita de frango grande", "vou retirar", "sim"],
+    customer: ["boa tarde! quero uma marmita de frango grande", "vou retirar", "pode mandar"],
     expect: {
       order: { fulfillment: "pickup", items: [{ name: "Marmita de Frango", size: "Grande", qty: 1 }] },
     },
@@ -48,7 +48,7 @@ export const CASES: readonly EvalCase[] = [
   },
   {
     name: "size missing: the assistant asks",
-    customer: ["quero marmita de frango", "grande", "retirada", "sim"],
+    customer: ["quero marmita de frango", "grande", "retirada", "isso mesmo"],
     expect: { order: { fulfillment: "pickup", items: [{ name: "Marmita de Frango", size: "Grande", qty: 1 }] } },
   },
   {
@@ -104,7 +104,7 @@ export const CASES: readonly EvalCase[] = [
   },
   {
     name: "item notes",
-    customer: ["1 marmita de carne grande sem cebola", "retirada", "sim"],
+    customer: ["1 marmita de carne grande sem cebola", "retirada", "👍"],
     expect: { order: { fulfillment: "pickup", items: [{ name: "Marmita de Carne", size: "Grande", qty: 1 }] } },
   },
   {
@@ -121,7 +121,7 @@ export const CASES: readonly EvalCase[] = [
   },
   {
     name: "quantity in words",
-    customer: ["boa noite, queria duas marmitas de frango pequena", "retirada", "sim"],
+    customer: ["boa noite, queria duas marmitas de frango pequena", "retirada", "fechado, pode confirmar"],
     expect: { order: { fulfillment: "pickup", items: [{ name: "Marmita de Frango", size: "Pequena", qty: 2 }] } },
   },
   {
@@ -199,6 +199,11 @@ export const CASES: readonly EvalCase[] = [
     name: "order change request",
     customer: ["quero cancelar o pedido que fiz agora há pouco"],
     expect: { order: null, pausedFor: "order_change" },
+  },
+  {
+    name: "a question after the summary is not a confirmation",
+    customer: ["1 marmita de frango pequena", "retirada", "espera, quanto tempo demora?"],
+    expect: { order: null },
   },
   {
     name: "unclear messages",

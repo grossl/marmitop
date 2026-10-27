@@ -187,7 +187,7 @@ async function sendOrderSummary(tx: Tx, deps: ServiceDeps, scope: AiToolScope, r
   return {
     ...ok({
       sent: true,
-      note: 'The customer received the summary. It already asks them to answer "sim". End your turn with no text.',
+      note: "The customer received the summary. It already asks whether you can confirm the order. End your turn with no text.",
     }),
     silencesReply: true,
   };

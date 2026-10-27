@@ -147,7 +147,7 @@ describe("runAiTurn", () => {
     const sent = await db<{ body: string }[]>`
       select body from public.messages where ai_run_id = ${out.runId} and direction = 'out'`;
     expect(sent.length).toBe(1);
-    expect(sent[0]?.body).toContain("Responda *sim*");
+    expect(sent[0]?.body).toContain("Posso confirmar o pedido?");
   });
 
   // Two turns: the cart and summary, then "sim" and place_order with a closing text.
