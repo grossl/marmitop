@@ -30,7 +30,7 @@ import {
   type UatisWebhookEvent,
   verifyUatisSignature,
 } from "@mt/core";
-import { type Db, withoutContext, withRestaurantContext } from "@mt/db";
+import { type Db, type RateClass, withoutContext, withRestaurantContext } from "@mt/db";
 
 import type { ServiceDeps } from "../../deps";
 import { mapError } from "../../errors";
@@ -150,7 +150,7 @@ export async function receiveUatisWebhook(store: UatisInboundStore, input: Recei
 export async function hitRateCounter(
   db: Db,
   subjectId: string,
-  cls: "read" | "write" | "webhook",
+  cls: RateClass,
   limit: number,
   now: Date,
 ): Promise<RateDecision> {

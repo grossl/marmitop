@@ -8,6 +8,7 @@ export * from "./list-orders";
 export * from "./order-form";
 export * from "./order-settings";
 export * from "./payment";
+export * from "./place-public-order";
 export type {
   AddressParts,
   BoardOrder,

@@ -28,6 +28,7 @@ const SOURCE_LABELS: Record<string, string> = {
   phone: "Telefone",
   whatsapp: "WhatsApp",
   api: "API",
+  menu: "Cardápio online",
 };
 
 export const sourceLabel = (source: string) => SOURCE_LABELS[source] ?? source;

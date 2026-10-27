@@ -63,8 +63,8 @@ describe("startingPriceCents", () => {
       startingPriceCents(
         item({
           sizes: [
-            { name: "G", priceCents: 2200 },
-            { name: "P", priceCents: 1500 },
+            { id: "g", name: "G", priceCents: 2200 },
+            { id: "p", name: "P", priceCents: 1500 },
           ],
         }),
       ),

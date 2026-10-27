@@ -52,7 +52,7 @@ export type MenuCategory = MealCategory | DrinkCategory;
 export type OrderStatus = "aguardando" | "confirmado" | "pronto" | "saiu" | "finalizado" | "cancelado";
 export type Fulfillment = "delivery" | "pickup";
 export type PaymentMethod = "pix" | "dinheiro" | "cartao_credito" | "cartao_debito";
-export type OrderSource = "counter" | "phone" | "whatsapp" | "api";
+export type OrderSource = "counter" | "phone" | "whatsapp" | "api" | "menu";
 export type StatusActorType = "user" | "api_key" | "system";
 export type InvoiceKind = "nfce" | "nfe";
 export type InvoiceStatus =
@@ -73,7 +73,7 @@ export type JobQueue = "mt_outbound_messages" | "mt_webhook_deliveries" | "mt_in
 export type JobSubjectType = "message" | "webhook_delivery" | "order_invoice" | "sync" | "ai_turn";
 export type JobOutcome = "ok" | "transient_error" | "permanent_error";
 export type UsageEventKind = "order.created" | "message.sent" | "invoice.issued" | "ai.reply";
-export type RateClass = "read" | "write" | "webhook";
+export type RateClass = "read" | "write" | "webhook" | "menu_order";
 export type AiMode = "auto" | "paused";
 export type AiPauseReason =
   | "attendant"

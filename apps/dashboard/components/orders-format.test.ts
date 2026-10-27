@@ -1,4 +1,4 @@
-// covers FR-020, FR-035, FR-037
+// covers FR-020, FR-035, FR-037, FR-236
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -13,6 +13,7 @@ import {
   isInvoicePending,
   MISSING_FIELD_LABELS,
   parseMoneyToCents,
+  sourceLabel,
 } from "./orders-format";
 
 describe("orders-format", () => {
@@ -77,5 +78,12 @@ describe("invoice display (08 section 8.4)", () => {
   });
   test("formatChave groups the access key by four digits", () => {
     expect(formatChave("4".repeat(44))).toBe(Array(11).fill("4444").join(" "));
+  });
+});
+
+describe("sourceLabel", () => {
+  test("names every order source, including the public menu", () => {
+    expect(sourceLabel("menu")).toBe("Cardápio online");
+    expect(sourceLabel("api")).toBe("API");
   });
 });

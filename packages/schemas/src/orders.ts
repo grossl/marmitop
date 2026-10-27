@@ -16,8 +16,8 @@ import {
 export const PAYMENT_METHODS = ["pix", "dinheiro", "cartao_credito", "cartao_debito"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export const FULFILLMENTS = ["delivery", "pickup"] as const;
-export const ORDER_SOURCES = ["counter", "phone", "whatsapp", "api"] as const;
-/** Sources a dashboard user can pick. `api` is set by the server for API-key calls. */
+export const ORDER_SOURCES = ["counter", "phone", "whatsapp", "api", "menu"] as const;
+/** Sources a dashboard user can pick. The server sets `api` for API-key calls and `menu` for the public menu (ADR-031). */
 export const DASHBOARD_ORDER_SOURCES = ["counter", "phone", "whatsapp"] as const;
 
 const qtySchema = z.number().int().min(1).max(99);
@@ -94,6 +94,32 @@ export const createOrderActionSchema = z
     source: z.enum(DASHBOARD_ORDER_SOURCES),
     conversationId: optionalOf(uuidSchema),
   })
+  .superRefine((v, ctx) => {
+    for (const d of assertDeliveryAddress(v)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [d.path], message: d.message, params: { code: d.code } });
+    }
+  })
+  .transform((v) => ({ ...v, changeForCents: changeFor(v, v.changeForCents) }));
+
+/**
+ * The public menu checkout (ADR-031, FR-230–233). No session: the restaurant comes from the
+ * page's `public_id`, the customer from the phone. Prices are never sent (ADR-006).
+ */
+export const publicOrderSchema = z
+  .object({
+    name: z.string().trim().min(1, "Informe seu nome.").max(120),
+    phone: phoneSchema,
+    items: z.array(orderItemActionSchema).min(1, "Adicione um item.").max(50),
+    fulfillment: z.enum(FULFILLMENTS),
+    logradouro: addressShapeCamel.logradouro,
+    numero: addressShapeCamel.numero,
+    complemento: addressShapeCamel.complemento,
+    bairro: addressShapeCamel.bairro,
+    paymentMethod: z.enum(PAYMENT_METHODS),
+    changeForCents: changeSchema,
+    notes: orderNotes,
+  })
+  .strict()
   .superRefine((v, ctx) => {
     for (const d of assertDeliveryAddress(v)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: [d.path], message: d.message, params: { code: d.code } });

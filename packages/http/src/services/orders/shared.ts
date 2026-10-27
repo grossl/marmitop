@@ -10,7 +10,7 @@ import type { Tx } from "@mt/db";
 import type { OrderInvoiceView } from "../invoices/shared";
 
 export type PaymentMethodCode = "pix" | "dinheiro" | "cartao_credito" | "cartao_debito";
-export type OrderSourceCode = "counter" | "phone" | "whatsapp" | "api";
+export type OrderSourceCode = "counter" | "phone" | "whatsapp" | "api" | "menu";
 
 export interface OrderItemView {
   readonly name: string;
