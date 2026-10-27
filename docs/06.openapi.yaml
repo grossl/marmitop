@@ -499,7 +499,7 @@ components:
       enum: [aguardando, confirmado, pronto, saiu, finalizado, cancelado]
     OrderSource:
       type: string
-      enum: [counter, phone, whatsapp, api]
+      enum: [counter, phone, whatsapp, api, menu]
     Fulfillment:
       type: string
       enum: [delivery, pickup]
