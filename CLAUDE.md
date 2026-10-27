@@ -97,8 +97,9 @@ Test naming: `*.test.ts` (unit), `*.integration.test.ts` (needs a database).
 Boundary rule (ADR-001): apps never import other apps. Shared code moves down
 into a package.
 
-Order status: `aguardando → confirmado → preparando → pronto → saiu →
-entregue`; any non-final status → `cancelado`. Pickup skips `saiu`.
+Order status (ADR-028): `aguardando → confirmado → pronto → saiu → finalizado`;
+any non-final status → `cancelado`. Pickup skips `saiu`. `finalizado` sends no
+customer message.
 
 ## Docs
 

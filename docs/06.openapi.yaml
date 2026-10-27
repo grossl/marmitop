@@ -496,7 +496,7 @@ components:
 
     OrderStatus:
       type: string
-      enum: [aguardando, confirmado, preparando, pronto, saiu, entregue, cancelado]
+      enum: [aguardando, confirmado, pronto, saiu, finalizado, cancelado]
     OrderSource:
       type: string
       enum: [counter, phone, whatsapp, api]

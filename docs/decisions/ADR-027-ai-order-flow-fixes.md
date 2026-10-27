@@ -2,6 +2,8 @@
 
 **Status:** accepted · 2026-10-26
 
+> **Amended by [ADR-028](ADR-028-status-flow-without-preparando.md) (2026-10-27).** `order_preparing` and `order_delivered` no longer exist, so the rule that turns them on no longer applies. A new restaurant gets seven automatic messages, all on.
+
 ## Question
 
 The first live test of the AI assistant (ADR-025) showed three problems:

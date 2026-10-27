@@ -2,6 +2,8 @@
 
 **Status:** accepted · 2026-10-13
 
+> **Amended by [ADR-028](ADR-028-status-flow-without-preparando.md) (2026-10-27).** `preparando` is no longer a status, and `entregue` is now `finalizado`. Choice 3 keeps its rules with the new names: delivery `aguardando → confirmado → pronto → saiu → finalizado`, pickup `aguardando → confirmado → pronto → finalizado`.
+
 ## Question
 
 Writing 05.data-model.md and 07.security.md raised five points that earlier ADRs leave open.

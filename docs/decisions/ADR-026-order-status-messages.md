@@ -2,6 +2,8 @@
 
 **Status:** accepted · 2026-10-20
 
+> **Amended by [ADR-028](ADR-028-status-flow-without-preparando.md) (2026-10-27).** `order_preparing` and `order_delivered` are removed. `finalizado` (formerly `entregue`) sends no message. Four status kinds remain: `order_confirmed`, `order_ready`, `order_out_for_delivery`, and `order_cancelled`.
+
 ## Question
 
 01.briefing.md says the customer "gets the order status through the chat". Today only `order_received` goes out, when the order is created (FR-112). A status move on the board writes a history row and emits the `order.status_changed` webhook, but sends nothing to the customer. Which status moves send a WhatsApp message, with which text, and under which rules?
