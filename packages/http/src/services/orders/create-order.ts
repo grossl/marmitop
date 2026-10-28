@@ -55,6 +55,48 @@ export const createOrder = defineService({
   run: ({ tx, ctx, deps, input }): Promise<CreatedOrder> => createOrderInTx(tx, deps, ctx, input),
 });
 
+/** ADR-006: the menu rows an order is priced from. An archived item is not orderable. */
+export async function loadOrderMenu(
+  tx: Tx,
+  restaurantId: string,
+  menuItemIds: readonly string[],
+): Promise<MenuItemForOrder[]> {
+  const itemIds = [...new Set(menuItemIds)];
+  const menuRows = await tx<
+    {
+      id: string;
+      kind: "meal" | "drink";
+      name: string;
+      price_cents: number;
+      available: boolean;
+      available_weekdays: number[];
+    }[]
+  >`
+      select id, kind, name, price_cents, available, available_weekdays
+      from public.menu_items
+      where restaurant_id = ${restaurantId} and archived_at is null and id in ${tx(itemIds)}
+    `;
+  const sizeRows =
+    menuRows.length === 0
+      ? []
+      : await tx<{ id: string; menu_item_id: string; name: string; price_cents: number }[]>`
+            select id, menu_item_id, name, price_cents from public.menu_item_sizes
+            where restaurant_id = ${restaurantId} and menu_item_id in ${tx(menuRows.map((m) => m.id))}
+            order by position, name
+          `;
+  return menuRows.map((m) => ({
+    id: m.id,
+    kind: m.kind,
+    name: m.name,
+    priceCents: m.price_cents,
+    available: m.available,
+    availableWeekdays: m.available_weekdays,
+    sizes: sizeRows
+      .filter((s) => s.menu_item_id === m.id)
+      .map((s) => ({ id: s.id, name: s.name, priceCents: s.price_cents })),
+  }));
+}
+
 /**
  * The whole create, in the caller's transaction. The dashboard's `createOrder` and the
  * public API's `apiCreateOrder` both run it, so totals, address rules, the first history
@@ -130,41 +172,12 @@ export async function createOrderInTx(
       throw new AppError("validation_failed", "Delivery address is incomplete.", { details: missing });
   }
 
-  // ADR-006: prices come from the database, never from the client. An archived item is not orderable.
-  const itemIds = [...new Set(input.items.map((i) => i.menuItemId))];
-  const menuRows = await tx<
-    {
-      id: string;
-      kind: "meal" | "drink";
-      name: string;
-      price_cents: number;
-      available: boolean;
-      available_weekdays: number[];
-    }[]
-  >`
-      select id, kind, name, price_cents, available, available_weekdays
-      from public.menu_items
-      where restaurant_id = ${ctx.restaurantId} and archived_at is null and id in ${tx(itemIds)}
-    `;
-  const sizeRows =
-    menuRows.length === 0
-      ? []
-      : await tx<{ id: string; menu_item_id: string; name: string; price_cents: number }[]>`
-            select id, menu_item_id, name, price_cents from public.menu_item_sizes
-            where restaurant_id = ${ctx.restaurantId} and menu_item_id in ${tx(menuRows.map((m) => m.id))}
-            order by position, name
-          `;
-  const menu: MenuItemForOrder[] = menuRows.map((m) => ({
-    id: m.id,
-    kind: m.kind,
-    name: m.name,
-    priceCents: m.price_cents,
-    available: m.available,
-    availableWeekdays: m.available_weekdays,
-    sizes: sizeRows
-      .filter((s) => s.menu_item_id === m.id)
-      .map((s) => ({ id: s.id, name: s.name, priceCents: s.price_cents })),
-  }));
+  // ADR-006: prices come from the database, never from the client.
+  const menu = await loadOrderMenu(
+    tx,
+    ctx.restaurantId,
+    input.items.map((i) => i.menuItemId),
+  );
 
   const total = computeOrderTotal({
     lines: input.items.map((i) => ({

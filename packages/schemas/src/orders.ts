@@ -102,13 +102,13 @@ export const createOrderActionSchema = z
   .transform((v) => ({ ...v, changeForCents: changeFor(v, v.changeForCents) }));
 
 /**
- * The public menu checkout (ADR-031, FR-230–233). No session: the restaurant comes from the
- * page's `public_id`, the customer from the phone. Prices are never sent (ADR-006).
+ * The public menu checkout (ADR-031, ADR-033, FR-230–233). No session and no phone: the
+ * restaurant comes from the page's `public_id`, the customer from the WhatsApp message that
+ * carries the draft. Prices are never sent (ADR-006).
  */
 export const publicOrderSchema = z
   .object({
     name: z.string().trim().min(1, "Informe seu nome.").max(120),
-    phone: phoneSchema,
     items: z.array(orderItemActionSchema).min(1, "Adicione um item.").max(50),
     fulfillment: z.enum(FULFILLMENTS),
     logradouro: addressShapeCamel.logradouro,

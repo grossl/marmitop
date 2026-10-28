@@ -467,6 +467,20 @@ const SPECS: TableSpec[] = [
       values (${f.restaurantId}, ${f.conversationId}, 'abandoned')`,
   },
   {
+    table: "menu_order_drafts",
+    tenantColumn: "restaurant_id",
+    pkColumn: "id",
+    pk: (f) => f.menuOrderDraftId,
+    select: "member",
+    insert: "admin",
+    update: "admin",
+    delete: null,
+    updateSet: "expires_at = now()",
+    insertRow: (tx, f) => tx`
+      insert into public.menu_order_drafts (restaurant_id, reference, payload)
+      values (${f.restaurantId}, translate(upper(substr(md5(random()::text), 1, 8)), '01', '23'), '{}'::jsonb)`,
+  },
+  {
     table: "usage_events",
     tenantColumn: "restaurant_id",
     pkColumn: "id",

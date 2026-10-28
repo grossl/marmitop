@@ -209,6 +209,11 @@ const CASES: Case[] = [
     foreign: (tx) => tx`update public.ai_carts set order_id = ${b.orderId} where id = ${a.aiCartId}`,
   },
   {
+    name: "menu_order_drafts.order_id -> orders",
+    own: (tx) => tx`update public.menu_order_drafts set order_id = ${a.orderId} where id = ${a.menuOrderDraftId}`,
+    foreign: (tx) => tx`update public.menu_order_drafts set order_id = ${b.orderId} where id = ${a.menuOrderDraftId}`,
+  },
+  {
     name: "messages.ai_run_id -> ai_runs",
     own: (tx) => tx`update public.messages set ai_run_id = ${a.aiRunId} where id = ${a.messageId}`,
     foreign: (tx) => tx`update public.messages set ai_run_id = ${b.aiRunId} where id = ${a.messageId}`,

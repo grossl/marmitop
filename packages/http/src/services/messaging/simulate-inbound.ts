@@ -34,6 +34,7 @@ export const simulateInboundMessage = defineService({
         conversationId: result.conversationId,
         conversationCreated: result.conversationCreated,
         messageId: result.messageId,
+        body: input.body,
       }));
     }
     return {

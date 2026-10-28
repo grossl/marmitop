@@ -56,7 +56,10 @@ export function PublicMenuClient({ publicId, menu, today }: { publicId: string; 
   const drinks = groupByCategory(menu.items, "drink");
   const sections = [...meals, ...drinks];
   const whatsapp = whatsappLink(menu.phone);
-  const canOrder = menu.openNow;
+  const open = menu.openNow;
+  // ADR-033: the order goes out by WhatsApp, so a restaurant without a phone takes no menu orders.
+  const canOrder = open && whatsapp !== null;
+  const blockedLabel = open ? "Pedidos indisponíveis" : "Fechado agora";
 
   const change = (item: PublicMenuItemDto, sizeId: string | null, qty: number) =>
     setCart((c) => setQty(c, item.id, sizeId, qty));
@@ -73,8 +76,8 @@ export function PublicMenuClient({ publicId, menu, today }: { publicId: string; 
             </div>
             <div className="min-w-0">
               <h1 className="truncate text-base font-bold text-foreground sm:text-xl">{menu.restaurantName}</h1>
-              <p className={cn("text-xs font-medium sm:text-sm", canOrder ? "text-primary" : "text-muted-foreground")}>
-                {canOrder ? "Aberto agora" : "Fechado agora"}
+              <p className={cn("text-xs font-medium sm:text-sm", open ? "text-primary" : "text-muted-foreground")}>
+                {open ? "Aberto agora" : "Fechado agora"}
               </p>
             </div>
           </div>
@@ -107,10 +110,16 @@ export function PublicMenuClient({ publicId, menu, today }: { publicId: string; 
 
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8 lg:px-8 xl:grid-cols-[minmax(0,1fr)_380px]">
         <main className={cn("min-w-0 space-y-8 pt-5 sm:pt-6", preview.count > 0 ? "pb-32 lg:pb-12" : "pb-12")}>
-          {!canOrder && (
+          {!open && (
             <p className="flex items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2.5 text-sm text-muted-foreground">
               <Clock className="h-4 w-4 shrink-0" />
               Estamos fechados agora. Você pode ver o cardápio, mas os pedidos abrem no horário de funcionamento.
+            </p>
+          )}
+          {open && whatsapp === null && (
+            <p className="flex items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2.5 text-sm text-muted-foreground">
+              <MessageCircle className="h-4 w-4 shrink-0" />
+              Este restaurante ainda não recebe pedidos pelo cardápio online.
             </p>
           )}
           {menu.items.length === 0 ? (
@@ -146,6 +155,7 @@ export function PublicMenuClient({ publicId, menu, today }: { publicId: string; 
         <aside className="hidden lg:block">
           <div className="sticky top-32 mt-6 max-h-[calc(100dvh-9rem)] overflow-y-auto rounded-xl border border-border bg-card p-4">
             <CartPanel
+              blockedLabel={blockedLabel}
               lines={lines}
               subtotalCents={preview.subtotalCents}
               canOrder={canOrder}
@@ -172,7 +182,7 @@ export function PublicMenuClient({ publicId, menu, today }: { publicId: string; 
                     {preview.count}
                   </span>
                 </span>
-                {canOrder ? "Ver carrinho" : "Fechado agora"}
+                {canOrder ? "Ver carrinho" : blockedLabel}
               </span>
               <span className="font-bold">{formatBRL(preview.subtotalCents)}</span>
             </Button>
@@ -187,7 +197,7 @@ export function PublicMenuClient({ publicId, menu, today }: { publicId: string; 
         menu={menu}
         lines={lines}
         onChangeQty={changeLine}
-        onPlaced={() => setCart([])}
+        onSent={() => setCart([])}
       />
     </div>
   );
@@ -197,12 +207,14 @@ function CartPanel({
   lines,
   subtotalCents,
   canOrder,
+  blockedLabel,
   onChangeQty,
   onCheckout,
 }: {
   lines: readonly PricedLine[];
   subtotalCents: number;
   canOrder: boolean;
+  blockedLabel: string;
   onChangeQty: (menuItemId: string, sizeId: string | null, qty: number) => void;
   onCheckout: () => void;
 }) {
@@ -240,7 +252,7 @@ function CartPanel({
         <span className="font-semibold tabular-nums text-foreground">{formatBRL(subtotalCents)}</span>
       </div>
       <Button className="h-12 w-full text-base" disabled={!canOrder || lines.length === 0} onClick={onCheckout}>
-        {canOrder ? "Finalizar pedido" : "Fechado agora"}
+        {canOrder ? "Finalizar pedido" : blockedLabel}
       </Button>
     </div>
   );

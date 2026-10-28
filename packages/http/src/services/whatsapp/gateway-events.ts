@@ -101,6 +101,7 @@ export async function applyGatewayMessage(
     conversationId: ingest.conversationId,
     conversationCreated: ingest.conversationCreated,
     messageId: ingest.messageId,
+    body: message.body,
   });
   // message.received (FR-146) was emitted by ingestInboundMessage, in this transaction.
   return { action: "ingested", messageId: ingest.messageId, conversationId: ingest.conversationId, automatic };

@@ -132,6 +132,8 @@ export interface RestaurantFixture {
   aiRunId: string;
   /** A placed cart (not open), so a test may open a new cart on `conversationId`. */
   aiCartId: string;
+  /** A converted draft: `order_id` is the fixture order. */
+  menuOrderDraftId: string;
   adminCtx: RestaurantContext;
   attendantCtx: RestaurantContext;
   apiKeyCtx: RestaurantContext;
@@ -356,6 +358,13 @@ export async function seedRestaurant(db: Db, label: string): Promise<RestaurantF
         values (${rid}, ${conversation.id}, 'placed', 'delivery', ${order.id}) returning id`,
       "ai_carts",
     );
+    const draft = await one(
+      tx<{ id: string }[]>`
+        insert into public.menu_order_drafts (restaurant_id, reference, payload, order_id, converted_at)
+        values (${rid}, 'FIXTURE2', '{}'::jsonb, ${order.id}, now())
+        returning id`,
+      "menu_order_drafts",
+    );
 
     return {
       restaurantId: rid,
@@ -389,6 +398,7 @@ export async function seedRestaurant(db: Db, label: string): Promise<RestaurantF
       usageEventId: usage.id,
       aiRunId: aiRun.id,
       aiCartId: aiCart.id,
+      menuOrderDraftId: draft.id,
       adminCtx: { restaurantId: rid, actorType: "user", userId: adminId },
       attendantCtx: { restaurantId: rid, actorType: "user", userId: attendantId },
       apiKeyCtx: { restaurantId: rid, actorType: "api_key", apiKeyId: apiKey.id },

@@ -1,6 +1,6 @@
-// The WhatsApp text of a public menu order (ADR-032, FR-238). The customer sends it to the
-// restaurant, so the conversation starts on their side. Built from the stored order rows:
-// the prices are the database prices (ADR-006).
+// The WhatsApp text of a public menu checkout (ADR-032, ADR-033, FR-238). The customer sends
+// it to the restaurant, so the conversation starts on their side, and the `Ref.: #REFERENCE`
+// line turns the draft into an order. Prices are the database prices (ADR-006).
 
 import { formatBRL } from "./money";
 
@@ -13,8 +13,11 @@ export interface MenuOrderMessageLine {
   readonly lineTotalCents: number;
 }
 
+/** `#` and 8 characters from `A`–`Z` and `2`–`9`: the draft reference in a message (ADR-033). */
+export const MENU_ORDER_REFERENCE_IN_TEXT = /#([A-Z2-9]{8})(?![A-Z0-9])/;
+
 export interface MenuOrderMessageInput {
-  readonly code: string;
+  readonly reference: string;
   readonly customerName: string;
   readonly lines: readonly MenuOrderMessageLine[];
   readonly subtotalCents: number;
@@ -61,11 +64,12 @@ export function formatMenuOrderMessage(input: MenuOrderMessageInput): string {
   }
 
   const blocks = [
-    ["Olá! Quero fazer um pedido pelo cardápio online.", "", `*Pedido ${input.code}*`, ...items].join("\n"),
+    ["Olá! Quero fazer este pedido pelo cardápio online:", "", ...items].join("\n"),
     totals.join("\n"),
     fulfillment.join("\n"),
     [payment, ...(input.notes?.trim() ? [`Observações: ${input.notes.trim()}`] : [])].join("\n"),
     `Nome: ${input.customerName}`,
+    `Ref.: #${input.reference}`,
   ];
   // NBSP from Intl currency formatting reads fine in WhatsApp, but a plain space copies better.
   return blocks.join("\n\n").replace(/ /g, " ");

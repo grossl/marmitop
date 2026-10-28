@@ -611,6 +611,18 @@ export interface AiCartRow {
   updated_at: Date;
 }
 
+/** A public menu checkout waiting for its WhatsApp message (ADR-033, migration 0028). */
+export interface MenuOrderDraftRow {
+  id: string;
+  restaurant_id: string;
+  reference: string;
+  payload: unknown;
+  created_at: Date;
+  expires_at: Date;
+  order_id: string | null;
+  converted_at: Date | null;
+}
+
 export interface AiRunRow {
   id: string;
   restaurant_id: string;
@@ -678,6 +690,7 @@ export interface Tables {
   audit_logs: AuditLogRow;
   ai_settings: AiSettingsRow;
   ai_carts: AiCartRow;
+  menu_order_drafts: MenuOrderDraftRow;
   ai_runs: AiRunRow;
   usage_events: UsageEventRow;
   uatis_event_receipts: UatisEventReceiptRow;
@@ -720,6 +733,7 @@ export const TENANT_TABLES = [
   "ai_settings",
   "ai_runs",
   "ai_carts",
+  "menu_order_drafts",
   "usage_events",
   "uatis_event_receipts",
 ] as const satisfies readonly TableName[];

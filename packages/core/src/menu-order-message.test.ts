@@ -1,10 +1,10 @@
-// covers FR-238
+// covers FR-238, FR-239
 import { describe, expect, test } from "bun:test";
 
-import { formatMenuOrderMessage, type MenuOrderMessageInput } from "./menu-order-message";
+import { formatMenuOrderMessage, MENU_ORDER_REFERENCE_IN_TEXT, type MenuOrderMessageInput } from "./menu-order-message";
 
 const base: MenuOrderMessageInput = {
-  code: "ORD-012",
+  reference: "K7Q2MX9A",
   customerName: "Ana",
   lines: [
     { qty: 2, name: "Frango grelhado", sizeName: "M", lineTotalCents: 3780 },
@@ -27,9 +27,8 @@ describe("formatMenuOrderMessage", () => {
   test("a delivery order lists the code, items, totals, address, payment, notes and name", () => {
     expect(formatMenuOrderMessage(base)).toBe(
       [
-        "Olá! Quero fazer um pedido pelo cardápio online.",
+        "Olá! Quero fazer este pedido pelo cardápio online:",
         "",
-        "*Pedido ORD-012*",
         "2x Frango grelhado (M) — R$ 37,80",
         "1x Suco de laranja — R$ 8,00",
         "",
@@ -45,6 +44,8 @@ describe("formatMenuOrderMessage", () => {
         "Observações: sem cebola",
         "",
         "Nome: Ana",
+        "",
+        "Ref.: #K7Q2MX9A",
       ].join("\n"),
     );
   });
@@ -68,5 +69,18 @@ describe("formatMenuOrderMessage", () => {
 
   test("uses plain spaces, not the non-breaking space of the currency format", () => {
     expect(formatMenuOrderMessage(base)).not.toContain(" ");
+  });
+});
+
+describe("MENU_ORDER_REFERENCE_IN_TEXT", () => {
+  test("finds the reference in the sent text, also when the customer adds words", () => {
+    expect(formatMenuOrderMessage(base).match(MENU_ORDER_REFERENCE_IN_TEXT)?.[1]).toBe("K7Q2MX9A");
+    expect("oi, segue #K7Q2MX9A obrigado".match(MENU_ORDER_REFERENCE_IN_TEXT)?.[1]).toBe("K7Q2MX9A");
+  });
+
+  test("ignores lowercase, short, long, and ambiguous references", () => {
+    for (const text of ["#k7q2mx9a", "#K7Q2MX9", "#K7Q2MX9AB", "#K7Q2MX0A", "K7Q2MX9A"]) {
+      expect(text.match(MENU_ORDER_REFERENCE_IN_TEXT)).toBeNull();
+    }
   });
 });
