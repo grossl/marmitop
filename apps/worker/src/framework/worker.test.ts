@@ -1,4 +1,4 @@
-// covers FR-108, NFR-022, NFR-032, ADR-007 (poll loop, visibility timeout, retries, job_attempts, archive)
+// covers FR-108, NFR-022, NFR-032, ADR-007, ADR-034 (poll loop, visibility timeout, retries, job_attempts, archive)
 import { describe, expect, test } from "bun:test";
 import { MAX_ATTEMPTS, RETRY_DELAYS_MS } from "@mt/core";
 import { QUEUES } from "@mt/db";
@@ -143,6 +143,39 @@ describe("QueueWorker.tick", () => {
     expect(queue.sent.map((s) => s.delaySeconds * 1000)).toEqual([...RETRY_DELAYS_MS]);
     expect(exhausted).toEqual(["connection_error"]);
     expect(queue.pending(QUEUES.sync)).toHaveLength(0);
+  });
+
+  test("a periodic job ends on a transient failure: one attempt, no re-send, no onExhausted (ADR-034)", async () => {
+    const { handler, exhausted } = syncHandler(async () => ({ kind: "retry", errorCode: "connection_error" }), {
+      periodic: true,
+    });
+    const { queue, worker } = setup(handler);
+    queue.send(QUEUES.sync, job());
+    await worker.tick(QUEUES.sync);
+    expect(queue.attempts).toHaveLength(1);
+    expect(queue.attempts[0]).toMatchObject({
+      outcome: "transient_error",
+      errorCode: "connection_error",
+      attemptNo: 1,
+    });
+    expect(queue.sent).toHaveLength(0);
+    expect(queue.pending(QUEUES.sync)).toHaveLength(0);
+    expect(exhausted).toEqual([]);
+    expect(worker.health().failed).toBe(1);
+  });
+
+  test("a periodic job that throws also ends without a re-send", async () => {
+    const { handler } = syncHandler(
+      async () => {
+        throw new Error("boom");
+      },
+      { periodic: true },
+    );
+    const { queue, worker } = setup(handler);
+    queue.send(QUEUES.sync, job());
+    await worker.tick(QUEUES.sync);
+    expect(queue.attempts[0]).toMatchObject({ outcome: "transient_error", errorCode: "internal_error" });
+    expect(queue.sent).toHaveLength(0);
   });
 
   test("a permanent or ambiguous failure stops at once: one attempt, no re-send", async () => {

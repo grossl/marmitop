@@ -1,4 +1,4 @@
-// covers FR-174, FR-175, FR-176 (ADR-023): the event-feed job.
+// covers FR-174, FR-175, FR-176 (ADR-023), ADR-034: the event-feed job.
 import { beforeEach, describe, expect, test } from "bun:test";
 import { FakeGateway, FixedClock, GatewayError, type UatisWebhookEvent } from "@mt/core";
 import { QUEUES } from "@mt/db";
@@ -225,9 +225,10 @@ describe("uatis_feed_pull", () => {
     expect(store.errors).toEqual(["A chave de API foi recusada pelo backend-uatis."]);
   });
 
-  test("a 5xx is retried", async () => {
+  test("a 5xx is a transient failure of a periodic job: the next tick reads again (ADR-034)", async () => {
     gateway.failNext("listWebhookEvents", GatewayError.http(503));
     expect((await handler().run(ctx())).kind).toBe("retry");
+    expect(handler().periodic).toBe(true);
   });
 
   test("no registered webhook or a disconnected integration does nothing", async () => {

@@ -1,6 +1,6 @@
-// covers FR-107, FR-108, ADR-002 Amendment 1 (timestamp cursor with a 60 s overlap)
+// covers FR-107, FR-108, ADR-002 Amendment 1 (timestamp cursor with a 60 s overlap), ADR-034
 import { beforeEach, describe, expect, test } from "bun:test";
-import { FakeGateway, FixedClock, type GatewayMessage, GatewayError } from "@mt/core";
+import { FakeGateway, FixedClock, GatewayError, type GatewayMessage } from "@mt/core";
 import { QUEUES } from "@mt/db";
 
 import type { JobContext } from "../framework/types";
@@ -159,5 +159,9 @@ describe("mt_sync whatsapp_reconcile handler", () => {
     expect(h.subjectType).toBe("sync");
     expect(h.subjectId(ctx().payload)).toBeNull();
     expect(h.visibilityTimeoutSeconds).toBeGreaterThanOrEqual(300);
+  });
+
+  test("the poll is periodic: a failure ends the job and the next 30 s tick retries (ADR-034)", () => {
+    expect(handler().periodic).toBe(true);
   });
 });

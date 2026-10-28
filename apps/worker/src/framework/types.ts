@@ -47,6 +47,12 @@ export interface JobHandler<P extends JobPayload> {
   subjectId(payload: P): string | null;
   /** Seconds. Default 60; set it higher when one run can take longer than the HTTP timeout times the pages. */
   readonly visibilityTimeoutSeconds?: number | undefined;
+  /**
+   * A job a schedule enqueues again each tick (ADR-034): a transient failure ends it with a
+   * `transient_error` attempt and no re-send, because the next tick retries. A delayed retry
+   * would block the schedule, which skips a restaurant that already has a queued job.
+   */
+  readonly periodic?: boolean | undefined;
   run(ctx: JobContext<P>): Promise<JobOutcome>;
   /** Called once when the last retry fails, to mark the subject `failed` or `exhausted`. */
   onExhausted?(ctx: JobContext<P>, last: { readonly errorCode: string }): Promise<void>;

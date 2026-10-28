@@ -93,6 +93,8 @@ export function createUatisFeedHandler(deps: FeedHandlerDeps): JobHandler<UatisF
     subjectId: () => null,
     // Up to MAX_PAGES reads at 10 s each, plus the writes.
     visibilityTimeoutSeconds: 300,
+    // ADR-034: the schedule enqueues the next run; a failure must not back off and block it.
+    periodic: true,
     run: ({ payload }) => runFeedPull(deps, payload.restaurantId),
   };
 }

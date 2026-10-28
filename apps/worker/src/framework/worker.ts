@@ -12,6 +12,7 @@
 //        ─▶ retry ─▶ attempt `transient_error`; next delay from core
 //                    `decideAfterFailure`: re-send with attempt + 1 and archive,
 //                    or after the sixth attempt call `onExhausted` and archive
+//                    A periodic handler (ADR-034) archives at once: the next tick retries
 //        ─▶ fail  ─▶ attempt `permanent_error`, archive
 //        ─▶ throw ─▶ treated as retry `internal_error`
 //
@@ -234,12 +235,25 @@ export class QueueWorker {
       return;
     }
 
+    const record = attempt("transient_error", outcome.errorCode, outcome.httpStatus);
+    if (handler.periodic === true) {
+      // ADR-034: no backoff; the schedule enqueues a fresh job on the next tick.
+      this.failed++;
+      this.log.warn("periodic job failed; next tick retries", {
+        queue,
+        msgId: m.msgId,
+        handler: handler.name,
+        errorCode: outcome.errorCode,
+      });
+      await this.client.complete({ queue, msgId: m.msgId, attempt: record });
+      return;
+    }
+
     const decision = decideAfterFailure({
       attemptNo: ctx.attempt,
       failure: "transient",
       ...(outcome.retryAfterMs !== undefined ? { retryAfterMs: outcome.retryAfterMs } : {}),
     });
-    const record = attempt("transient_error", outcome.errorCode, outcome.httpStatus);
     if (decision.action === "retry") {
       await this.client.complete({
         queue,

@@ -12,9 +12,9 @@
 //   cursor = the newest created_at seen, written after every message applied
 //
 // The overlap and the external_id upsert make a repeated poll harmless. A
-// database error stops before the cursor moves; the retry reads again.
+// database error stops before the cursor moves; the next poll reads again (ADR-034).
 
-import { type Clock, classifyUpstreamFailure, type GatewayMessage, GatewayError, type WhatsAppGateway } from "@mt/core";
+import { type Clock, classifyUpstreamFailure, GatewayError, type GatewayMessage, type WhatsAppGateway } from "@mt/core";
 import { QUEUES } from "@mt/db";
 import type { GatewayConnection } from "@mt/http";
 import { type SyncJob, syncJobSchema } from "@mt/schemas";
@@ -65,6 +65,8 @@ export function createWhatsAppReconcileHandler(deps: ReconcileHandlerDeps): JobH
     subjectId: () => null,
     // Up to MAX_PAGES reads at 10 s each, plus the writes.
     visibilityTimeoutSeconds: 300,
+    // ADR-034: the schedule enqueues the next run; a failure must not back off and block it.
+    periodic: true,
 
     run: ({ payload }) => runTimestampPoll(deps, payload.restaurantId),
   };
