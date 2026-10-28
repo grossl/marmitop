@@ -1,4 +1,4 @@
-// covers FR-184, FR-185, FR-186, FR-187, FR-190, FR-195, NFR-001, FR-216
+// covers FR-184, FR-185, FR-186, FR-187, FR-190, FR-195, NFR-001, FR-216, FR-217
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { FixedClock } from "@mt/core";
 import { type Db, withRestaurantContext } from "@mt/db";
@@ -94,6 +94,7 @@ describe("search_menu", () => {
 
 describe("update_cart", () => {
   test("returns totals and missing fields; stores no price", async () => {
+    await db`update public.customers set logradouro = null, numero = null, bairro = null where id = ${a.customerId}`;
     const r = json((await run("update_cart", cartInput("delivery"))).content);
     expect(r.missing).toEqual(["logradouro", "bairro"]);
     expect(typeof r.total).toBe("string");
@@ -129,6 +130,7 @@ describe("update_cart", () => {
 
 describe("summary and place_order", () => {
   test("summary needs a complete cart", async () => {
+    await db`update public.customers set logradouro = null, numero = null, bairro = null where id = ${a.customerId}`;
     await run("update_cart", cartInput("delivery"));
     expect(await run("send_order_summary", {})).toMatchObject({ ok: false, errorCode: "cart_incomplete" });
   });
@@ -204,6 +206,47 @@ describe("cart lifetime (database clock)", () => {
     expect(open).toHaveLength(1);
     expect(open[0]?.id).not.toBe(old!.id);
     expect(open[0]?.logradouro).toBeNull();
+  });
+});
+
+describe("saved address (FR-217)", () => {
+  const address = async (input: unknown) => {
+    const r = await run("update_cart", input);
+    expect(r.ok).toBe(true);
+    return json(r.content) as { address: Record<string, string | null>; missing: string[] };
+  };
+
+  test("a delivery cart with no address takes the saved address", async () => {
+    const r = await address(cartInput("delivery"));
+    expect(r.address).toEqual({
+      logradouro: "Rua das Flores",
+      numero: "342",
+      bairro: "Vila Madalena",
+      complemento: null,
+    });
+    expect(r.missing).toEqual([]);
+  });
+
+  test("an address in the input wins over the saved one", async () => {
+    const r = await address(cartInput("delivery", { logradouro: "Rua Nova", numero: "9", bairro: "Centro" }));
+    expect(r.address).toMatchObject({ logradouro: "Rua Nova", numero: "9", bairro: "Centro" });
+  });
+
+  test("a later address replaces the saved one in the cart", async () => {
+    await address(cartInput("delivery"));
+    const r = await address(cartInput("delivery", { logradouro: "Rua Nova", numero: "9", bairro: "Centro" }));
+    expect(r.address).toMatchObject({ logradouro: "Rua Nova", numero: "9", bairro: "Centro", complemento: null });
+  });
+
+  test("a pickup cart takes no address", async () => {
+    const r = await address(cartInput("pickup"));
+    expect(r.address).toEqual({ logradouro: null, numero: null, bairro: null, complemento: null });
+  });
+
+  test("a customer with no saved address still has the address missing", async () => {
+    await db`update public.customers set logradouro = null, numero = null, bairro = null where id = ${a.customerId}`;
+    const r = await address(cartInput("delivery"));
+    expect(r.missing).toEqual(["logradouro", "bairro"]);
   });
 });
 

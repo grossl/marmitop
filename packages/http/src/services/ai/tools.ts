@@ -6,6 +6,8 @@ import {
   type AiPauseReason,
   AppError,
   applyCartPatch,
+  type CartAddress,
+  type CartState,
   checkPlaceOrder,
   formatBRL,
   missingCartFields,
@@ -109,7 +111,7 @@ async function updateCart(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: un
   const cart = await loadCart(tx, scope.restaurantId, scope.conversationId);
   // A cart placed in the last 30 minutes keeps its fulfillment and address; its items start over.
   const base = cart.status === "open" ? cart.state : { ...cart.state, lines: [], version: 1 };
-  const next = applyCartPatch(base, {
+  const patched = applyCartPatch(base, {
     lines:
       input.items?.map((i) => ({
         menuItemId: i.menu_item_id,
@@ -121,6 +123,7 @@ async function updateCart(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: un
     address: input.address,
     customerName: input.customer_name,
   });
+  const next = await withSavedAddress(tx, scope, patched);
   const { menu, weekday } = await loadTodayMenu(tx, deps, scope.restaurantId);
   let total: ReturnType<typeof quoteCart>;
   try {
@@ -152,6 +155,17 @@ async function updateCart(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: un
     total: formatBRL(delivery ? total.subtotalCents + settings.deliveryFeeCents : total.subtotalCents),
     missing: missingCartFields(next),
   });
+}
+
+// FR-217: an empty delivery address takes the customer's saved address, so a returning customer is not
+// asked again. The summary shows it, and an address from the customer replaces it in the cart.
+async function withSavedAddress(tx: Tx, scope: AiToolScope, cart: CartState): Promise<CartState> {
+  if (cart.fulfillment !== "delivery" || Object.values(cart.address).some((v) => v !== null)) return cart;
+  const [saved] = await tx<CartAddress[]>`
+    select logradouro, numero, bairro, complemento from public.customers
+    where id = ${scope.customerId} and restaurant_id = ${scope.restaurantId}`;
+  if (!saved?.logradouro) return cart;
+  return applyCartPatch(cart, { address: saved });
 }
 
 async function sendOrderSummary(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: unknown): Promise<AiToolResult> {
