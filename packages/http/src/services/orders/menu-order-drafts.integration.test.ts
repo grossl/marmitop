@@ -1,14 +1,15 @@
-// covers FR-230, FR-231, FR-232, FR-233, FR-234, FR-235, FR-236, FR-238, FR-239, ADR-006, ADR-033, NFR-001
+// covers FR-230, FR-231, FR-232, FR-233, FR-234, FR-235, FR-236, FR-238, FR-239, FR-240, ADR-006, ADR-033, ADR-035, NFR-001
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { AppError, FixedClock } from "@mt/core";
 import type { Db } from "@mt/db";
-import { createTestDb, type RestaurantFixture, seedRestaurant } from "@mt/db/test-harness";
+import { asService, createTestDb, type RestaurantFixture, seedRestaurant } from "@mt/db/test-harness";
 
 import type { ServiceDeps } from "../../deps";
 import { createTestServiceDeps, userCtx } from "../../testing";
 import { saveMenuItem } from "../catalog/menu";
 import { getPublicMenu } from "../catalog/public-menu";
 import { simulateInboundMessage } from "../messaging";
+import { applyGatewayMessage } from "../whatsapp/gateway-events";
 import { PUBLIC_ORDER_LIMITS, type PublicOrderInput, preparePublicOrder } from "./menu-order-drafts";
 
 let db: Db;
@@ -300,6 +301,62 @@ describe("the WhatsApp message makes the order (FR-239)", () => {
     const [jobs] = await db<{ n: number }[]>`
       select count(*)::int as n from pgmq.q_mt_ai_turns where message->>'conversationId' = ${sim.conversationId}`;
     expect(jobs?.n).toBe(1);
+  });
+});
+
+describe("auto-confirm menu orders (FR-240)", () => {
+  const admin = () => userCtx(a.restaurantId, a.adminId, "admin");
+
+  async function convertedOrder(reference: string) {
+    const [row] = await db<{ id: string; status: string }[]>`
+      select o.id, o.status from public.orders o join public.menu_order_drafts d on d.order_id = o.id
+      where d.restaurant_id = ${a.restaurantId} and d.reference = ${reference}`;
+    return row;
+  }
+
+  test("with the switch on, the order moves to confirmado and order_confirmed goes out", async () => {
+    await db`update public.restaurant_settings set auto_confirm_menu_orders = true where restaurant_id = ${a.restaurantId}`;
+    await db`insert into public.automatic_messages (restaurant_id, kind, enabled, body)
+             values (${a.restaurantId}, 'order_confirmed', true, 'Pedido {{pedido}} confirmado.')
+             on conflict (restaurant_id, kind) do update set enabled = true`;
+    try {
+      const prepared = await preparePublicOrder(deps, publicId, order());
+      // The real inbound path (webhook and poll) runs as the system actor.
+      await asService(db, { restaurantId: a.restaurantId, actorType: "system" }, (tx) =>
+        applyGatewayMessage(tx, deps, a.restaurantId, {
+          externalId: `wamid.${prepared.reference}`,
+          conversationExternalId: null,
+          direction: "in",
+          body: prepared.whatsappText,
+          contentType: "text",
+          status: "delivered",
+          contactAddress: nextPhone(),
+          createdAt: new Date(),
+        }),
+      );
+      const placed = await convertedOrder(prepared.reference);
+      expect(placed?.status).toBe("confirmado");
+      const history = await db<{ from_status: string | null; to_status: string; actor_type: string }[]>`
+        select from_status, to_status, actor_type from public.order_status_history
+        where order_id = ${placed?.id ?? ""} order by changed_at, from_status nulls first`;
+      expect(history.map((h) => [h.from_status, h.to_status])).toEqual([
+        [null, "aguardando"],
+        ["aguardando", "confirmado"],
+      ]);
+      expect(history[1]?.actor_type).toBe("system");
+      const kinds = await db<{ automatic_kind: string }[]>`
+        select automatic_kind from public.messages where order_id = ${placed?.id ?? ""} and automatic_kind is not null
+        order by created_at`;
+      expect(kinds.map((k) => k.automatic_kind)).toContain("order_confirmed");
+    } finally {
+      await db`update public.restaurant_settings set auto_confirm_menu_orders = false where restaurant_id = ${a.restaurantId}`;
+    }
+  });
+
+  test("with the switch off, the order stays aguardando, also with auto_accept on", async () => {
+    const prepared = await preparePublicOrder(deps, publicId, order());
+    await simulateInboundMessage(deps, admin(), { phone: nextPhone(), body: prepared.whatsappText });
+    expect((await convertedOrder(prepared.reference))?.status).toBe("aguardando");
   });
 });
 

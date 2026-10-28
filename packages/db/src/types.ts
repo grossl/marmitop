@@ -146,6 +146,8 @@ export interface RestaurantSettingsRow {
   delivery_estimate_minutes: number;
   delivery_fee_cents: number;
   timezone: string;
+  /** Migration 0029, ADR-035. */
+  auto_confirm_menu_orders: boolean;
   updated_at: Date;
 }
 

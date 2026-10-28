@@ -313,6 +313,7 @@ function RestaurantSettings({ settings }: { settings: SettingsView }) {
     fee: centsToInput(pr.deliveryFeeCents),
     minutes: String(pr.deliveryEstimateMinutes),
     timezone: pr.timezone,
+    autoConfirmMenuOrders: pr.autoConfirmMenuOrders,
   });
   const prefSection = useSection();
   const [feeError, setFeeError] = useState<string | null>(null);
@@ -337,6 +338,7 @@ function RestaurantSettings({ settings }: { settings: SettingsView }) {
           deliveryFeeCents: cents,
           deliveryEstimateMinutes: Number(prefs.minutes),
           timezone: prefs.timezone,
+          autoConfirmMenuOrders: prefs.autoConfirmMenuOrders,
         }),
       "Preferências salvas.",
     );
@@ -390,6 +392,12 @@ function RestaurantSettings({ settings }: { settings: SettingsView }) {
               description="Novos pedidos entram diretamente como confirmados."
               checked={prefs.autoAccept}
               onChange={(autoAccept) => setPrefs((prev) => ({ ...prev, autoAccept }))}
+            />
+            <ToggleRow
+              title="Confirmar pedidos do cardápio online automaticamente"
+              description="Pedidos enviados pelo cardápio online são confirmados assim que chegam no WhatsApp, e o cliente recebe a confirmação."
+              checked={prefs.autoConfirmMenuOrders}
+              onChange={(autoConfirmMenuOrders) => setPrefs((prev) => ({ ...prev, autoConfirmMenuOrders }))}
             />
             <ToggleRow
               title="Permitir pedidos para retirada"

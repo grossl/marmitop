@@ -38,7 +38,7 @@ export const saveProfileSchema = z.object({
   codigoMunicipio: optionalOf(ibgeCodeSchema),
 });
 
-/** `saveOrderPreferences` (FR-081, FR-082, FR-096). */
+/** `saveOrderPreferences` (FR-081, FR-082, FR-096, FR-240). */
 export const saveOrderPreferencesSchema = z.object({
   autoAccept: z.boolean(),
   pickupEnabled: z.boolean(),
@@ -46,6 +46,8 @@ export const saveOrderPreferencesSchema = z.object({
   deliveryFeeCents: centsSchema,
   deliveryEstimateMinutes: z.number().int().min(5).max(240),
   timezone: timezoneSchema.default(DEFAULT_TIMEZONE),
+  /** FR-240, ADR-035. */
+  autoConfirmMenuOrders: z.boolean().default(false),
 });
 
 const timeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use o formato HH:MM.");

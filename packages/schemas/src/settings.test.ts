@@ -1,4 +1,4 @@
-// covers FR-080, FR-081, FR-082, FR-083, FR-084, FR-095, FR-096, FR-200, ADR-028
+// covers FR-080, FR-081, FR-082, FR-083, FR-084, FR-095, FR-096, FR-200, FR-240, ADR-028
 import { describe, expect, test } from "bun:test";
 import {
   AUTOMATIC_MESSAGE_KINDS,
@@ -31,7 +31,7 @@ describe("saveProfileSchema (FR-080)", () => {
   });
 });
 
-describe("saveOrderPreferencesSchema (FR-081, FR-082, FR-096)", () => {
+describe("saveOrderPreferencesSchema (FR-081, FR-082, FR-096, FR-240)", () => {
   const prefs = {
     autoAccept: false,
     pickupEnabled: true,
@@ -39,8 +39,13 @@ describe("saveOrderPreferencesSchema (FR-081, FR-082, FR-096)", () => {
     deliveryFeeCents: 600,
     deliveryEstimateMinutes: 45,
   };
-  test("accepts valid preferences with the default timezone", () => {
-    expect(saveOrderPreferencesSchema.parse(prefs)).toEqual({ ...prefs, timezone: "America/Sao_Paulo" });
+  test("accepts valid preferences with the default timezone and menu auto-confirm off", () => {
+    expect(saveOrderPreferencesSchema.parse(prefs)).toEqual({
+      ...prefs,
+      timezone: "America/Sao_Paulo",
+      autoConfirmMenuOrders: false,
+    });
+    expect(saveOrderPreferencesSchema.parse({ ...prefs, autoConfirmMenuOrders: true }).autoConfirmMenuOrders).toBe(true);
   });
   test("fee is non-negative integer cents; estimate is 5..240 minutes", () => {
     expect(saveOrderPreferencesSchema.safeParse({ ...prefs, deliveryFeeCents: -1 }).success).toBe(false);

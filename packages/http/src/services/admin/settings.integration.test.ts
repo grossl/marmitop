@@ -1,4 +1,4 @@
-// covers FR-081, FR-082, FR-083, FR-084, FR-200, FR-092, FR-093, FR-096, FR-098, FR-150, FR-151, FR-154, FR-155
+// covers FR-081, FR-082, FR-083, FR-084, FR-200, FR-092, FR-093, FR-096, FR-098, FR-150, FR-151, FR-154, FR-155, FR-240
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { AppError } from "@mt/core";
 import type { Db } from "@mt/db";
@@ -76,6 +76,14 @@ describe("saveOrderPreferences", () => {
     const [other] = await db<{ delivery_fee_cents: number; auto_accept: boolean }[]>`
       select delivery_fee_cents, auto_accept from public.restaurant_settings where restaurant_id = ${b.restaurantId}`;
     expect(other).toEqual({ delivery_fee_cents: 0, auto_accept: false });
+  });
+
+  test("the menu auto-confirm switch is saved and read back (FR-240)", async () => {
+    const saved = await saveOrderPreferences(deps, admin(), { ...input, autoConfirmMenuOrders: true });
+    expect(saved.autoConfirmMenuOrders).toBe(true);
+    expect((await getSettings(deps, admin(), undefined)).preferences.autoConfirmMenuOrders).toBe(true);
+    await saveOrderPreferences(deps, admin(), { ...input, autoConfirmMenuOrders: false });
+    expect((await getSettings(deps, admin(), undefined)).preferences.autoConfirmMenuOrders).toBe(false);
   });
 
   test("an attendant is refused", async () => {

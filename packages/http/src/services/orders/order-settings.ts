@@ -8,6 +8,8 @@ import type { Tx } from "@mt/db";
 
 export interface OrderSettings {
   readonly autoAccept: boolean;
+  /** FR-240, ADR-035: menu orders move to `confirmado` when created. */
+  readonly autoConfirmMenuOrders: boolean;
   readonly allowPickup: boolean;
   readonly deliveryFeeCents: number;
   readonly showDeliveryEstimate: boolean;
@@ -24,6 +26,7 @@ export async function loadOrderSettings(tx: Tx, restaurantId: string): Promise<O
   const [row] = await tx<
     {
       auto_accept: boolean | null;
+      auto_confirm_menu_orders: boolean | null;
       allow_pickup: boolean | null;
       delivery_fee_cents: number | null;
       show_delivery_estimate: boolean | null;
@@ -34,7 +37,7 @@ export async function loadOrderSettings(tx: Tx, restaurantId: string): Promise<O
       codigo_municipio: string | null;
     }[]
   >`
-    select s.auto_accept, s.allow_pickup, s.delivery_fee_cents, s.show_delivery_estimate, s.delivery_estimate_minutes,
+    select s.auto_accept, s.auto_confirm_menu_orders, s.allow_pickup, s.delivery_fee_cents, s.show_delivery_estimate, s.delivery_estimate_minutes,
       s.timezone, r.cidade, r.uf, r.codigo_municipio
     from public.restaurants r
     left join public.restaurant_settings s on s.restaurant_id = r.id
@@ -42,6 +45,7 @@ export async function loadOrderSettings(tx: Tx, restaurantId: string): Promise<O
   `;
   return {
     autoAccept: row?.auto_accept ?? false,
+    autoConfirmMenuOrders: row?.auto_confirm_menu_orders ?? false,
     allowPickup: row?.allow_pickup ?? true,
     deliveryFeeCents: row?.delivery_fee_cents ?? 0,
     showDeliveryEstimate: row?.show_delivery_estimate ?? true,

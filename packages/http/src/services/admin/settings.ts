@@ -25,6 +25,8 @@ export interface OrderPreferences {
   readonly deliveryFeeCents: number;
   readonly deliveryEstimateMinutes: number;
   readonly timezone: string;
+  /** FR-240, ADR-035. */
+  readonly autoConfirmMenuOrders: boolean;
 }
 
 export interface BusinessHoursDay {
@@ -60,6 +62,7 @@ const DEFAULT_PREFERENCES: OrderPreferences = {
   deliveryFeeCents: 0,
   deliveryEstimateMinutes: 45,
   timezone: DEFAULT_TIMEZONE,
+  autoConfirmMenuOrders: false,
 };
 
 const hhmm = (t: string) => t.slice(0, 5);
@@ -73,9 +76,11 @@ async function readPreferences(tx: Tx, restaurantId: string): Promise<OrderPrefe
       delivery_estimate_minutes: number;
       delivery_fee_cents: number;
       timezone: string;
+      auto_confirm_menu_orders: boolean;
     }[]
   >`
-    select auto_accept, allow_pickup, show_delivery_estimate, delivery_estimate_minutes, delivery_fee_cents, timezone
+    select auto_accept, allow_pickup, show_delivery_estimate, delivery_estimate_minutes, delivery_fee_cents, timezone,
+      auto_confirm_menu_orders
     from public.restaurant_settings where restaurant_id = ${restaurantId}
   `;
   return row === undefined
@@ -87,6 +92,7 @@ async function readPreferences(tx: Tx, restaurantId: string): Promise<OrderPrefe
         deliveryFeeCents: row.delivery_fee_cents,
         deliveryEstimateMinutes: row.delivery_estimate_minutes,
         timezone: row.timezone,
+        autoConfirmMenuOrders: row.auto_confirm_menu_orders,
       };
 }
 
@@ -163,16 +169,17 @@ export const saveOrderPreferences = defineService({
     const [row] = await tx<{ restaurant_id: string }[]>`
       insert into public.restaurant_settings
         (restaurant_id, auto_accept, allow_pickup, show_delivery_estimate, delivery_fee_cents,
-         delivery_estimate_minutes, timezone)
+         delivery_estimate_minutes, timezone, auto_confirm_menu_orders)
       values (${ctx.restaurantId}, ${input.autoAccept}, ${input.pickupEnabled}, ${input.showDeliveryEstimate},
-              ${input.deliveryFeeCents}, ${input.deliveryEstimateMinutes}, ${input.timezone})
+              ${input.deliveryFeeCents}, ${input.deliveryEstimateMinutes}, ${input.timezone}, ${input.autoConfirmMenuOrders})
       on conflict (restaurant_id) do update set
         auto_accept = excluded.auto_accept,
         allow_pickup = excluded.allow_pickup,
         show_delivery_estimate = excluded.show_delivery_estimate,
         delivery_fee_cents = excluded.delivery_fee_cents,
         delivery_estimate_minutes = excluded.delivery_estimate_minutes,
-        timezone = excluded.timezone
+        timezone = excluded.timezone,
+        auto_confirm_menu_orders = excluded.auto_confirm_menu_orders
       returning restaurant_id
     `;
     if (row === undefined) throw new AppError("forbidden", "Your role cannot perform this action.");
@@ -183,6 +190,7 @@ export const saveOrderPreferences = defineService({
       deliveryFeeCents: input.deliveryFeeCents,
       deliveryEstimateMinutes: input.deliveryEstimateMinutes,
       timezone: input.timezone,
+      autoConfirmMenuOrders: input.autoConfirmMenuOrders,
     };
   },
 });

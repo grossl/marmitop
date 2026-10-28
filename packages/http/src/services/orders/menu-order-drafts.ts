@@ -27,6 +27,7 @@ import { isRestaurantOpen } from "../ai/menu";
 import { PUBLIC_ID_PATTERN } from "../catalog/public-menu";
 import { systemCtx } from "../whatsapp/connection";
 import { hitRateCounter } from "../whatsapp/inbound-webhook";
+import { changeOrderStatusInTx } from "./change-status";
 import { createOrderInTx, loadOrderMenu } from "./create-order";
 import { loadOrderSettings } from "./order-settings";
 
@@ -222,7 +223,7 @@ export async function convertMenuOrderDraft(
     const created = await tx.savepoint(async (sp) => {
       await fillCustomer(sp, restaurantId, input.customerId, order);
       const delivery = order.fulfillment === "delivery";
-      return createOrderInTx(sp, deps, systemCtx(restaurantId), {
+      const placed = await createOrderInTx(sp, deps, systemCtx(restaurantId), {
         customerId: input.customerId,
         items: order.items,
         fulfillment: order.fulfillment,
@@ -242,6 +243,18 @@ export async function convertMenuOrderDraft(
         conversationId: input.conversationId,
         requireConfirmation: true,
       });
+      // FR-240, ADR-035: a real status move, so order_confirmed goes out (FR-201).
+      if ((await loadOrderSettings(sp, restaurantId)).autoConfirmMenuOrders) {
+        await changeOrderStatusInTx(
+          sp,
+          { restaurantId, actorType: "system" },
+          placed.id,
+          "confirmado",
+          undefined,
+          deps.clock.now(),
+        );
+      }
+      return placed;
     });
     await tx`
       update public.menu_order_drafts set order_id = ${created.id}, converted_at = now()
