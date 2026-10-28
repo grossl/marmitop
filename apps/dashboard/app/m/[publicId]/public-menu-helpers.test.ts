@@ -1,8 +1,15 @@
-// covers FR-223
+// covers FR-223, FR-238
 import { describe, expect, test } from "bun:test";
 import type { PublicMenuItemDto } from "@mt/http";
 
-import { groupByCategory, isOfferedOn, startingPriceCents, weekdaysText, whatsappLink } from "./public-menu-helpers";
+import {
+  groupByCategory,
+  isOfferedOn,
+  startingPriceCents,
+  weekdaysText,
+  whatsappLink,
+  whatsappOrderLink,
+} from "./public-menu-helpers";
 
 function item(overrides: Partial<PublicMenuItemDto>): PublicMenuItemDto {
   return {
@@ -85,5 +92,17 @@ describe("whatsappLink", () => {
   test("returns null without a dialable phone", () => {
     expect(whatsappLink(null)).toBeNull();
     expect(whatsappLink("1234")).toBeNull();
+  });
+});
+
+describe("whatsappOrderLink", () => {
+  test("puts the encoded order text in the chat link", () => {
+    expect(whatsappOrderLink("(11) 99999-0000", "*Pedido ORD-1*\n2x Frango & arroz")).toBe(
+      "https://wa.me/5511999990000?text=*Pedido%20ORD-1*%0A2x%20Frango%20%26%20arroz",
+    );
+  });
+
+  test("returns null without a dialable phone", () => {
+    expect(whatsappOrderLink(null, "oi")).toBeNull();
   });
 });

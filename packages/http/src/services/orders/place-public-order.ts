@@ -8,7 +8,7 @@
 
 import { createHash } from "node:crypto";
 
-import { AppError } from "@mt/core";
+import { AppError, formatMenuOrderMessage, type MenuOrderPaymentMethod } from "@mt/core";
 import { type Tx, withoutContext, withRestaurantContext } from "@mt/db";
 import { parseOrThrow, publicOrderSchema } from "@mt/schemas";
 import type { z } from "zod";
@@ -25,6 +25,11 @@ import { type CreatedOrder, createOrderInTx } from "./create-order";
 export const PUBLIC_ORDER_LIMITS = { restaurant: 20, phone: 3 } as const;
 
 export type PublicOrderInput = z.input<typeof publicOrderSchema>;
+
+/** FR-238: the order plus the text the customer sends to the restaurant's WhatsApp (ADR-032). */
+export interface PlacedPublicOrder extends CreatedOrder {
+  readonly whatsappText: string;
+}
 
 /** A stable uuid for one phone at one restaurant: `rate_counters.subject_id` is a uuid. */
 export function phoneRateSubject(restaurantId: string, phone: string): string {
@@ -96,15 +101,68 @@ async function upsertCustomer(
   return existing.id;
 }
 
+/** FR-238: the WhatsApp text from the stored rows, so it shows the database prices. */
+async function loadWhatsappText(tx: Tx, restaurantId: string, orderId: string): Promise<string> {
+  const [order] = await tx<
+    {
+      code: string;
+      customer_name: string;
+      subtotal_cents: number;
+      delivery_fee_cents: number;
+      total_cents: number;
+      fulfillment: "delivery" | "pickup";
+      logradouro: string | null;
+      numero: string | null;
+      complemento: string | null;
+      bairro: string | null;
+      payment_method: MenuOrderPaymentMethod;
+      change_for_cents: number | null;
+      notes: string | null;
+    }[]
+  >`
+    select o.code, c.name as customer_name, o.subtotal_cents, o.delivery_fee_cents, o.total_cents,
+      o.fulfillment, o.logradouro, o.numero, o.complemento, o.bairro, o.payment_method,
+      o.change_for_cents, o.notes
+    from public.orders o join public.customers c on c.id = o.customer_id and c.restaurant_id = o.restaurant_id
+    where o.restaurant_id = ${restaurantId} and o.id = ${orderId}`;
+  if (order === undefined) throw new Error("order vanished after create");
+  const lines = await tx<{ qty: number; name: string; size_name: string | null; line_total_cents: number }[]>`
+    select qty, name, size_name, line_total_cents from public.order_items
+    where restaurant_id = ${restaurantId} and order_id = ${orderId}
+    order by position, id`;
+  return formatMenuOrderMessage({
+    code: order.code,
+    customerName: order.customer_name,
+    lines: lines.map((l) => ({
+      qty: l.qty,
+      name: l.name,
+      sizeName: l.size_name,
+      lineTotalCents: l.line_total_cents,
+    })),
+    subtotalCents: order.subtotal_cents,
+    deliveryFeeCents: order.delivery_fee_cents,
+    totalCents: order.total_cents,
+    fulfillment: order.fulfillment,
+    logradouro: order.logradouro,
+    numero: order.numero,
+    complemento: order.complemento,
+    bairro: order.bairro,
+    paymentMethod: order.payment_method,
+    changeForCents: order.change_for_cents,
+    notes: order.notes,
+  });
+}
+
 /**
  * Creates an order from the public menu (FR-232). Always `aguardando`, `source = menu`, no
- * conversation. Refused when the restaurant is closed (FR-234) or over the limits (FR-235).
+ * conversation; the customer sends `whatsappText` to start one (ADR-032). Refused when the
+ * restaurant is closed (FR-234) or over the limits (FR-235).
  */
 export async function placePublicOrder(
   deps: ServiceDeps,
   publicId: string,
   rawInput: PublicOrderInput,
-): Promise<CreatedOrder> {
+): Promise<PlacedPublicOrder> {
   const input = parseOrThrow(publicOrderSchema, rawInput);
   const restaurantId = await resolveRestaurantId(deps, publicId);
   await enforceRateLimits(deps, restaurantId, input.phone);
@@ -121,7 +179,7 @@ export async function placePublicOrder(
       }
       const customerId = await upsertCustomer(tx, restaurantId, input);
       const delivery = input.fulfillment === "delivery";
-      return createOrderInTx(tx, deps, ctx, {
+      const created = await createOrderInTx(tx, deps, ctx, {
         customerId,
         items: input.items,
         fulfillment: input.fulfillment,
@@ -141,6 +199,7 @@ export async function placePublicOrder(
         conversationId: null,
         requireConfirmation: true,
       });
+      return { ...created, whatsappText: await loadWhatsappText(tx, restaurantId, created.id) };
     },
     deps.contextOptions,
   );

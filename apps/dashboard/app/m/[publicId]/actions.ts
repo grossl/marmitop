@@ -1,22 +1,25 @@
 "use server";
 
-import { type CreatedOrder, type PublicOrderInput, placePublicOrder, toActionError } from "@mt/http";
+import { type PlacedPublicOrder, type PublicOrderInput, placePublicOrder, toActionError } from "@mt/http";
 import { unstable_rethrow } from "next/navigation";
 
 import type { ActionResult } from "@/lib/server/action-core";
 import { requireDeps } from "@/lib/server/deps";
 
-// Public menu checkout (ADR-031, FR-232). The one Server Action without a session:
+// Public menu checkout (ADR-031, FR-232; ADR-032, FR-238). The one Server Action without a session:
 // the restaurant comes from the page's public id, never from a session or the client
 // body, and placePublicOrder applies the business hours and rate limits.
 
 export async function placePublicOrderAction(
   publicId: string,
   input: PublicOrderInput,
-): Promise<ActionResult<Pick<CreatedOrder, "code" | "totalCents">>> {
+): Promise<ActionResult<Pick<PlacedPublicOrder, "code" | "totalCents" | "whatsappText">>> {
   try {
     const created = await placePublicOrder(requireDeps(), publicId, input);
-    return { ok: true, data: { code: created.code, totalCents: created.totalCents } };
+    return {
+      ok: true,
+      data: { code: created.code, totalCents: created.totalCents, whatsappText: created.whatsappText },
+    };
   } catch (error) {
     unstable_rethrow(error);
     const actionError = toActionError(error);

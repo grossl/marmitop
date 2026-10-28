@@ -64,3 +64,9 @@ export function whatsappLink(phone: string | null): string | null {
   const international = digits.length <= 11 ? `55${digits}` : digits;
   return `https://wa.me/${international}`;
 }
+
+/** FR-238, ADR-032: the chat with the restaurant, with the order text typed in. */
+export function whatsappOrderLink(phone: string | null, text: string): string | null {
+  const base = whatsappLink(phone);
+  return base === null ? null : `${base}?text=${encodeURIComponent(text)}`;
+}

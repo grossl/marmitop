@@ -21,6 +21,7 @@ export { FixedClock } from "./fakes/fixed-clock";
 export type { ScriptedStep } from "./fakes/scripted-assistant-model";
 export { ScriptedAssistantModel } from "./fakes/scripted-assistant-model";
 export * from "./fiscal";
+export * from "./menu-order-message";
 export * from "./money";
 export * from "./order-status";
 export * from "./order-total";

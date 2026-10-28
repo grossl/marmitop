@@ -14,12 +14,14 @@ import { formatBRL, reaisToCents } from "@/app/(app)/menu/menu-helpers";
 
 import { placePublicOrderAction } from "./actions";
 import { cartTotals, type PricedLine } from "./cart";
-import { whatsappLink } from "./public-menu-helpers";
+import { whatsappLink, whatsappOrderLink } from "./public-menu-helpers";
 import { Stepper } from "./stepper";
 
 // Checkout for the public menu (ADR-031, FR-231). Responsive (FR-237): full screen on a
 // phone, a bottom sheet on a tablet, a side panel on a desktop. One column, 16 px inputs
 // with phone keyboards and autofill, and the send button fixed at the bottom.
+// The order is sent by WhatsApp (ADR-032, FR-238): after the order is created, the page
+// opens the restaurant's chat with the order text, so the customer starts the conversation.
 
 type Fulfillment = "delivery" | "pickup";
 type Payment = "pix" | "dinheiro" | "cartao_credito" | "cartao_debito";
@@ -91,6 +93,8 @@ const orNull = (v: string) => (v.trim() === "" ? null : v.trim());
 interface Placed {
   readonly code: string;
   readonly totalCents: number;
+  /** The chat with the order text; null when the restaurant has no phone. */
+  readonly whatsappHref: string | null;
 }
 
 export function CheckoutSheet({
@@ -120,6 +124,7 @@ export function CheckoutSheet({
   const [placed, setPlaced] = useState<Placed | null>(null);
   const [pending, startTransition] = useTransition();
   const desktop = useMediaQuery(DESKTOP_QUERY);
+  const byWhatsapp = whatsappLink(menu.phone) !== null;
 
   useEffect(() => setCustomer(loadCustomer()), []);
   // A closed sheet forgets the last result, so the next cart starts a new checkout.
@@ -158,10 +163,14 @@ export function CheckoutSheet({
       });
       if (result.ok) {
         saveCustomer(customer);
-        setPlaced(result.data);
+        const whatsappHref = whatsappOrderLink(menu.phone, result.data.whatsappText);
+        setPlaced({ code: result.data.code, totalCents: result.data.totalCents, whatsappHref });
         setNotes("");
         setChangeFor("");
         onPlaced();
+        // A phone opens WhatsApp at once. A desktop browser blocks a new tab after an await,
+        // so there the customer clicks "Abrir WhatsApp" (ADR-032).
+        if (whatsappHref !== null && !desktop) window.location.assign(whatsappHref);
         return;
       }
       const errors = result.error.fieldErrors ?? {};
@@ -185,7 +194,7 @@ export function CheckoutSheet({
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
           <div className="min-w-0">
-            <SheetTitle className="text-base">{placed ? "Pedido enviado" : "Seu pedido"}</SheetTitle>
+            <SheetTitle className="text-base">{placed ? `Pedido ${placed.code}` : "Seu pedido"}</SheetTitle>
             <SheetDescription className="truncate text-xs">{menu.restaurantName}</SheetDescription>
           </div>
           <SheetClose asChild>
@@ -196,7 +205,7 @@ export function CheckoutSheet({
         </div>
 
         {placed ? (
-          <PlacedView placed={placed} phone={menu.phone} onClose={() => onOpenChange(false)} />
+          <PlacedView placed={placed} onClose={() => onOpenChange(false)} />
         ) : (
           <>
             <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain px-4 py-4">
@@ -238,7 +247,12 @@ export function CheckoutSheet({
                     className="h-12 text-base"
                   />
                 </Field>
-                <Field id="co-phone" label="Telefone (WhatsApp)" error={fieldErrors.phone}>
+                <Field
+                  id="co-phone"
+                  label="Seu WhatsApp"
+                  hint={byWhatsapp ? "Use o número de onde vai enviar o pedido." : undefined}
+                  error={fieldErrors.phone}
+                >
                   <Input
                     id="co-phone"
                     type="tel"
@@ -361,7 +375,8 @@ export function CheckoutSheet({
               >
                 <span className="flex items-center gap-2">
                   {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {pending ? "Enviando..." : "Enviar pedido"}
+                  {!pending && byWhatsapp && <MessageCircle className="h-4 w-4" />}
+                  {pending ? "Enviando..." : byWhatsapp ? "Enviar pedido pelo WhatsApp" : "Enviar pedido"}
                 </span>
                 <span className="font-bold">{formatBRL(totals.totalCents)}</span>
               </Button>
@@ -373,27 +388,44 @@ export function CheckoutSheet({
   );
 }
 
-function PlacedView({ placed, phone, onClose }: { placed: Placed; phone: string | null; onClose: () => void }) {
-  const whatsapp = whatsappLink(phone);
+function PlacedView({ placed, onClose }: { placed: Placed; onClose: () => void }) {
+  const total = (
+    <p className="text-base">
+      Total: <span className="font-bold">{formatBRL(placed.totalCents)}</span>
+    </p>
+  );
+  if (placed.whatsappHref === null) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-10 text-center">
+        <CheckCircle2 className="h-14 w-14 text-primary" />
+        <div className="space-y-1">
+          <p className="text-xl font-bold text-foreground">Pedido {placed.code} enviado!</p>
+          <p className="text-sm text-muted-foreground">O restaurante vai confirmar seu pedido.</p>
+        </div>
+        {total}
+        <Button className="h-12 w-full max-w-xs" onClick={onClose}>
+          Voltar ao cardápio
+        </Button>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-10 text-center">
-      <CheckCircle2 className="h-14 w-14 text-primary" />
+      <MessageCircle className="h-14 w-14 text-[#25D366]" />
       <div className="space-y-1">
-        <p className="text-xl font-bold text-foreground">Pedido {placed.code} enviado!</p>
-        <p className="text-sm text-muted-foreground">Aguardando confirmação do restaurante.</p>
+        <p className="text-xl font-bold text-foreground">Falta enviar no WhatsApp</p>
+        <p className="text-sm text-muted-foreground">
+          Envie a mensagem com o pedido {placed.code} para o restaurante receber e confirmar.
+        </p>
       </div>
-      <p className="text-base">
-        Total: <span className="font-bold">{formatBRL(placed.totalCents)}</span>
-      </p>
+      {total}
       <div className="flex w-full max-w-xs flex-col gap-2 pt-2">
-        {whatsapp !== null && (
-          <Button asChild variant="outline" className="h-12 gap-2">
-            <a href={whatsapp} target="_blank" rel="noopener noreferrer">
-              <MessageCircle className="h-4 w-4" /> Falar com o restaurante
-            </a>
-          </Button>
-        )}
-        <Button className="h-12" onClick={onClose}>
+        <Button asChild className="h-12 gap-2 bg-[#25D366] text-white hover:bg-[#1ebe5b]">
+          <a href={placed.whatsappHref} target="_blank" rel="noopener noreferrer">
+            <MessageCircle className="h-4 w-4" /> Abrir WhatsApp
+          </a>
+        </Button>
+        <Button variant="outline" className="h-12" onClick={onClose}>
           Voltar ao cardápio
         </Button>
       </div>
@@ -404,11 +436,13 @@ function PlacedView({ placed, phone, onClose }: { placed: Placed; phone: string 
 function Field({
   id,
   label,
+  hint,
   error,
   children,
 }: {
   id: string;
   label: string;
+  hint?: string | undefined;
   error: string | undefined;
   children: React.ReactNode;
 }) {
@@ -418,7 +452,11 @@ function Field({
         {label}
       </Label>
       {children}
-      {error !== undefined && <p className="text-xs font-medium text-destructive">{error}</p>}
+      {error !== undefined ? (
+        <p className="text-xs font-medium text-destructive">{error}</p>
+      ) : (
+        hint !== undefined && <p className="text-xs text-muted-foreground">{hint}</p>
+      )}
     </div>
   );
 }

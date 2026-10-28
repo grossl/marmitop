@@ -5,8 +5,8 @@ import { AppError } from "@mt/core";
 import { simulateInboundActionSchema } from "@mt/schemas";
 
 import { defineService } from "../../service";
-import { enqueueAiTurn } from "../ai/trigger";
-import { type AutomaticResult, runInboundAutomation } from "../whatsapp/automatic";
+import { afterInboundMessage } from "../whatsapp/after-inbound";
+import type { AutomaticResult } from "../whatsapp/automatic";
 import { ingestInboundMessage } from "./ingest-inbound";
 
 export const simulateInboundMessage = defineService({
@@ -22,22 +22,19 @@ export const simulateInboundMessage = defineService({
       name: input.name,
       receivedAt: deps.clock.now(),
     });
-    // FR-110, FR-111: the same automatic messages as the webhook and the poll.
+    // FR-110, FR-111, FR-239: the same follow-up as the webhook and the poll.
     const [customer] = await tx<{ name: string }[]>`
       select name from public.customers where id = ${result.customerId} and restaurant_id = ${ctx.restaurantId}
     `;
     let automatic: AutomaticResult | null = null;
     if (result.messageId !== null) {
-      automatic = await runInboundAutomation(tx, deps, ctx.restaurantId, {
+      ({ automatic } = await afterInboundMessage(tx, deps, ctx.restaurantId, {
+        customerId: result.customerId,
+        customerName: customer?.name ?? input.phone,
         conversationId: result.conversationId,
         conversationCreated: result.conversationCreated,
-        customerName: customer?.name ?? input.phone,
-      });
-      await enqueueAiTurn(tx, deps, ctx.restaurantId, {
-        conversationId: result.conversationId,
-        triggerMessageId: result.messageId,
-        closedSent: automatic?.kind === "closed",
-      });
+        messageId: result.messageId,
+      }));
     }
     return {
       conversationId: result.conversationId,

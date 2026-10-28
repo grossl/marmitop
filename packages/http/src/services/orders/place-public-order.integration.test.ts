@@ -1,4 +1,4 @@
-// covers FR-230, FR-231, FR-232, FR-233, FR-234, FR-235, FR-236, ADR-006, NFR-001
+// covers FR-230, FR-231, FR-232, FR-233, FR-234, FR-235, FR-236, FR-238, FR-239, ADR-006, ADR-032, NFR-001
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { AppError, FixedClock } from "@mt/core";
 import type { Db } from "@mt/db";
@@ -8,6 +8,7 @@ import type { ServiceDeps } from "../../deps";
 import { createTestServiceDeps, userCtx } from "../../testing";
 import { saveMenuItem } from "../catalog/menu";
 import { getPublicMenu } from "../catalog/public-menu";
+import { simulateInboundMessage } from "../messaging";
 import { PUBLIC_ORDER_LIMITS, type PublicOrderInput, placePublicOrder } from "./place-public-order";
 
 let db: Db;
@@ -125,6 +126,12 @@ describe("placePublicOrder", () => {
     const [row] = await db<{ source: string; status: string; conversation_id: string | null; logradouro: string }[]>`
       select source, status, conversation_id, logradouro from public.orders where id = ${created.id}`;
     expect(row).toEqual({ source: "menu", status: "aguardando", conversation_id: null, logradouro: "Rua das Flores" });
+    // FR-238: the WhatsApp text carries the code and the database prices.
+    expect(created.whatsappText).toContain(`*Pedido ${created.code}*`);
+    expect(created.whatsappText).toContain("2x Frango Público — R$ 37,80");
+    expect(created.whatsappText).toContain("1x Executiva Pública (G) — R$ 22,00");
+    expect(created.whatsappText).toContain("*Total: R$ 64,80*");
+    expect(created.whatsappText).toContain("Rua das Flores, 10");
   });
 
   test("a client price is not accepted", async () => {
@@ -192,5 +199,56 @@ describe("placePublicOrder", () => {
       await placePublicOrder(deps, publicId, order({ phone }));
     }
     expect(code(await caught(() => placePublicOrder(deps, publicId, order({ phone }))))).toBe("rate_limited");
+  });
+});
+
+describe("WhatsApp handoff (ADR-032)", () => {
+  const admin = () => userCtx(a.restaurantId, a.adminId, "admin");
+  /** `nextPhone` is "(11) 98888-NNNN"; the gateway sends E.164. */
+  const e164 = (phone: string) => `+55${phone.replace(/\D/g, "")}`;
+
+  async function orderRow(id: string) {
+    const [row] = await db<{ conversation_id: string | null }[]>`
+      select conversation_id from public.orders where id = ${id}`;
+    return row;
+  }
+
+  test("the first message from the order's phone links the order and sends order_received", async () => {
+    await db`insert into public.ai_settings (restaurant_id, enabled) values (${a.restaurantId}, true)
+             on conflict (restaurant_id) do update set enabled = true`;
+    await db`insert into public.automatic_messages (restaurant_id, kind, enabled, body)
+             values (${a.restaurantId}, 'order_received', true, 'Recebemos o pedido {{pedido}}.')
+             on conflict (restaurant_id, kind) do update set enabled = true`;
+    const phone = nextPhone();
+    const created = await placePublicOrder(deps, publicId, order({ phone }));
+    const sim = await simulateInboundMessage(deps, admin(), { phone: e164(phone), body: created.whatsappText });
+
+    expect((await orderRow(created.id))?.conversation_id).toBe(sim.conversationId);
+    expect(sim.automaticKind).toBe("order_received");
+    const kinds = await db<{ automatic_kind: string; order_id: string | null }[]>`
+      select automatic_kind, order_id from public.messages
+      where conversation_id = ${sim.conversationId} and automatic_kind is not null`;
+    expect([...kinds]).toEqual([{ automatic_kind: "order_received", order_id: created.id }]);
+    // The AI would create the order again from the text: it pauses instead.
+    const [conv] = await db<{ ai_mode: string; ai_pause_reason: string | null }[]>`
+      select ai_mode, ai_pause_reason from public.conversations where id = ${sim.conversationId}`;
+    expect(conv).toEqual({ ai_mode: "paused", ai_pause_reason: "attendant" });
+    const [jobs] = await db<{ n: number }[]>`
+      select count(*)::int as n from pgmq.q_mt_ai_turns where message->>'conversationId' = ${sim.conversationId}`;
+    expect(jobs?.n).toBe(0);
+  });
+
+  test("a message from another phone links nothing", async () => {
+    const created = await placePublicOrder(deps, publicId, order());
+    await simulateInboundMessage(deps, admin(), { phone: e164(nextPhone()), body: created.whatsappText });
+    expect((await orderRow(created.id))?.conversation_id).toBeNull();
+  });
+
+  test("an order older than 24 hours is not linked", async () => {
+    const phone = nextPhone();
+    const created = await placePublicOrder(deps, publicId, order({ phone }));
+    await db`update public.orders set created_at = created_at - interval '25 hours' where id = ${created.id}`;
+    await simulateInboundMessage(deps, admin(), { phone: e164(phone), body: "oi" });
+    expect((await orderRow(created.id))?.conversation_id).toBeNull();
   });
 });

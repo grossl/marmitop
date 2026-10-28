@@ -2,6 +2,7 @@
 // connection, automatic messages, gateway events, the inbound webhook, and the
 // stores the worker handlers use.
 
+export * from "./after-inbound";
 export * from "./automatic";
 export * from "./connection";
 export * from "./gateway-events";

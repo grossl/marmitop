@@ -2,7 +2,7 @@
 // rows (FR-104..FR-107, 06.api-spec.md "POST /v1/webhooks/uatis"). Both paths
 // call `applyGatewayMessage`, so a message that arrives twice creates one row.
 //
-//   in,  unknown external_id  → ingestInboundMessage + automatic messages
+//   in,  unknown external_id  → ingestInboundMessage + afterInboundMessage
 //   in,  known external_id    → status moves forward only (FR-106)
 //   out, known external_id    → status moves forward only (FR-106)
 //   out, unknown external_id  → ignored in v1. Marmitop stores the id of its
@@ -13,9 +13,9 @@ import { type GatewayMessage, type MessageFailure, type MessageStatus, nextMessa
 import type { Tx } from "@mt/db";
 
 import type { ServiceDeps } from "../../deps";
-import { enqueueAiTurn } from "../ai/trigger";
 import { ingestInboundMessage } from "../messaging/ingest-inbound";
-import { type AutomaticResult, runInboundAutomation } from "./automatic";
+import { afterInboundMessage } from "./after-inbound";
+import type { AutomaticResult } from "./automatic";
 
 const E164 = /^\+[1-9][0-9]{7,14}$/;
 
@@ -94,15 +94,13 @@ export async function applyGatewayMessage(
   const [customer] = await tx<{ name: string }[]>`
     select name from public.customers where id = ${ingest.customerId} and restaurant_id = ${restaurantId}
   `;
-  const automatic = await runInboundAutomation(tx, deps, restaurantId, {
+  // Menu order link (FR-239), automatic messages, and the AI turn.
+  const { automatic } = await afterInboundMessage(tx, deps, restaurantId, {
+    customerId: ingest.customerId,
+    customerName: customer?.name ?? message.contactAddress,
     conversationId: ingest.conversationId,
     conversationCreated: ingest.conversationCreated,
-    customerName: customer?.name ?? message.contactAddress,
-  });
-  await enqueueAiTurn(tx, deps, restaurantId, {
-    conversationId: ingest.conversationId,
-    triggerMessageId: ingest.messageId,
-    closedSent: automatic?.kind === "closed",
+    messageId: ingest.messageId,
   });
   // message.received (FR-146) was emitted by ingestInboundMessage, in this transaction.
   return { action: "ingested", messageId: ingest.messageId, conversationId: ingest.conversationId, automatic };
