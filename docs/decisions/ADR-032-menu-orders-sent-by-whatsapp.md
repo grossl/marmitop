@@ -1,6 +1,6 @@
 # ADR-032 — Menu orders are sent by WhatsApp
 
-**Status:** accepted · 2026-10-28 · amends ADR-031
+**Status:** accepted · 2026-10-28 · amends ADR-031 · creation and linking superseded by ADR-033
 
 ## Question
 
