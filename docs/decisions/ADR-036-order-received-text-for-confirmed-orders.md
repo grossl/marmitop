@@ -27,3 +27,12 @@ Option 2.
 
 * A confirmed order sends "Recebemos seu pedido! Avisaremos quando …" and then `order_confirmed`, when both are enabled.
 * An order that waits for a person still sends the restaurant's `order_received` text.
+
+## Amendment 1 — 2026-10-28
+
+An auto-confirmed order sent the confirmed `order_received` text and then `order_confirmed` ("Seu pedido … foi confirmado e logo entra em preparo.") in the same second. The owner wants `order_confirmed` only when the restaurant confirms the order.
+
+* The move to `confirmado` that `confirmOnCreate` makes sends no status message. `changeOrderStatusInTx` takes `notifyCustomer: false` for it. The history row and the `order.status_changed` event stay.
+* An order created as `confirmado` by `auto_accept` makes no move, so it already sent no `order_confirmed`.
+* A confirm by a person or the API still sends `order_confirmed` (FR-201).
+
