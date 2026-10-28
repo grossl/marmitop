@@ -1,6 +1,6 @@
 # ADR-031 — Orders from the public menu
 
-**Status:** accepted · 2026-10-27 · extends ADR-030
+**Status:** accepted · 2026-10-27 · extends ADR-030 · amended by ADR-032
 
 ## Question
 
