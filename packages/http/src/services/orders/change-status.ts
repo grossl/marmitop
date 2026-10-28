@@ -29,6 +29,8 @@ export async function changeOrderStatusInTx(
   to: OrderStatus,
   reason: string | undefined,
   now: Date,
+  /** ADR-036 Amendment 1: false for the automatic confirm at creation, which sends no status message. */
+  opts: { readonly notifyCustomer?: boolean } = {},
 ): Promise<OrderStatusResult> {
   // The row lock serializes two attendants dragging the same card.
   const [order] = await tx<
@@ -92,16 +94,18 @@ export async function changeOrderStatusInTx(
     { now },
   );
   // FR-201–205, ADR-026: the customer's status message, in this transaction, for every actor.
-  await enqueueOrderStatusMessage(tx, ctx.restaurantId, {
-    orderId: order.id,
-    orderCode: order.code,
-    from: order.status,
-    to,
-    fulfillment: order.fulfillment,
-    conversationId: order.conversation_id,
-    customerId: order.customer_id,
-    now,
-  });
+  if (opts.notifyCustomer !== false) {
+    await enqueueOrderStatusMessage(tx, ctx.restaurantId, {
+      orderId: order.id,
+      orderCode: order.code,
+      from: order.status,
+      to,
+      fulfillment: order.fulfillment,
+      conversationId: order.conversation_id,
+      customerId: order.customer_id,
+      now,
+    });
+  }
   return {
     id: order.id,
     code: order.code,

@@ -275,7 +275,7 @@ async function placeOrder(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: un
       source: "whatsapp",
       conversationId: scope.conversationId,
       requireConfirmation: true,
-      // FR-213, ADR-036: auto-confirm is a real status move, so order_confirmed goes out (FR-201).
+      // FR-213, ADR-036: confirmed at once; order_received says so, and no order_confirmed follows.
       confirmOnCreate: (await loadAiSettings(tx, scope.restaurantId)).autoConfirmOrders,
     });
   } catch (e) {

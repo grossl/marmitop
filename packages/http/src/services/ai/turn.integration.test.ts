@@ -1,4 +1,4 @@
-// covers FR-182, FR-183, FR-186, FR-187, FR-191, FR-192, FR-196, FR-198, FR-210, FR-211, FR-212, FR-213, FR-215
+// covers FR-182, FR-183, FR-186, FR-187, FR-191, FR-192, FR-196, FR-198, FR-210, FR-211, FR-212, FR-213, FR-215, FR-241
 import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { AssistantModelError, type AssistantRequest, ScriptedAssistantModel } from "@mt/core";
 import type { Db } from "@mt/db";
@@ -221,7 +221,7 @@ describe("runAiTurn", () => {
     });
   });
 
-  test("auto-confirm moves the AI order to confirmado and sends order_confirmed (FR-213)", async () => {
+  test("auto-confirm moves the AI order to confirmado; only order_received goes out (FR-213, FR-241)", async () => {
     await withAutomatic(["order_received", "order_confirmed"], async () => {
       await db`update public.ai_settings set auto_confirm_orders = true where restaurant_id = ${a.restaurantId}`;
       const r = await placeAiOrder("Pedido confirmado!");
@@ -230,7 +230,8 @@ describe("runAiTurn", () => {
         { from_status: null, to_status: "aguardando", actor_type: "system" },
         { from_status: "aguardando", to_status: "confirmado", actor_type: "system" },
       ]);
-      expect([...r.automatic].sort()).toEqual(["order_confirmed", "order_received"]);
+      // ADR-036 Amendment 1: the order_received text already says confirmed; no order_confirmed.
+      expect([...r.automatic]).toEqual(["order_received"]);
       expect(r.aiTexts).toEqual([]);
     });
   });

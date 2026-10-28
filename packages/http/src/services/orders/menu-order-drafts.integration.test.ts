@@ -314,7 +314,7 @@ describe("auto-confirm menu orders (FR-240)", () => {
     return row;
   }
 
-  test("with the switch on, the order moves to confirmado and order_confirmed goes out", async () => {
+  test("with the switch on, the order moves to confirmado and only order_received goes out", async () => {
     await db`update public.restaurant_settings set auto_confirm_menu_orders = true where restaurant_id = ${a.restaurantId}`;
     await db`insert into public.automatic_messages (restaurant_id, kind, enabled, body)
              values (${a.restaurantId}, 'order_confirmed', true, 'Pedido {{pedido}} confirmado.')
@@ -346,11 +346,11 @@ describe("auto-confirm menu orders (FR-240)", () => {
       expect(history[1]?.actor_type).toBe("system");
       const sent = await db<{ automatic_kind: string; body: string }[]>`
         select automatic_kind, body from public.messages where order_id = ${placed?.id ?? ""} and automatic_kind is not null`;
-      // FR-241: the confirmed text by fulfillment (delivery here), then order_confirmed.
+      // FR-241: the confirmed text by fulfillment (delivery here), and no order_confirmed.
       expect(sent.find((m) => m.automatic_kind === "order_received")?.body).toBe(
         "Recebemos seu pedido! Avisaremos quando seu pedido for enviado.",
       );
-      expect(sent.map((m) => m.automatic_kind)).toContain("order_confirmed");
+      expect(sent.map((m) => m.automatic_kind)).toEqual(["order_received"]);
     } finally {
       await db`update public.restaurant_settings set auto_confirm_menu_orders = false where restaurant_id = ${a.restaurantId}`;
     }

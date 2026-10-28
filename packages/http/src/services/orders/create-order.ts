@@ -49,7 +49,7 @@ export type CreateOrderInput = Omit<z.output<typeof createOrderActionSchema>, "s
   readonly requireConfirmation?: boolean;
   /**
    * FR-213, FR-240, ADR-036: move the new order to `confirmado` (actor `system`) in this
-   * transaction, which sends `order_confirmed`; `order_received` gets the confirmed text.
+   * transaction. `order_received` gets the confirmed text, and no `order_confirmed` follows.
    */
   readonly confirmOnCreate?: boolean;
 };
@@ -261,7 +261,8 @@ export async function createOrderInTx(
   const apiOrder = await loadApiOrder(tx, ctx.restaurantId, order.id);
   if (apiOrder !== null) await emitEvent(tx, ctx.restaurantId, "order.created", { order: apiOrder }, { now });
 
-  // FR-201: a real status move after the create, so order_confirmed follows order_received.
+  // A real status move (history row, order.status_changed), but no order_confirmed: the
+  // order_received text already says the order is confirmed (FR-241, ADR-036 Amendment 1).
   if (input.confirmOnCreate === true && status === "aguardando") {
     const moved = await changeOrderStatusInTx(
       tx,
@@ -270,6 +271,7 @@ export async function createOrderInTx(
       "confirmado",
       undefined,
       now,
+      { notifyCustomer: false },
     );
     return { id: order.id, code: codeRow.code, status: moved.status, totalCents: total.totalCents };
   }
