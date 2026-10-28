@@ -25,6 +25,7 @@ import { recordUsage } from "../billing/usage";
 import { loadApiOrder } from "../public-api/views";
 import { emitEvent } from "../webhooks/emit";
 import { enqueueOrderReceived } from "../whatsapp/automatic";
+import { changeOrderStatusInTx } from "./change-status";
 import { loadOrderSettings } from "./order-settings";
 import type { OrderSourceCode } from "./shared";
 
@@ -46,6 +47,11 @@ export type CreateOrderInput = Omit<z.output<typeof createOrderActionSchema>, "s
   readonly paymentMethod: PaymentMethod | null;
   /** True starts the order as `aguardando` even with auto-accept on (FR-211, ADR-027: AI orders). */
   readonly requireConfirmation?: boolean;
+  /**
+   * FR-213, FR-240, ADR-036: move the new order to `confirmado` (actor `system`) in this
+   * transaction, which sends `order_confirmed`; `order_received` gets the confirmed text.
+   */
+  readonly confirmOnCreate?: boolean;
 };
 
 export const createOrder = defineService({
@@ -241,11 +247,13 @@ export async function createOrderInTx(
   const [named] = await tx<{ name: string }[]>`
       select name from public.customers where restaurant_id = ${ctx.restaurantId} and id = ${input.customerId}
     `;
+  const confirmedAtCreation = status === "confirmado" || input.confirmOnCreate === true;
   await enqueueOrderReceived(tx, deps, ctx.restaurantId, {
     orderId: order.id,
     orderCode: codeRow.code,
     customerName: named?.name ?? "",
     conversationId: input.conversationId ?? null,
+    confirmedFor: confirmedAtCreation ? input.fulfillment : null,
   });
   // FR-039, FR-146, FR-152: usage and the order.created event in this transaction.
   const now = deps.clock.now();
@@ -253,5 +261,17 @@ export async function createOrderInTx(
   const apiOrder = await loadApiOrder(tx, ctx.restaurantId, order.id);
   if (apiOrder !== null) await emitEvent(tx, ctx.restaurantId, "order.created", { order: apiOrder }, { now });
 
+  // FR-201: a real status move after the create, so order_confirmed follows order_received.
+  if (input.confirmOnCreate === true && status === "aguardando") {
+    const moved = await changeOrderStatusInTx(
+      tx,
+      { restaurantId: ctx.restaurantId, actorType: "system" },
+      order.id,
+      "confirmado",
+      undefined,
+      now,
+    );
+    return { id: order.id, code: codeRow.code, status: moved.status, totalCents: total.totalCents };
+  }
   return { id: order.id, code: codeRow.code, status, totalCents: total.totalCents };
 }

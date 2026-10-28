@@ -104,7 +104,18 @@ export interface OrderReceivedInput {
   readonly orderCode: string;
   readonly customerName: string;
   readonly restaurantName: string;
+  /**
+   * FR-241, ADR-036: the fulfillment of an order confirmed at creation, or null for an order
+   * that waits for a person. When set, the fixed confirmed text replaces the restaurant's text.
+   */
+  readonly confirmedFor?: Fulfillment | null;
 }
+
+/** FR-241, ADR-036: `order_received` for an order that is already confirmed. */
+export const CONFIRMED_ORDER_RECEIVED_TEXT: Readonly<Record<Fulfillment, string>> = {
+  pickup: "Recebemos seu pedido! Avisaremos quando seu pedido estiver pronto.",
+  delivery: "Recebemos seu pedido! Avisaremos quando seu pedido for enviado.",
+};
 
 /** The outcome of a message that follows the 24-hour window (FR-117). */
 export type WindowedDecision<K extends AutomaticKind> =
@@ -154,16 +165,21 @@ function decideWindowed<K extends AutomaticKind>(
   return { action: "fail", kind, body, errorCode: decision.errorCode };
 }
 
-/** FR-112 and FR-117: text inside the window, the configured template outside it, a failed row with no template. */
+/**
+ * FR-112 and FR-117: text inside the window, the configured template outside it, a failed row with no template.
+ * FR-241: an order confirmed at creation gets the fixed confirmed text.
+ */
 export function decideOrderReceived(input: OrderReceivedInput): OrderReceivedDecision {
   const cfg = input.config.order_received;
   if (!cfg.enabled) return { action: "skip", reason: "disabled" };
   if (!input.hasConversation) return { action: "skip", reason: "no_conversation" };
-  const body = renderMessage(cfg.body, {
-    nome: input.customerName,
-    restaurante: input.restaurantName,
-    pedido: input.orderCode,
-  });
+  const body = input.confirmedFor
+    ? CONFIRMED_ORDER_RECEIVED_TEXT[input.confirmedFor]
+    : renderMessage(cfg.body, {
+        nome: input.customerName,
+        restaurante: input.restaurantName,
+        pedido: input.orderCode,
+      });
   return decideWindowed("order_received", cfg, body, input.lastInboundAt, input.now);
 }
 

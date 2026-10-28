@@ -21,8 +21,8 @@ import { QUEUES, sendJob, type Tx } from "@mt/db";
 import type { OutboundMessageJob } from "@mt/schemas";
 
 import type { ServiceDeps } from "../../deps";
-import { previewOf } from "../messaging/helpers";
 import { aiWillAnswer } from "../ai/trigger";
+import { previewOf } from "../messaging/helpers";
 
 const KINDS: readonly AutomaticKind[] = ["welcome", "closed", "order_received", ...ORDER_STATUS_MESSAGE_KINDS];
 
@@ -188,6 +188,8 @@ export interface OrderReceivedInput {
   readonly customerName: string;
   /** The order's WhatsApp conversation; null for a counter order (FR-112). */
   readonly conversationId: string | null;
+  /** FR-241, ADR-036: the fulfillment of an order confirmed at creation; null or absent otherwise. */
+  readonly confirmedFor?: Fulfillment | null;
 }
 
 export type OrderReceivedOutcome =
@@ -221,6 +223,7 @@ export async function enqueueOrderReceived(
     orderCode: input.orderCode,
     customerName: input.customerName,
     restaurantName: settings.restaurantName,
+    confirmedFor: input.confirmedFor ?? null,
   });
   if (decision.action === "skip" || input.conversationId === null) {
     return { action: "skip", reason: decision.action === "skip" ? decision.reason : "no_conversation" };

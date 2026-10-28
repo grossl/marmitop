@@ -17,7 +17,6 @@ import { emptyToolInputSchema, handoffInputSchema, searchMenuInputSchema, update
 import type { ZodIssue, ZodTypeAny, z } from "zod";
 
 import type { ServiceDeps } from "../../deps";
-import { changeOrderStatusInTx } from "../orders/change-status";
 import { createOrderInTx } from "../orders/create-order";
 import { loadOrderSettings } from "../orders/order-settings";
 import { systemCtx } from "../whatsapp/connection";
@@ -276,6 +275,8 @@ async function placeOrder(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: un
       source: "whatsapp",
       conversationId: scope.conversationId,
       requireConfirmation: true,
+      // FR-213, ADR-036: auto-confirm is a real status move, so order_confirmed goes out (FR-201).
+      confirmOnCreate: (await loadAiSettings(tx, scope.restaurantId)).autoConfirmOrders,
     });
   } catch (e) {
     if (e instanceof AppError) return fail(codeOf(e), "The order was refused. Check the items and the address.");
@@ -297,19 +298,7 @@ async function placeOrder(tx: Tx, deps: ServiceDeps, scope: AiToolScope, raw: un
       where id = ${scope.customerId} and restaurant_id = ${scope.restaurantId}
     `;
   }
-  // FR-213: auto-confirm is a real status move, so order_confirmed goes out (FR-201).
-  let status = created.status;
-  if ((await loadAiSettings(tx, scope.restaurantId)).autoConfirmOrders) {
-    const moved = await changeOrderStatusInTx(
-      tx,
-      { restaurantId: scope.restaurantId, actorType: "system" },
-      created.id,
-      "confirmado",
-      undefined,
-      now,
-    );
-    status = moved.status;
-  }
+  const status = created.status;
   const notified = await customerNotified(tx, scope.restaurantId, created.id);
   const settings = await loadOrderSettings(tx, scope.restaurantId);
   return {

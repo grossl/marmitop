@@ -1,4 +1,4 @@
-// covers FR-110, FR-111, FR-112, FR-114, FR-115, FR-117
+// covers FR-110, FR-111, FR-112, FR-114, FR-115, FR-117, FR-241
 import { describe, expect, test } from "bun:test";
 import {
   type AutomaticMessageConfig,
@@ -198,6 +198,31 @@ describe("decideOrderReceived (FR-112, FR-117, ADR-014)", () => {
       body: "Pedido ORD-042 recebido, Ana!",
       errorCode: "outside_service_window",
     });
+  });
+  test("an order confirmed at creation gets the fixed text by fulfillment (FR-241, ADR-036)", () => {
+    const at = { ...order, lastInboundAt: hoursAgo(1), config: cfg() };
+    expect(decideOrderReceived({ ...at, confirmedFor: "pickup" })).toEqual({
+      action: "send_text",
+      kind: "order_received",
+      body: "Recebemos seu pedido! Avisaremos quando seu pedido estiver pronto.",
+    });
+    expect(decideOrderReceived({ ...at, confirmedFor: "delivery" })).toMatchObject({
+      body: "Recebemos seu pedido! Avisaremos quando seu pedido for enviado.",
+    });
+    expect(decideOrderReceived({ ...at, confirmedFor: null })).toMatchObject({ body: "Pedido ORD-042 recebido, Ana!" });
+  });
+  test("the confirmed text still follows the switch and the 24-hour window", () => {
+    expect(
+      decideOrderReceived({
+        ...order,
+        lastInboundAt: hoursAgo(1),
+        confirmedFor: "pickup",
+        config: cfg({ order_received: { enabled: false } }),
+      }),
+    ).toEqual({ action: "skip", reason: "disabled" });
+    expect(
+      decideOrderReceived({ ...order, lastInboundAt: hoursAgo(30), confirmedFor: "delivery", config: cfg() }),
+    ).toMatchObject({ action: "fail", errorCode: "outside_service_window" });
   });
   test("a counter order with no conversation sends none", () => {
     expect(decideOrderReceived({ ...order, hasConversation: false, lastInboundAt: null, config: cfg() })).toEqual({

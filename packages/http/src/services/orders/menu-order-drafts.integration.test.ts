@@ -1,4 +1,4 @@
-// covers FR-230, FR-231, FR-232, FR-233, FR-234, FR-235, FR-236, FR-238, FR-239, FR-240, ADR-006, ADR-033, ADR-035, NFR-001
+// covers FR-230, FR-231, FR-232, FR-233, FR-234, FR-235, FR-236, FR-238, FR-239, FR-240, FR-241, ADR-006, ADR-033, ADR-035, ADR-036, NFR-001
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { AppError, FixedClock } from "@mt/core";
 import type { Db } from "@mt/db";
@@ -344,10 +344,13 @@ describe("auto-confirm menu orders (FR-240)", () => {
         ["aguardando", "confirmado"],
       ]);
       expect(history[1]?.actor_type).toBe("system");
-      const kinds = await db<{ automatic_kind: string }[]>`
-        select automatic_kind from public.messages where order_id = ${placed?.id ?? ""} and automatic_kind is not null
-        order by created_at`;
-      expect(kinds.map((k) => k.automatic_kind)).toContain("order_confirmed");
+      const sent = await db<{ automatic_kind: string; body: string }[]>`
+        select automatic_kind, body from public.messages where order_id = ${placed?.id ?? ""} and automatic_kind is not null`;
+      // FR-241: the confirmed text by fulfillment (delivery here), then order_confirmed.
+      expect(sent.find((m) => m.automatic_kind === "order_received")?.body).toBe(
+        "Recebemos seu pedido! Avisaremos quando seu pedido for enviado.",
+      );
+      expect(sent.map((m) => m.automatic_kind)).toContain("order_confirmed");
     } finally {
       await db`update public.restaurant_settings set auto_confirm_menu_orders = false where restaurant_id = ${a.restaurantId}`;
     }
@@ -356,7 +359,12 @@ describe("auto-confirm menu orders (FR-240)", () => {
   test("with the switch off, the order stays aguardando, also with auto_accept on", async () => {
     const prepared = await preparePublicOrder(deps, publicId, order());
     await simulateInboundMessage(deps, admin(), { phone: nextPhone(), body: prepared.whatsappText });
-    expect((await convertedOrder(prepared.reference))?.status).toBe("aguardando");
+    const placed = await convertedOrder(prepared.reference);
+    expect(placed?.status).toBe("aguardando");
+    // FR-241: an order that waits for a person keeps the restaurant's text.
+    const [received] = await db<{ body: string }[]>`
+      select body from public.messages where order_id = ${placed?.id ?? ""} and automatic_kind = 'order_received'`;
+    expect(received?.body).toMatch(/^Recebemos o pedido ORD-\d+\.$/);
   });
 });
 
