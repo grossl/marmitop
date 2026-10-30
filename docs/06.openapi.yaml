@@ -21,6 +21,8 @@ tags:
   - name: Customers
   - name: Menu
   - name: Messages
+  - name: Print jobs
+    description: Used by the local print agent (ADR-038).
   - name: Inbound webhooks
     description: Called by backend-uatis and web-nf. Not for integrators.
 
@@ -319,6 +321,76 @@ paths:
         '422': { $ref: '#/components/responses/Error' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
+  /v1/print-jobs/claim:
+    post:
+      operationId: claimPrintJobs
+      summary: Claim print jobs for the local printer
+      description: >
+        Claims up to limit jobs of the key's restaurant, oldest first. A job is
+        claimable when it is pending, or printing with claimed_at more than 2
+        minutes ago. The claim sets printing, claimed_at, and attempts + 1, and
+        returns the ticket data (FR-251, ADR-038).
+      tags: [Print jobs]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                limit: { type: integer, minimum: 1, maximum: 10, default: 5 }
+      responses:
+        '200':
+          description: The claimed jobs. An empty list when nothing waits.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/PrintJob' } }
+        '401': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v1/print-jobs/{id}/result:
+    post:
+      operationId: reportPrintJobResult
+      summary: Report the result of a claimed print job
+      description: >
+        printed true sets printed and printed_at. printed false stores the error
+        and sets pending, or failed after 5 attempts. A job that is not printing
+        is 409 (FR-252, ADR-038).
+      tags: [Print jobs]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [printed]
+              additionalProperties: false
+              properties:
+                printed: { type: boolean }
+                error: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: The job after the result.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PrintJob' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   /v1/webhooks/uatis/{restaurant_id}:
     post:
       operationId: receiveUatisWebhook
@@ -550,6 +622,27 @@ components:
         qty: { type: integer }
         notes: { type: [string, 'null'] }
 
+    PrintJob:
+      type: object
+      required: [id, kind, status, attempts, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [order_ticket] }
+        status: { type: string, enum: [pending, printing, printed, failed] }
+        attempts: { type: integer }
+        last_error: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+        printed_at: { type: [string, 'null'], format: date-time }
+        ticket:
+          description: Present on claim only.
+          type: object
+          required: [restaurant_name, timezone, customer_name, customer_phone, order]
+          properties:
+            restaurant_name: { type: string }
+            timezone: { type: string }
+            customer_name: { type: string }
+            customer_phone: { type: [string, 'null'] }
+            order: { $ref: '#/components/schemas/Order' }
     Order:
       type: object
       required: [id, code, status, customer_id, fulfillment, payment_method, subtotal_cents, delivery_fee_cents, total_cents, source, items, created_at]
