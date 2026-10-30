@@ -148,7 +148,11 @@ describe("claim and result (FR-251, FR-252)", () => {
   test("a failed print goes back to pending, and fails for good on the last attempt", async () => {
     await confirmedOrder();
     let [job] = (await apiClaimPrintJobs(deps, keyOf(a), {})).data;
-    const retry = await apiReportPrintJobResult(deps, keyOf(a), { id: job?.id ?? "", printed: false, error: "sem papel" });
+    const retry = await apiReportPrintJobResult(deps, keyOf(a), {
+      id: job?.id ?? "",
+      printed: false,
+      error: "sem papel",
+    });
     expect(retry).toMatchObject({ status: "pending", last_error: "sem papel" });
 
     for (let attempt = 2; attempt <= PRINT_MAX_ATTEMPTS; attempt++) {

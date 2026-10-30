@@ -68,6 +68,18 @@
         "typescript": "^5.9.3",
       },
     },
+    "apps/print-agent": {
+      "name": "@mt/print-agent",
+      "version": "0.0.0",
+      "dependencies": {
+        "@mt/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@mt/config": "workspace:*",
+        "@types/bun": "^1.3.14",
+        "typescript": "^5.9.3",
+      },
+    },
     "apps/worker": {
       "name": "@mt/worker",
       "version": "0.0.0",
@@ -327,6 +339,8 @@
     "@mt/db": ["@mt/db@workspace:packages/db"],
 
     "@mt/http": ["@mt/http@workspace:packages/http"],
+
+    "@mt/print-agent": ["@mt/print-agent@workspace:apps/print-agent"],
 
     "@mt/schemas": ["@mt/schemas@workspace:packages/schemas"],
 

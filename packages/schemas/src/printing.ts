@@ -3,9 +3,7 @@
 import { z } from "zod";
 
 /** `POST /v1/print-jobs/claim`. */
-export const claimPrintJobsBodySchema = z
-  .object({ limit: z.number().int().min(1).max(10).default(5) })
-  .strict();
+export const claimPrintJobsBodySchema = z.object({ limit: z.number().int().min(1).max(10).default(5) }).strict();
 
 /** `POST /v1/print-jobs/{id}/result`. */
 export const printJobResultBodySchema = z

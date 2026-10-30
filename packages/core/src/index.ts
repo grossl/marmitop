@@ -31,6 +31,7 @@ export * from "./retry-schedule";
 export type { EnvelopeSecretBoxOptions, KekRef } from "./secret-box";
 export { EnvelopeSecretBox, FakeSecretBox, parseKek } from "./secret-box";
 export * from "./service-window";
+export * from "./ticket";
 export * from "./ssrf";
 export * from "./uatis-mapping";
 export * from "./webhook-signature";

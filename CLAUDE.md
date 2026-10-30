@@ -82,6 +82,9 @@ Test naming: `*.test.ts` (unit), `*.integration.test.ts` (needs a database).
   (`backend-uatis`, `web-nf`). `GET /v1/health`.
 - `apps/worker` (`@mt/worker`) — Bun process consuming pgmq queues. Health
   server on :8181.
+- `apps/print-agent` (`@mt/print-agent`) — Bun process on the restaurant's
+  counter computer. Claims print jobs through the public API and prints
+  ESC/POS tickets with `lp -o raw` (ADR-038).
 - `packages/core` — domain logic with zero I/O: totals, status machine,
   business hours, ports.
 - `packages/db` — postgres.js client, RLS context wrapper, row types.
