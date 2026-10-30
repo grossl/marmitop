@@ -22,6 +22,7 @@ import type { ServiceContext } from "../../context";
 import type { ServiceDeps } from "../../deps";
 import { defineService } from "../../service";
 import { recordUsage } from "../billing/usage";
+import { acceptsOrder, enqueueOrderTicket } from "../printing/enqueue";
 import { loadApiOrder } from "../public-api/views";
 import { emitEvent } from "../webhooks/emit";
 import { enqueueOrderReceived } from "../whatsapp/automatic";
@@ -260,6 +261,8 @@ export async function createOrderInTx(
   await recordUsage(tx, ctx.restaurantId, "order.created", order.id, now);
   const apiOrder = await loadApiOrder(tx, ctx.restaurantId, order.id);
   if (apiOrder !== null) await emitEvent(tx, ctx.restaurantId, "order.created", { order: apiOrder }, { now });
+  // FR-250, ADR-038: an order created as accepted gets its ticket here; confirmOnCreate gets it from the move below.
+  if (acceptsOrder(null, status)) await enqueueOrderTicket(tx, ctx.restaurantId, order.id);
 
   // A real status move (history row, order.status_changed), but no order_confirmed: the
   // order_received text already says the order is confirmed (FR-241, ADR-036 Amendment 1).

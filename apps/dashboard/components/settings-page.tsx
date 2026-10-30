@@ -314,6 +314,7 @@ function RestaurantSettings({ settings }: { settings: SettingsView }) {
     minutes: String(pr.deliveryEstimateMinutes),
     timezone: pr.timezone,
     autoConfirmMenuOrders: pr.autoConfirmMenuOrders,
+    autoPrintOrders: pr.autoPrintOrders,
   });
   const prefSection = useSection();
   const [feeError, setFeeError] = useState<string | null>(null);
@@ -339,6 +340,7 @@ function RestaurantSettings({ settings }: { settings: SettingsView }) {
           deliveryEstimateMinutes: Number(prefs.minutes),
           timezone: prefs.timezone,
           autoConfirmMenuOrders: prefs.autoConfirmMenuOrders,
+          autoPrintOrders: prefs.autoPrintOrders,
         }),
       "Preferências salvas.",
     );
@@ -398,6 +400,12 @@ function RestaurantSettings({ settings }: { settings: SettingsView }) {
               description="Pedidos enviados pelo cardápio online são confirmados assim que chegam no WhatsApp, e o cliente recebe a confirmação."
               checked={prefs.autoConfirmMenuOrders}
               onChange={(autoConfirmMenuOrders) => setPrefs((prev) => ({ ...prev, autoConfirmMenuOrders }))}
+            />
+            <ToggleRow
+              title="Imprimir comanda automaticamente"
+              description="Cada pedido confirmado imprime uma comanda na impressora do balcão. O agente de impressão precisa estar rodando."
+              checked={prefs.autoPrintOrders}
+              onChange={(autoPrintOrders) => setPrefs((prev) => ({ ...prev, autoPrintOrders }))}
             />
             <ToggleRow
               title="Permitir pedidos para retirada"

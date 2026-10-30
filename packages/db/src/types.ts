@@ -148,6 +148,8 @@ export interface RestaurantSettingsRow {
   timezone: string;
   /** Migration 0029, ADR-035. */
   auto_confirm_menu_orders: boolean;
+  /** Migration 0030, ADR-038. */
+  auto_print_orders: boolean;
   updated_at: Date;
 }
 
@@ -625,6 +627,20 @@ export interface MenuOrderDraftRow {
   converted_at: Date | null;
 }
 
+/** A ticket for the restaurant's local printer (ADR-038, migration 0030). */
+export interface PrintJobRow {
+  id: string;
+  restaurant_id: string;
+  order_id: string;
+  kind: "order_ticket";
+  status: "pending" | "printing" | "printed" | "failed";
+  attempts: number;
+  last_error: string | null;
+  created_at: Date;
+  claimed_at: Date | null;
+  printed_at: Date | null;
+}
+
 export interface AiRunRow {
   id: string;
   restaurant_id: string;
@@ -693,6 +709,7 @@ export interface Tables {
   ai_settings: AiSettingsRow;
   ai_carts: AiCartRow;
   menu_order_drafts: MenuOrderDraftRow;
+  print_jobs: PrintJobRow;
   ai_runs: AiRunRow;
   usage_events: UsageEventRow;
   uatis_event_receipts: UatisEventReceiptRow;
@@ -736,6 +753,7 @@ export const TENANT_TABLES = [
   "ai_runs",
   "ai_carts",
   "menu_order_drafts",
+  "print_jobs",
   "usage_events",
   "uatis_event_receipts",
 ] as const satisfies readonly TableName[];

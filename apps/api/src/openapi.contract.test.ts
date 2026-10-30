@@ -56,7 +56,7 @@ describe("06.openapi.yaml contract", () => {
   test("every API-key operation documents 401 and 429; every POST documents Idempotency-Key", async () => {
     const s = await spec();
     for (const [path, item] of Object.entries(s.paths)) {
-      if (!/^\/v1\/(orders|customers|menu|messages)/.test(path)) continue;
+      if (!/^\/v1\/(orders|customers|menu|messages|print-jobs)/.test(path)) continue;
       for (const [method, op] of Object.entries(item)) {
         if (!METHODS.has(method)) continue;
         const where = `${method.toUpperCase()} ${path}`;

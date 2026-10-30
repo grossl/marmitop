@@ -84,6 +84,9 @@ describe("saveOrderPreferences", () => {
     expect((await getSettings(deps, admin(), undefined)).preferences.autoConfirmMenuOrders).toBe(true);
     await saveOrderPreferences(deps, admin(), { ...input, autoConfirmMenuOrders: false });
     expect((await getSettings(deps, admin(), undefined)).preferences.autoConfirmMenuOrders).toBe(false);
+    // covers FR-250
+    expect((await saveOrderPreferences(deps, admin(), { ...input, autoPrintOrders: true })).autoPrintOrders).toBe(true);
+    expect((await getSettings(deps, admin(), undefined)).preferences.autoPrintOrders).toBe(true);
   });
 
   test("an attendant is refused", async () => {

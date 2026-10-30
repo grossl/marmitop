@@ -1,8 +1,9 @@
 // covers FR-140, FR-141, FR-142, FR-143, FR-144, FR-145, 06.api-spec.md "Authentication",
-// "Error format", "Pagination", "Idempotency", "Rate limits", Orders, Customers, Menu, Messages
+// "Error format", "Pagination", "Idempotency", "Rate limits", Orders, Customers, Menu, Messages,
+// Print jobs (FR-251, FR-252)
 import { beforeEach, describe, expect, test } from "bun:test";
 import { FixedClock } from "@mt/core";
-import { idempotencyRequestHash } from "@mt/http";
+import { type ApiPrintJob, idempotencyRequestHash } from "@mt/http";
 import { MemoryUatisInboundStore } from "@mt/http/testing";
 
 import { createApp } from "../../app";
@@ -94,6 +95,8 @@ describe("authentication (FR-140, FR-141)", () => {
       ["PATCH", `/v1/customers/${RESTAURANT_A}`],
       ["GET", "/v1/menu"],
       ["POST", "/v1/messages"],
+      ["POST", "/v1/print-jobs/claim"],
+      ["POST", `/v1/print-jobs/${RESTAURANT_A}/result`],
     ];
     for (const [method, path] of routes) {
       const res = await call(path, { method, key: null, ...(method === "GET" ? {} : { body: {} }) });
@@ -546,5 +549,54 @@ describe("errors", () => {
     await call("/v1/orders", { key: mem.revokedKey.key });
     expect(JSON.stringify(logs)).not.toContain(mem.keyA.key);
     expect(JSON.stringify(logs)).not.toContain(mem.revokedKey.key);
+  });
+});
+
+describe("print jobs (FR-251, FR-252)", () => {
+  const job = (id: string): ApiPrintJob => ({
+    id,
+    kind: "order_ticket",
+    status: "pending",
+    attempts: 0,
+    last_error: null,
+    created_at: "2026-10-13T12:00:00.000Z",
+    printed_at: null,
+  });
+  const JOB_A = "00000000-0000-4000-8000-00000000a001";
+  const JOB_B = "00000000-0000-4000-8000-00000000b001";
+
+  beforeEach(() => {
+    const at = new Date("2026-10-13T12:00:00Z");
+    mem.printJobs.push({ restaurantId: RESTAURANT_A, created_at: at, id: JOB_A, value: job(JOB_A) });
+    mem.printJobs.push({ restaurantId: RESTAURANT_B, created_at: at, id: JOB_B, value: job(JOB_B) });
+  });
+
+  test("claim returns only the key's restaurant's jobs, and an empty body is the default limit", async () => {
+    const res = await call("/v1/print-jobs/claim", { method: "POST" });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: ApiPrintJob[] };
+    expect(body.data.map((j) => j.id)).toEqual([JOB_A]);
+    expect(body.data[0]?.status).toBe("printing");
+  });
+
+  test("a limit outside 1..10 is 422", async () => {
+    const res = await call("/v1/print-jobs/claim", { method: "POST", body: { limit: 50 } });
+    expect(res.status).toBe(422);
+  });
+
+  test("result sets printed; a second result is 409; a foreign job is 404", async () => {
+    await call("/v1/print-jobs/claim", { method: "POST" });
+    const ok = await call(`/v1/print-jobs/${JOB_A}/result`, { method: "POST", body: { printed: true } });
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as ApiPrintJob).status).toBe("printed");
+    const again = await call(`/v1/print-jobs/${JOB_A}/result`, { method: "POST", body: { printed: true } });
+    expect(again.status).toBe(409);
+    const foreign = await call(`/v1/print-jobs/${JOB_B}/result`, { method: "POST", body: { printed: true } });
+    expect(foreign.status).toBe(404);
+  });
+
+  test("result without printed is 422", async () => {
+    const res = await call(`/v1/print-jobs/${JOB_A}/result`, { method: "POST", body: { error: "x" } });
+    expect(res.status).toBe(422);
   });
 });

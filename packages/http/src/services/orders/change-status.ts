@@ -3,13 +3,15 @@
 // Status moves and cancel (FR-021, FR-022, FR-023, FR-026, FR-028; ADR-017;
 // Appendix A `changeOrderStatus`, `cancelOrder`). The core status machine
 // decides; the database trigger is the backstop and writes the history row.
-// A forward move or a cancel also writes the status message (FR-201–205, ADR-026).
+// A forward move or a cancel also writes the status message (FR-201–205, ADR-026),
+// and accepting an order writes its ticket job (FR-250, ADR-038).
 
 import { AppError, applyTransition, type Fulfillment, type OrderStatus } from "@mt/core";
 import type { Tx } from "@mt/db";
 import { cancelOrderActionSchema, changeOrderStatusActionSchema } from "@mt/schemas";
 
 import { defineService } from "../../service";
+import { acceptsOrder, enqueueOrderTicket } from "../printing/enqueue";
 import { emitEvent } from "../webhooks/emit";
 import { enqueueOrderStatusMessage } from "../whatsapp/automatic";
 
@@ -93,6 +95,8 @@ export async function changeOrderStatusInTx(
     },
     { now },
   );
+  // FR-250, ADR-038: the kitchen ticket when the order leaves aguardando, once per order.
+  if (acceptsOrder(order.status, to)) await enqueueOrderTicket(tx, ctx.restaurantId, order.id);
   // FR-201–205, ADR-026: the customer's status message, in this transaction, for every actor.
   if (opts.notifyCustomer !== false) {
     await enqueueOrderStatusMessage(tx, ctx.restaurantId, {

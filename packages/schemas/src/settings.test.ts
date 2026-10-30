@@ -39,13 +39,16 @@ describe("saveOrderPreferencesSchema (FR-081, FR-082, FR-096, FR-240)", () => {
     deliveryFeeCents: 600,
     deliveryEstimateMinutes: 45,
   };
-  test("accepts valid preferences with the default timezone and menu auto-confirm off", () => {
+  test("accepts valid preferences with the default timezone, menu auto-confirm off, and printing off", () => {
     expect(saveOrderPreferencesSchema.parse(prefs)).toEqual({
       ...prefs,
       timezone: "America/Sao_Paulo",
       autoConfirmMenuOrders: false,
+      autoPrintOrders: false,
     });
     expect(saveOrderPreferencesSchema.parse({ ...prefs, autoConfirmMenuOrders: true }).autoConfirmMenuOrders).toBe(true);
+    // covers FR-250
+    expect(saveOrderPreferencesSchema.parse({ ...prefs, autoPrintOrders: true }).autoPrintOrders).toBe(true);
   });
   test("fee is non-negative integer cents; estimate is 5..240 minutes", () => {
     expect(saveOrderPreferencesSchema.safeParse({ ...prefs, deliveryFeeCents: -1 }).success).toBe(false);

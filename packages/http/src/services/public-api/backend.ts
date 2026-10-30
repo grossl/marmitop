@@ -3,12 +3,14 @@
 // api tests use a memory backend.
 
 import type {
+  claimPrintJobsBodySchema,
   createCustomerBodySchema,
   createOrderBodySchema,
   listCustomersQuerySchema,
   listMenuQuerySchema,
   listOrdersQuerySchema,
   patchOrderBodySchema,
+  printJobResultBodySchema,
   sendMessageBodySchema,
   updateCustomerBodySchema,
 } from "@mt/schemas";
@@ -16,6 +18,7 @@ import type { z } from "zod";
 
 import type { ApiKeyContext } from "../../context";
 import type { ServiceDeps } from "../../deps";
+import { type ApiPrintJob, apiClaimPrintJobs, apiReportPrintJobResult } from "../printing/print-jobs";
 import { type ApiKeyDirectory, createDbApiKeyDirectory } from "./api-keys";
 import { apiCreateCustomer, apiGetCustomer, apiListCustomers, apiUpdateCustomer } from "./customers";
 import type { Page } from "./cursor";
@@ -37,6 +40,12 @@ export interface PublicApiOps {
   updateCustomer(ctx: ApiKeyContext, id: string, body: z.input<typeof updateCustomerBodySchema>): Promise<ApiCustomer>;
   listMenu(ctx: ApiKeyContext, query: z.input<typeof listMenuQuerySchema>): Promise<Page<ApiMenuItem>>;
   sendMessage(ctx: ApiKeyContext, body: z.input<typeof sendMessageBodySchema>): Promise<ApiMessage>;
+  claimPrintJobs(ctx: ApiKeyContext, body: z.input<typeof claimPrintJobsBodySchema>): Promise<{ data: ApiPrintJob[] }>;
+  reportPrintJobResult(
+    ctx: ApiKeyContext,
+    id: string,
+    body: z.input<typeof printJobResultBodySchema>,
+  ): Promise<ApiPrintJob>;
 }
 
 export interface PublicApiBackend {
@@ -58,6 +67,8 @@ export function createPublicApiOps(deps: ServiceDeps): PublicApiOps {
     updateCustomer: (ctx, id, body) => apiUpdateCustomer(deps, ctx, { ...body, id }),
     listMenu: (ctx, query) => apiListMenu(deps, ctx, query),
     sendMessage: (ctx, body) => apiSendMessage(deps, ctx, body),
+    claimPrintJobs: (ctx, body) => apiClaimPrintJobs(deps, ctx, body),
+    reportPrintJobResult: (ctx, id, body) => apiReportPrintJobResult(deps, ctx, { ...body, id }),
   };
 }
 

@@ -134,6 +134,8 @@ export interface RestaurantFixture {
   aiCartId: string;
   /** A converted draft: `order_id` is the fixture order. */
   menuOrderDraftId: string;
+  /** A printed `order_ticket` job for the fixture order. */
+  printJobId: string;
   adminCtx: RestaurantContext;
   attendantCtx: RestaurantContext;
   apiKeyCtx: RestaurantContext;
@@ -365,6 +367,13 @@ export async function seedRestaurant(db: Db, label: string): Promise<RestaurantF
         returning id`,
       "menu_order_drafts",
     );
+    const printJob = await one(
+      tx<{ id: string }[]>`
+        insert into public.print_jobs (restaurant_id, order_id, status, attempts, printed_at)
+        values (${rid}, ${order.id}, 'printed', 1, now())
+        returning id`,
+      "print_jobs",
+    );
 
     return {
       restaurantId: rid,
@@ -399,6 +408,7 @@ export async function seedRestaurant(db: Db, label: string): Promise<RestaurantF
       aiRunId: aiRun.id,
       aiCartId: aiCart.id,
       menuOrderDraftId: draft.id,
+      printJobId: printJob.id,
       adminCtx: { restaurantId: rid, actorType: "user", userId: adminId },
       attendantCtx: { restaurantId: rid, actorType: "user", userId: attendantId },
       apiKeyCtx: { restaurantId: rid, actorType: "api_key", apiKeyId: apiKey.id },

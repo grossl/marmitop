@@ -11,6 +11,7 @@ import { menuRoutes } from "./menu";
 import { messageRoutes } from "./messages";
 import { apiKeyAuth, idempotency, type PublicEnv, rateLimit } from "./middleware";
 import { orderRoutes } from "./orders";
+import { printJobRoutes } from "./print-jobs";
 
 function group(deps: ApiDeps, backend: PublicApiBackend): Hono<PublicEnv> {
   return new Hono<PublicEnv>()
@@ -24,4 +25,5 @@ export function registerPublicRoutes(app: Hono, deps: ApiDeps, backend: PublicAp
   app.route("/v1/customers", customerRoutes(group(deps, backend), deps, backend));
   app.route("/v1/menu", menuRoutes(group(deps, backend), deps, backend));
   app.route("/v1/messages", messageRoutes(group(deps, backend), deps, backend));
+  app.route("/v1/print-jobs", printJobRoutes(group(deps, backend), deps, backend));
 }

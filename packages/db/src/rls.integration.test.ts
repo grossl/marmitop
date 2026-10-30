@@ -481,6 +481,20 @@ const SPECS: TableSpec[] = [
       values (${f.restaurantId}, translate(upper(substr(md5(random()::text), 1, 8)), '01', '23'), '{}'::jsonb)`,
   },
   {
+    table: "print_jobs",
+    tenantColumn: "restaurant_id",
+    pkColumn: "id",
+    pk: (f) => f.printJobId,
+    select: "member",
+    insert: "attendant",
+    update: "attendant",
+    delete: null,
+    updateSet: "attempts = attempts + 1",
+    // The fixture order already has its job: an allowed insert passes RLS, then hits the unique key.
+    insertRow: (tx, f) => tx`
+      insert into public.print_jobs (restaurant_id, order_id) values (${f.restaurantId}, ${f.orderId})`,
+  },
+  {
     table: "usage_events",
     tenantColumn: "restaurant_id",
     pkColumn: "id",

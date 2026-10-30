@@ -12,6 +12,7 @@ export * from "./invoices";
 export * from "./menu";
 export * from "./messages";
 export * from "./orders";
+export * from "./printing";
 export * from "./queues";
 export * from "./reports";
 export * from "./settings";

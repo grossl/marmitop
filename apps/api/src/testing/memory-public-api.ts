@@ -11,6 +11,7 @@ import {
   type ApiMenuItem,
   type ApiMessage,
   type ApiOrder,
+  type ApiPrintJob,
   decodeKeysetCursor,
   type IdempotencyRow,
   isStaleClaim,
@@ -45,6 +46,7 @@ export class MemoryPublicApi {
   readonly orders: Row<ApiOrder>[] = [];
   readonly customers: Row<ApiCustomer>[] = [];
   readonly menu: Row<ApiMenuItem>[] = [];
+  readonly printJobs: Row<ApiPrintJob>[] = [];
   /** Customer ids whose 24-hour window is open. */
   readonly windowOpen = new Set<string>();
   private readonly keys = new Map<string, ApiKeyRecord>();
@@ -314,6 +316,21 @@ export class MemoryPublicApi {
             created_at: self.tick().toISOString(),
           };
           return message;
+        },
+        async claimPrintJobs(ctx, body) {
+          self.calls.push("claimPrintJobs");
+          const picked = self.printJobs
+            .filter((j) => j.restaurantId === ctx.restaurantId && j.value.status === "pending")
+            .slice(0, body.limit ?? 5);
+          for (const j of picked) j.value = { ...j.value, status: "printing", attempts: j.value.attempts + 1 };
+          return { data: picked.map((j) => j.value) };
+        },
+        async reportPrintJobResult(ctx, id, body) {
+          self.calls.push("reportPrintJobResult");
+          const row = self.find(self.printJobs, ctx, id, "Print job");
+          if (row.value.status !== "printing") throw new AppError("conflict", "The print job is not being printed.");
+          row.value = { ...row.value, status: body.printed ? "printed" : "pending", last_error: body.error ?? null };
+          return row.value;
         },
       },
     };

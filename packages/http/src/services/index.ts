@@ -10,6 +10,7 @@ export * from "./finance";
 export * from "./invoices";
 export * from "./messaging";
 export * from "./orders";
+export * from "./printing";
 export * from "./public-api";
 export * from "./restaurant-profile";
 export * from "./webhooks";
