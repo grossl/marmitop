@@ -1,5 +1,8 @@
 // The agent's environment (apps/print-agent/.env.example; 11.operations.md "Order ticket printer").
 
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 import { TICKET_COLUMNS } from "@mt/core";
 
 export interface AgentConfig {
@@ -9,6 +12,8 @@ export interface AgentConfig {
   readonly pollMs: number;
   readonly columns: number;
   readonly logLevel: string;
+  /** The printed-jobs record (FR-254). */
+  readonly statePath: string;
 }
 
 function intOr(value: string | undefined, fallback: number, min: number): number {
@@ -27,5 +32,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     pollMs: intOr(env.MT_PRINT_POLL_MS, 3000, 500),
     columns: intOr(env.MT_PRINT_COLUMNS, TICKET_COLUMNS, 24),
     logLevel: env.MT_LOG_LEVEL ?? "info",
+    statePath: env.MT_PRINT_STATE?.trim() || join(homedir(), ".marmitop", "printed-jobs.json"),
   };
 }

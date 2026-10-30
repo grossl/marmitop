@@ -1,17 +1,20 @@
 // apps/print-agent: prints order tickets on the restaurant's local printer (FR-254, ADR-038).
 // Runs on the counter computer. Polls the API every MT_PRINT_POLL_MS; stops on SIGINT or SIGTERM.
 
-import { runOnce } from "./agent";
+import { CLAIM_LIMIT, runOnce } from "./agent";
 import { loadConfig } from "./config";
 import { CupsPrinter } from "./cups-printer";
 import { HttpPrintJobApi } from "./http-api";
 import { createLogger } from "./logger";
+import { FilePrintedRecord } from "./printed-file";
 
 const config = loadConfig();
 const log = createLogger(config.logLevel);
 const deps = {
   api: new HttpPrintJobApi(config.apiUrl, config.apiKey),
   printer: new CupsPrinter(config.printer),
+  printed: new FilePrintedRecord(config.statePath),
+  state: { claimFailing: false },
   log,
   columns: config.columns,
 };
@@ -27,6 +30,6 @@ log.info("print agent started", { api_url: config.apiUrl, printer: config.printe
 while (!stopping) {
   const handled = await runOnce(deps);
   // A full claim may leave more waiting: poll again at once.
-  if (handled < 5) await Bun.sleep(config.pollMs);
+  if (handled < CLAIM_LIMIT) await Bun.sleep(config.pollMs);
 }
 log.info("print agent stopped");

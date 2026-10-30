@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Starts the print agent at login and restarts it if it stops (ADR-038,
+  11.operations.md "Order ticket printer"). `bun run launchd:install` fills in
+  the paths and loads it. The agent reads apps/print-agent/.env.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.marmitop.print-agent</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__BUN__</string>
+    <string>src/index.ts</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__AGENT_DIR__</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>StandardOutPath</key>
+  <string>__LOG_DIR__/print-agent.log</string>
+  <key>StandardErrorPath</key>
+  <string>__LOG_DIR__/print-agent.log</string>
+</dict>
+</plist>

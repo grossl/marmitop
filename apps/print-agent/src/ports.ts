@@ -49,6 +49,12 @@ export interface TicketPrinter {
   print(bytes: Uint8Array): Promise<void>;
 }
 
+/** The job ids this computer already printed, so a job that comes back is not printed twice (FR-254). */
+export interface PrintedRecord {
+  has(id: string): boolean;
+  add(id: string): void;
+}
+
 export interface Logger {
   info(message: string, fields?: Record<string, unknown>): void;
   warn(message: string, fields?: Record<string, unknown>): void;

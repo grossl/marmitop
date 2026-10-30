@@ -6,6 +6,8 @@
   "scripts": {
     "start": "bun src/index.ts",
     "test-print": "bun src/test-print.ts",
+    "launchd:install": "bun src/launchd.ts install",
+    "launchd:uninstall": "bun src/launchd.ts uninstall",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
