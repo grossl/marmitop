@@ -1,7 +1,8 @@
 // Turn decisions for the AI assistant (12.ai-order-assistant.md "Trigger", "Quota check",
 // "Guards in the worker", "place_order guard"). Pure: callers load the facts.
 
-export const AI_TURN_DELAY_SECONDS = 8;
+// ADR-040: long enough for a burst of short messages, short enough for a fast reply.
+export const AI_TURN_DELAY_SECONDS = 3;
 export const AI_TURN_STALE_MS = 120_000;
 /**
  * Wall-clock budget for one turn (every model call, retries included). It must stay below
