@@ -10,11 +10,16 @@ export interface HistoryRow {
   /** True when a dashboard user sent it (`messages.sent_by` is not null). */
   readonly sentByUser: boolean;
   readonly aiRunId: string | null;
+  /** FR-218: the AI reply of a run that called handoff_to_human. */
+  readonly handedOff?: boolean;
 }
+
+/** FR-218, ADR-039: a later turn runs only after a person gave the chat back, so the marker is true. */
+export const HANDBACK_MARKER = "[sistema] Um atendente assumiu a conversa aqui e depois a devolveu ao assistente.";
 
 function textOf(r: HistoryRow): string {
   if (r.direction === "in") return r.body;
-  if (r.aiRunId !== null) return r.body;
+  if (r.aiRunId !== null) return r.handedOff === true ? `${r.body}\n${HANDBACK_MARKER}` : r.body;
   if (r.automaticKind !== null) return `[mensagem automática] ${r.body}`;
   return `[atendente] ${r.body}`;
 }

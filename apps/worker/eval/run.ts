@@ -127,6 +127,16 @@ async function runCase(
       insert into public.messages (restaurant_id, conversation_id, direction, body, status)
       values (${r.restaurantId}, ${r.conversationId}, 'in', ${text}, 'delivered') returning id`;
     await db`update public.conversations set last_inbound_at = now() where id = ${r.conversationId}`;
+    if (c.resumeAt !== undefined) {
+      const [mode] = await db<
+        { ai_mode: string }[]
+      >`select ai_mode from public.conversations where id = ${r.conversationId}`;
+      // FR-218: a person has the chat; the message arrives with no AI turn until Retomar.
+      if (mode?.ai_mode === "paused" && turn < c.resumeAt) continue;
+      if (turn === c.resumeAt)
+        await db`update public.conversations set ai_mode = 'auto', ai_paused_at = null, ai_pause_reason = null, ai_pause_note = null
+                 where id = ${r.conversationId}`;
+    }
     await runAiTurn(
       deps,
       model,
@@ -151,7 +161,7 @@ async function runCase(
       early = true;
       break;
     }
-    if (conv?.ai_mode === "paused") break;
+    if (conv?.ai_mode === "paused" && (c.resumeAt === undefined || turn >= c.resumeAt)) break;
   }
 
   const failures: string[] = [];

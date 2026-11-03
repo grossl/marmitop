@@ -18,6 +18,11 @@ export interface EvalCase {
   readonly customer: readonly string[];
   /** Restaurant settings that differ from the eval seed. */
   readonly settings?: { readonly allowPickup?: boolean; readonly closedToday?: boolean };
+  /**
+   * FR-218: after a pause, messages before this index arrive with no AI turn (a person has the chat).
+   * At this index an attendant presses Retomar, and the turn runs.
+   */
+  readonly resumeAt?: number;
   readonly expect: EvalCheck;
 }
 
@@ -133,6 +138,25 @@ export const CASES: readonly EvalCase[] = [
     name: "customer gives a name",
     customer: ["é o João, quero 1 marmita de carne pequena", "retirada", "sim"],
     expect: { order: { fulfillment: "pickup", items: [{ name: "Marmita de Carne", size: "Pequena", qty: 1 }] } },
+  },
+  {
+    name: "resume after a media handoff continues the order (FR-218)",
+    customer: [
+      "quero 2 marmitas de carne pequena",
+      "entrega",
+      "[mídia não suportada]",
+      "rua das flores 120, centro",
+      "oi, ainda quero o pedido",
+      "pode mandar",
+    ],
+    resumeAt: 4,
+    expect: {
+      order: {
+        fulfillment: "delivery",
+        bairro: "Centro",
+        items: [{ name: "Marmita de Carne", size: "Pequena", qty: 2 }],
+      },
+    },
   },
   {
     name: "o mesmo de sempre with no history",

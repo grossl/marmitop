@@ -1,6 +1,6 @@
-// covers FR-182, FR-183, FR-186, FR-187, FR-191, FR-192, FR-196, FR-198, FR-210, FR-211, FR-212, FR-213, FR-215, FR-241
+// covers FR-182, FR-183, FR-186, FR-187, FR-191, FR-192, FR-196, FR-198, FR-210, FR-211, FR-212, FR-213, FR-215, FR-218, FR-241
 import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { AssistantModelError, type AssistantRequest, ScriptedAssistantModel } from "@mt/core";
+import { AssistantModelError, type AssistantRequest, HANDBACK_MARKER, ScriptedAssistantModel } from "@mt/core";
 import type { Db } from "@mt/db";
 import { createTestDb, type RestaurantFixture, seedRestaurant, truncateQueues } from "@mt/db/test-harness";
 import type { AiTurnJob } from "@mt/schemas";
@@ -32,7 +32,14 @@ const job = (triggerMessageId: string, enqueuedAt = new Date(t)): AiTurnJob => (
 });
 const lastRun = async () =>
   (
-    await db<{ status: string; model_calls: number; billed_as: string | null; tool_calls: { name: string }[] }[]>`
+    await db<
+      {
+        status: string;
+        model_calls: number;
+        billed_as: string | null;
+        tool_calls: { name: string; ok: boolean; error_code: string | null }[];
+      }[]
+    >`
     select status, model_calls, billed_as, tool_calls from public.ai_runs where restaurant_id = ${a.restaurantId}
     order by started_at desc limit 1`
   )[0];
@@ -480,6 +487,28 @@ describe("runAiTurn", () => {
     const [c] = await db<{ ai_mode: string; ai_pause_reason: string; ai_pause_note: string | null }[]>`
       select ai_mode, ai_pause_reason, ai_pause_note from public.conversations where id = ${a.conversationId}`;
     expect(c).toEqual({ ai_mode: "paused", ai_pause_reason: "customer_request", ai_pause_note: "pediu atendente" });
+  });
+
+  test("after a handback the history marks the handoff reply; tool_calls is an array (FR-218)", async () => {
+    const m = await inbound("[mídia não suportada]");
+    const model = new ScriptedAssistantModel([
+      { tools: [{ name: "handoff_to_human", input: { reason: "unsupported_media", note: "áudio" } }] },
+      { text: "Um atendente vai continuar." },
+    ]);
+    await runAiTurn(deps, model, job(m));
+    expect((await lastRun())?.tool_calls).toEqual([{ name: "handoff_to_human", ok: true, error_code: null }]);
+    // Retomar.
+    await db`update public.conversations set ai_mode = 'auto', ai_pause_reason = null, ai_pause_note = null where id = ${a.conversationId}`;
+    const next = await inbound("Rua A, 39");
+    model.push({ text: "Anotado!" });
+    await runAiTurn(deps, model, job(next));
+    const history = JSON.stringify(model.requests.at(-1)?.messages);
+    expect(history).toContain(`Um atendente vai continuar.\\n${HANDBACK_MARKER}`);
+    // One marker per handoff reply in the window, none on other replies.
+    const [h] = await db<{ n: number }[]>`
+      select count(*)::int as n from public.messages m join public.ai_runs r on r.id = m.ai_run_id
+      where m.conversation_id = ${a.conversationId} and r.tool_calls @> '[{"name":"handoff_to_human","ok":true}]'`;
+    expect(history.split(HANDBACK_MARKER).length - 1).toBe(h!.n);
   });
 
   test("an attendant pause during the loop survives a refusal", async () => {

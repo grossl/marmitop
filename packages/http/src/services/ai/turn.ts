@@ -140,13 +140,19 @@ async function start(deps: ServiceDeps, job: AiTurnJob): Promise<Started | AiTur
         automatic_kind: string | null;
         sent_by: string | null;
         ai_run_id: string | null;
+        handed_off: boolean;
       }[]
     >`
-      select * from (
+      select recent.*,
+        -- FR-218: the reply of a run that handed off gets the hand-back marker.
+        coalesce(r.tool_calls @> '[{"name":"handoff_to_human","ok":true}]'::jsonb, false) as handed_off
+      from (
         select direction, body, automatic_kind, sent_by, ai_run_id, created_at, id from public.messages
         where restaurant_id = ${job.restaurantId} and conversation_id = ${job.conversationId}
         order by created_at desc, id desc limit ${AI_HISTORY_WINDOW}
-      ) recent order by created_at asc, id asc
+      ) recent
+      left join public.ai_runs r on r.id = recent.ai_run_id and r.restaurant_id = ${job.restaurantId}
+      order by recent.created_at asc, recent.id asc
     `;
     // The request must end with the customer (no prefill): our messages after the customer's last
     // one (for example the automatic welcome) move into the turn context instead.
@@ -158,6 +164,7 @@ async function start(deps: ServiceDeps, job: AiTurnJob): Promise<Started | AiTur
           automaticKind: r.automatic_kind,
           sentByUser: r.sent_by !== null,
           aiRunId: r.ai_run_id,
+          handedOff: r.handed_off,
         })),
       ),
     );
@@ -280,7 +287,7 @@ async function finish(
     await t`
       update public.ai_runs set status = ${status}, model = ${tally.model}, model_calls = ${tally.modelCalls},
         input_tokens = ${tally.input}, cache_read_tokens = ${tally.cacheRead}, cache_write_tokens = ${tally.cacheWrite},
-        output_tokens = ${tally.output}, tool_calls = ${JSON.stringify(tally.tools)}::jsonb,
+        output_tokens = ${tally.output}, tool_calls = ${JSON.stringify(tally.tools)}::text::jsonb,
         stop_reason = ${tally.stopReason}, error_code = ${result.errorCode}, finished_at = ${now}
       where id = ${runId} and restaurant_id = ${job.restaurantId}
     `;

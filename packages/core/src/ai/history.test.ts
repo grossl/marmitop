@@ -1,7 +1,7 @@
-// covers FR-192, FR-198
+// covers FR-192, FR-198, FR-218
 import { describe, expect, test } from "bun:test";
 
-import { type HistoryRow, historyToMessages, splitTrailingAssistant } from "./history";
+import { HANDBACK_MARKER, type HistoryRow, historyToMessages, splitTrailingAssistant } from "./history";
 
 const row = (p: Partial<HistoryRow>): HistoryRow => ({
   direction: "in",
@@ -13,6 +13,20 @@ const row = (p: Partial<HistoryRow>): HistoryRow => ({
 });
 
 describe("historyToMessages", () => {
+  test("a hand-off reply carries the hand-back marker; other replies do not (FR-218)", () => {
+    const text = (m: ReturnType<typeof historyToMessages>[number]) =>
+      m.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+    const out = historyToMessages([
+      row({ body: "Entrega" }),
+      row({ direction: "out", body: "Qual é o nome da rua?", aiRunId: "r1" }),
+      row({ body: "[mídia não suportada]" }),
+      row({ direction: "out", body: "Um atendente vai continuar.", aiRunId: "r2", handedOff: true }),
+      row({ body: "Rua A, 39" }),
+    ]);
+    expect(text(out[1]!)).not.toContain(HANDBACK_MARKER);
+    expect(text(out[3]!)).toBe(`Um atendente vai continuar.\n${HANDBACK_MARKER}`);
+  });
+
   test("inbound is user, AI outbound is assistant, same roles merge", () => {
     const out = historyToMessages([
       row({ body: "quero 2 marmitas" }),
