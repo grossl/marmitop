@@ -367,7 +367,11 @@ export function ManualOrderPage({
           ) : customerData ? (
             <div className="mb-5 flex items-center gap-3 rounded-lg border border-primary/40 bg-primary/5 p-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
-                {customerData.name.trim().charAt(0).toUpperCase()}
+                {/^\p{L}/u.test(customerData.name.trim()) ? (
+                  customerData.name.trim().charAt(0).toUpperCase()
+                ) : (
+                  <UserRound className="h-4 w-4" />
+                )}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">{customerData.name}</p>
@@ -443,22 +447,25 @@ export function ManualOrderPage({
             </div>
           )}
 
-          <div className="mb-4 grid grid-cols-2 gap-2">
-            {(["delivery", "pickup"] as const).map((f) => (
-              <button
-                key={f}
-                type="button"
-                disabled={f === "pickup" && !form.allowPickup}
-                onClick={() => setFulfillment(f)}
-                className={cn(
-                  "rounded-md border px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40",
-                  fulfillment === f ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"
-                )}
-              >
-                {f === "delivery" ? "Entrega" : "Retirada"}
-              </button>
-            ))}
-          </div>
+          {/* Delivery vs pickup only matters once we know who the order is for. */}
+          {customerId && (
+            <div className="mb-4 grid grid-cols-2 gap-2">
+              {(["delivery", "pickup"] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  disabled={f === "pickup" && !form.allowPickup}
+                  onClick={() => setFulfillment(f)}
+                  className={cn(
+                    "rounded-md border px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40",
+                    fulfillment === f ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"
+                  )}
+                >
+                  {f === "delivery" ? "Entrega" : "Retirada"}
+                </button>
+              ))}
+            </div>
+          )}
 
           {fulfillment === "delivery" && customerId && (
             <div className="mb-4 grid grid-cols-6 gap-2 rounded-lg bg-muted/50 p-3">
@@ -470,9 +477,6 @@ export function ManualOrderPage({
               {field("uf", "UF", "col-span-1")}
               {field("cep", "CEP", "col-span-2")}
             </div>
-          )}
-          {fulfillment === "delivery" && !customerId && customerData === undefined && (
-            <p className="mb-4 text-xs text-muted-foreground">Escolha o cliente para preencher o endereço.</p>
           )}
 
           <div className="border-y py-4">
