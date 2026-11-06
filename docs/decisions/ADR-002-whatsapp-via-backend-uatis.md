@@ -61,3 +61,10 @@ Option 3.
 ## Amendment 3 — 2026-10-14 (backend-uatis delivers webhooks)
 
 * backend-uatis commit `c887ef0` (its ADR-009) delivers customer webhooks. [ADR-021](ADR-021-uatis-webhook-registration.md) registers them from Settings, and [ADR-023](ADR-023-uatis-event-feed-push-and-pull.md) adds the event feed: a `push` webhook when `MT_PUBLIC_URL` is public, a `pull` webhook read every 3 seconds otherwise. A restaurant with a registered webhook reads the feed instead of the timestamp poll. The timestamp poll from Amendment 1 stays for restaurants without a webhook and as the fallback when the feed answers 404.
+
+## Amendment 4 — 2026-11-06 (backend-uatis documents shared locations)
+
+* backend-uatis commit `823eac5` documents the location content (its 06.api-spec.md "Location messages"): `content: { version: "1", type: "data", kind: "location", data: { latitude, longitude, name?, address?, url? } }`. Webhook events and `GET /v1/messages` carry the same content.
+* `latitude` and `longitude` are always present. `name` and `address` are present only when the customer picks a place on the map. A "current location" share has coordinates only.
+* Marmitop stores a location as text, so the dashboard, the AI history, and the attendant read it without a new column. The body is two lines: `📍 <name> - <address>` (the parts that are present, or `📍 Localização` when neither is), then `https://www.google.com/maps?q=<latitude>,<longitude>`.
+* A location without finite coordinates, and WhatsApp live location (`kind: "unsupported"`), stay `[mídia não suportada]`.

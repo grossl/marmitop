@@ -16,7 +16,7 @@ export interface GatewayMessage {
   readonly conversationExternalId: string | null;
   readonly direction: MessageDirection;
   readonly body: string;
-  readonly contentType: "text" | "unsupported";
+  readonly contentType: "text" | "location" | "unsupported";
   /** Null when backend-uatis sent a state Marmitop does not know. Callers leave the stored status alone. */
   readonly status: MessageStatus | null;
   /** E.164 when it can be normalized; the raw value otherwise; null when absent. */
@@ -96,7 +96,8 @@ function mapFailure(status: unknown): MessageFailure | null {
   if (mapStatus(status) !== "failed" || !isRecord(status)) return null;
   const first = Array.isArray(status.errors) ? status.errors[0] : undefined;
   const error = isRecord(first) ? first : {};
-  const code = typeof error.code === "number" && Number.isInteger(error.code) ? `whatsapp_${error.code}` : "whatsapp_failed";
+  const code =
+    typeof error.code === "number" && Number.isInteger(error.code) ? `whatsapp_${error.code}` : "whatsapp_failed";
   const text = str(error.title) ?? str(error.message);
   return { code, message: text === null ? null : text.slice(0, ERROR_MESSAGE_MAX) };
 }
@@ -117,6 +118,28 @@ function textOf(content: unknown): string | null {
   return body.length > MESSAGE_BODY_MAX ? body.slice(0, MESSAGE_BODY_MAX) : body;
 }
 
+function finite(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+/**
+ * The text of a `type: "data"`, `kind: "location"` envelope (ADR-002 Amendment 4): the place
+ * name and address that are present, then a Google Maps link. Null without finite coordinates.
+ */
+function locationOf(content: unknown): string | null {
+  if (!isRecord(content) || content.type !== "data" || content.kind !== "location" || !isRecord(content.data)) {
+    return null;
+  }
+  const data = content.data;
+  const latitude = finite(data.latitude);
+  const longitude = finite(data.longitude);
+  if (latitude === null || longitude === null) return null;
+  const parts = [str(data.name), str(data.address)].filter((p): p is string => p !== null && p.trim() !== "");
+  const label = parts.length > 0 ? parts.join(" - ") : "Localização";
+  const body = `📍 ${label}\nhttps://www.google.com/maps?q=${String(latitude)},${String(longitude)}`;
+  return body.length > MESSAGE_BODY_MAX ? body.slice(0, MESSAGE_BODY_MAX) : body;
+}
+
 /** Map one backend-uatis message (webhook `data.message` or a poll item). */
 export function mapUatisMessage(raw: unknown): GatewayMessage {
   if (!isRecord(raw)) throw invalid("message", "Expected an object.");
@@ -125,13 +148,14 @@ export function mapUatisMessage(raw: unknown): GatewayMessage {
   const direction = raw.direction;
   if (direction !== "in" && direction !== "out") throw invalid("message.direction", 'Expected "in" or "out".');
   const textBody = textOf(raw.content);
+  const locationBody = textBody === null ? locationOf(raw.content) : null;
   const address = str(raw.contact_address);
   return {
     externalId,
     conversationExternalId: str(raw.conversation_id),
     direction,
-    body: textBody ?? UNSUPPORTED_MEDIA_BODY,
-    contentType: textBody === null ? "unsupported" : "text",
+    body: textBody ?? locationBody ?? UNSUPPORTED_MEDIA_BODY,
+    contentType: textBody !== null ? "text" : locationBody !== null ? "location" : "unsupported",
     status: mapStatus(raw.status),
     contactAddress: address ? (normalizePhoneE164(address) ?? address) : null,
     createdAt: date(raw.created_at, "message.created_at"),
@@ -155,7 +179,8 @@ export function parseUatisWebhookEvent(body: unknown): UatisWebhookEvent {
   if (!type) throw invalid("type", "Missing event type.");
   const organizationId = str(body.organization_id);
   if (type === "conversation.updated") return { type: "conversation.updated", organizationId };
-  if (type !== "message.created" && type !== "message.updated") return { type: "ignored", eventType: type, organizationId };
+  if (type !== "message.created" && type !== "message.updated")
+    return { type: "ignored", eventType: type, organizationId };
   const data = body.data;
   if (!isRecord(data) || !isRecord(data.message)) throw invalid("data.message", "Missing message.");
   // Agent tool traffic never reaches a customer (ADR-002 Amendment 2).

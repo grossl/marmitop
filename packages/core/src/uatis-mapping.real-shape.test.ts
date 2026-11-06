@@ -1,4 +1,4 @@
-// covers FR-104, FR-105, FR-107, ADR-002 Amendment 2 (the real backend-uatis content shape)
+// covers FR-104, FR-105, FR-107, ADR-002 Amendment 2 and 4 (the real backend-uatis content shape)
 import { describe, expect, test } from "bun:test";
 import { mapUatisMessage, parseUatisWebhookEvent, tryMapUatisMessage, UNSUPPORTED_MEDIA_BODY } from "./uatis-mapping";
 
@@ -34,6 +34,51 @@ describe("mapUatisMessage with the stored backend-uatis shape", () => {
     });
     expect(m.body).toBe(UNSUPPORTED_MEDIA_BODY);
     expect(m.contentType).toBe("unsupported");
+  });
+
+  test("a location picked on the map keeps its name, address, and a Maps link", () => {
+    const m = mapUatisMessage({
+      ...realRow,
+      content: {
+        version: "1",
+        type: "data",
+        kind: "location",
+        data: {
+          latitude: -23.5505,
+          longitude: -46.6333,
+          name: "Av. Paulista",
+          address: "Av. Paulista, 1000 - São Paulo",
+          url: "https://example.com",
+        },
+      },
+    });
+    expect(m.body).toBe(
+      "📍 Av. Paulista - Av. Paulista, 1000 - São Paulo\nhttps://www.google.com/maps?q=-23.5505,-46.6333",
+    );
+    expect(m.contentType).toBe("location");
+  });
+
+  test("a current-position share has coordinates only", () => {
+    const m = mapUatisMessage({
+      ...realRow,
+      content: { version: "1", type: "data", kind: "location", data: { latitude: -23.5, longitude: -46.6 } },
+    });
+    expect(m.body).toBe("📍 Localização\nhttps://www.google.com/maps?q=-23.5,-46.6");
+    expect(m.contentType).toBe("location");
+  });
+
+  test("a location without finite coordinates and live location stay unsupported media", () => {
+    for (const content of [
+      { version: "1", type: "data", kind: "location", data: { latitude: "x", longitude: -46.6 } },
+      { version: "1", type: "data", kind: "location", data: { latitude: Number.NaN, longitude: -46.6 } },
+      { version: "1", type: "data", kind: "location" },
+      { version: "1", type: "data", kind: "unsupported" },
+      { version: "1", type: "data", kind: "order", data: { latitude: 1, longitude: 2 } },
+    ]) {
+      const m = mapUatisMessage({ ...realRow, content });
+      expect(m.body).toBe(UNSUPPORTED_MEDIA_BODY);
+      expect(m.contentType).toBe("unsupported");
+    }
   });
 
   test("an empty text body is unsupported (messages.body needs 1-4096 characters)", () => {
