@@ -3,11 +3,10 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Minus, Plus, ShoppingCart, Trash2, UserPlus, UserRound } from "lucide-react";
+import { Check, Minus, Plus, Search, ShoppingCart, Trash2, UserPlus, UserRound } from "lucide-react";
 import { Button } from "@mt/ui/components/button";
 import { Input } from "@mt/ui/components/input";
 import { Badge } from "@mt/ui/components/badge";
-import { Textarea } from "@mt/ui/components/textarea";
 import { cn } from "@mt/ui/lib/utils";
 import type { FormProduct, OrderFormData, PickerCustomer } from "@mt/http";
 import { PAYMENT_LABELS, formatCents, parseMoneyToCents } from "@/components/orders-format";
@@ -88,8 +87,8 @@ export function ManualOrderPage({
   );
   const [payment, setPayment] = useState<PaymentMethod>("pix");
   const [changeFor, setChangeFor] = useState("");
-  const [notes, setNotes] = useState("");
-  const [source, setSource] = useState<Source>(conversationId ? "whatsapp" : "counter");
+  // No picker: an order opened from a conversation is WhatsApp, anything else is the counter.
+  const source: Source = conversationId ? "whatsapp" : "counter";
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const customerData = customers.find((c) => c.id === customerId);
@@ -114,6 +113,48 @@ export function ManualOrderPage({
     setCustomerId(id);
     setAddress(addressFor(customers.find((c) => c.id === id), form));
     setFieldErrors({});
+    setCustomerQuery("");
+    setPickerOpen(false);
+  }
+
+  const customerInputRef = useRef<HTMLInputElement>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+
+  function clearCustomer() {
+    setCustomerId("");
+    setAddress(addressFor(undefined, form));
+    // Drop the last search's narrowed results so the list opens on the default customers again.
+    setCustomers(initialCustomers);
+    // The input mounts on the next render; focus it so the attendant can type right away.
+    setTimeout(() => customerInputRef.current?.focus(), 0);
+  }
+
+  // Prefill the quick-create form from what was typed: digits are a phone, anything else a name.
+  function startCreateFromQuery() {
+    const term = customerQuery.trim();
+    if (/^[\d\s()+-]+$/.test(term)) setNewPhone(term);
+    else setNewName(term);
+    setPickerOpen(false);
+    setCreating(true);
+  }
+
+  function onPickerKey(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setPickerOpen(true);
+      setHighlight((h) => Math.min(h + 1, customers.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlight((h) => Math.max(h - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const target = customers[highlight];
+      if (target) pickCustomer(target.id);
+      else if (customerQuery.trim()) startCreateFromQuery();
+    } else if (e.key === "Escape") {
+      setPickerOpen(false);
+    }
   }
 
   async function createCustomer() {
@@ -160,6 +201,8 @@ export function ManualOrderPage({
 
   const update = (key: string, patch: Partial<CartLine>) =>
     setCart((items) => items.map((i) => (i.key === key ? { ...i, ...patch } : i)));
+  const remove = (key: string) => setCart((items) => items.filter((i) => i.key !== key));
+  const itemCount = cart.reduce((sum, i) => sum + i.qty, 0);
 
   // Display only: the server recomputes every price and the total (ADR-006).
   const subtotal = cart.reduce((sum, i) => sum + i.unitPriceCents * i.qty, 0);
@@ -185,7 +228,7 @@ export function ManualOrderPage({
         ...(fulfillment === "delivery" ? address : {}),
         paymentMethod: payment,
         changeForCents: changeCents,
-        notes,
+        notes: "",
         source,
         conversationId: conversationId ?? undefined,
       });
@@ -246,7 +289,7 @@ export function ManualOrderPage({
             {products.map((product) => (
               <div
                 key={product.id}
-                className="flex flex-col gap-2 rounded-lg border p-3 text-left transition-colors hover:border-primary hover:bg-primary/5"
+                className="flex flex-col justify-between gap-2 rounded-lg border p-3 text-left"
               >
                 <div>
                   <Badge variant="secondary" className="mb-1 text-[10px]">
@@ -256,12 +299,18 @@ export function ManualOrderPage({
                   {product.volume && <p className="text-xs text-muted-foreground">{product.volume}</p>}
                 </div>
                 {product.sizes.length === 0 ? (
-                  <button
-                    onClick={() => add(product, null)}
-                    className="flex items-center justify-end gap-1 text-sm font-bold text-primary"
-                  >
-                    <Plus className="h-4 w-4" /> {formatCents(product.priceCents)}
-                  </button>
+                  // Only the + button adds; the price is plain text so a stray click on the card does nothing.
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-bold text-primary">{formatCents(product.priceCents)}</span>
+                    <button
+                      type="button"
+                      onClick={() => add(product, null)}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90"
+                      aria-label={`Adicionar ${product.name}`}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {product.sizes.map((size) => (
@@ -315,27 +364,83 @@ export function ManualOrderPage({
                 Criar cliente
               </Button>
             </div>
+          ) : customerData ? (
+            <div className="mb-5 flex items-center gap-3 rounded-lg border border-primary/40 bg-primary/5 p-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                {customerData.name.trim().charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{customerData.name}</p>
+                <p className="truncate text-xs text-muted-foreground">{customerData.phone}</p>
+              </div>
+              <button
+                type="button"
+                onClick={clearCustomer}
+                className="shrink-0 text-xs font-medium text-primary hover:underline"
+              >
+                Trocar
+              </button>
+            </div>
           ) : (
-            <>
+            <div className="relative mb-5">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                ref={customerInputRef}
+                role="combobox"
+                aria-expanded={pickerOpen}
+                aria-controls="customer-options"
                 placeholder="Buscar por nome ou telefone..."
                 value={customerQuery}
-                onChange={(e) => setCustomerQuery(e.target.value)}
-                className="mb-2"
+                onChange={(e) => {
+                  setCustomerQuery(e.target.value);
+                  setHighlight(0);
+                  setPickerOpen(true);
+                }}
+                onFocus={() => setPickerOpen(true)}
+                onBlur={() => setPickerOpen(false)}
+                onKeyDown={onPickerKey}
+                className="pl-9"
               />
-              <select
-                value={customerId}
-                onChange={(e) => pickCustomer(e.target.value)}
-                className={cn(selectClass, "mb-5")}
-              >
-                <option value="">Selecione um cliente</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} — {c.phone}
-                  </option>
-                ))}
-              </select>
-            </>
+              {pickerOpen && (
+                // onMouseDown keeps focus in the input, so blur doesn't close the list before the click lands.
+                <div
+                  id="customer-options"
+                  role="listbox"
+                  onMouseDown={(e) => e.preventDefault()}
+                  className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-auto rounded-lg border bg-popover p-1 shadow-lg"
+                >
+                  {customers.map((c, index) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      role="option"
+                      aria-selected={index === highlight}
+                      onMouseEnter={() => setHighlight(index)}
+                      onClick={() => pickCustomer(c.id)}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm",
+                        index === highlight && "bg-muted"
+                      )}
+                    >
+                      <span className="truncate font-medium">{c.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{c.phone}</span>
+                    </button>
+                  ))}
+                  {customers.length === 0 && (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">Nenhum cliente encontrado.</p>
+                  )}
+                  {customerQuery.trim() && (
+                    <button
+                      type="button"
+                      onClick={startCreateFromQuery}
+                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-primary hover:bg-primary/10"
+                    >
+                      <UserPlus className="h-4 w-4" /> Cadastrar “{customerQuery.trim()}”
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           <div className="mb-4 grid grid-cols-2 gap-2">
@@ -370,54 +475,79 @@ export function ManualOrderPage({
             <p className="mb-4 text-xs text-muted-foreground">Escolha o cliente para preencher o endereço.</p>
           )}
 
-          <div className="space-y-3 border-y py-4">
+          <div className="border-y py-4">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-medium">
+                Itens
+                {itemCount > 0 && (
+                  <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-xs font-semibold text-primary">
+                    {itemCount}
+                  </span>
+                )}
+              </p>
+              {cart.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCart([])}
+                  className="text-xs text-muted-foreground hover:text-destructive"
+                >
+                  Limpar
+                </button>
+              )}
+            </div>
             {cart.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">Nenhum item adicionado</p>
+              <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-6 text-center">
+                <ShoppingCart className="h-5 w-5 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Nenhum item adicionado</p>
+                <p className="text-xs text-muted-foreground">Toque em + nos produtos para adicionar.</p>
+              </div>
             ) : (
-              cart.map((item) => (
-                <div key={item.key} className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">{item.sizeName ?? ""}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => update(item.key, { qty: Math.max(1, item.qty - 1) })}
-                        className="rounded border p-0.5"
-                        aria-label={`Diminuir ${item.name}`}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </button>
-                      <span className="w-5 text-center text-sm">{item.qty}</span>
-                      <button
-                        onClick={() => update(item.key, { qty: Math.min(99, item.qty + 1) })}
-                        className="rounded border p-0.5"
-                        aria-label={`Aumentar ${item.name}`}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </button>
-                      <span className="w-20 text-right text-sm font-semibold">
-                        {formatCents(item.unitPriceCents * item.qty)}
-                      </span>
-                      <button
-                        onClick={() => setCart((all) => all.filter((entry) => entry.key !== item.key))}
-                        className="text-muted-foreground hover:text-destructive"
-                        aria-label={`Remover ${item.name}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                  <Input
-                    placeholder="Observação do item"
-                    value={item.notes}
-                    maxLength={280}
-                    onChange={(e) => update(item.key, { notes: e.target.value })}
-                    className="h-8 text-xs"
-                  />
-                </div>
-              ))
+              <ul className="divide-y">
+                {cart.map((item) => (
+                    <li key={item.key} className="space-y-2 py-3 first:pt-0 last:pb-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{item.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.sizeName ? `${item.sizeName} · ` : ""}
+                            {formatCents(item.unitPriceCents)} cada
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-sm font-semibold">
+                          {formatCents(item.unitPriceCents * item.qty)}
+                        </span>
+                      </div>
+                      <div className="flex items-center">
+                        <div className="flex items-center rounded-full border">
+                          {/* At 1 the minus becomes remove, so there is one control per line instead of two. */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              item.qty === 1 ? remove(item.key) : update(item.key, { qty: item.qty - 1 })
+                            }
+                            className={cn(
+                              "flex h-8 w-8 items-center justify-center rounded-l-full hover:bg-muted",
+                              item.qty === 1 && "text-muted-foreground hover:text-destructive"
+                            )}
+                            aria-label={item.qty === 1 ? `Remover ${item.name}` : `Diminuir ${item.name}`}
+                          >
+                            {item.qty === 1 ? <Trash2 className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
+                          </button>
+                          <span className="w-7 text-center text-sm font-semibold tabular-nums">{item.qty}</span>
+                          <button
+                            type="button"
+                            disabled={item.qty >= 99}
+                            onClick={() => update(item.key, { qty: Math.min(99, item.qty + 1) })}
+                            className="flex h-8 w-8 items-center justify-center rounded-r-full hover:bg-muted disabled:opacity-40"
+                            aria-label={`Aumentar ${item.name}`}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                ))}
+              </ul>
             )}
           </div>
 
@@ -449,18 +579,6 @@ export function ManualOrderPage({
                 )}
               </div>
             )}
-            <label className="block text-sm font-medium">Origem</label>
-            <select value={source} onChange={(e) => setSource(e.target.value as Source)} className={selectClass}>
-              <option value="counter">Balcão</option>
-              <option value="phone">Telefone</option>
-              {conversationId && <option value="whatsapp">WhatsApp</option>}
-            </select>
-            <Textarea
-              placeholder="Observação do pedido"
-              value={notes}
-              maxLength={1000}
-              onChange={(e) => setNotes(e.target.value)}
-            />
           </div>
 
           <dl className="space-y-1 py-4 text-sm">
