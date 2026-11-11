@@ -1,6 +1,6 @@
 # ADR-023 — One backend-uatis event log, read by push or pull
 
-**Status:** accepted · 2026-10-14 · amends ADR-002 and ADR-021
+**Status:** accepted · 2026-10-14 · amends ADR-002 and ADR-021 · pull mode and the event feed superseded by [ADR-042](ADR-042-webhook-only-manual-refresh.md)
 
 ## Question
 

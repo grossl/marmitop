@@ -1,6 +1,6 @@
 # ADR-041 — Production uses push only
 
-**Status:** accepted · 2026-11-11 · amends ADR-021, ADR-023
+**Status:** accepted · 2026-11-11 · amends ADR-021, ADR-023 · the 60-second feed timer and the pull warning are superseded by [ADR-042](ADR-042-webhook-only-manual-refresh.md); the production `MT_PUBLIC_URL` check stays
 
 ## Question
 

@@ -1,6 +1,6 @@
 # ADR-002 — WhatsApp channel through backend-uatis
 
-**Status:** accepted · 2026-10-13
+**Status:** accepted · 2026-10-13 · the 30-second poll of Amendment 1 runs only on "Atualizar" since [ADR-042](ADR-042-webhook-only-manual-refresh.md)
 
 ## Question
 

@@ -1,6 +1,6 @@
 # ADR-034 — Periodic jobs do not back off
 
-**Status:** accepted · 2026-10-28 · amends FR-108, FR-174
+**Status:** accepted · 2026-10-28 · amends FR-108, FR-174 · since [ADR-042](ADR-042-webhook-only-manual-refresh.md) the only such job is the timestamp poll, enqueued by "Atualizar"
 
 ## Question
 
