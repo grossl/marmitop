@@ -235,6 +235,29 @@ export const CASES: readonly EvalCase[] = [
     expect: { order: null, pausedFor: "unclear" },
   },
   {
+    name: "asks what there is: meals only, no drinks (FR-219)",
+    customer: ["o que tem hoje?"],
+    expect: { order: null, neverSays: ["Coca"] },
+  },
+  {
+    name: "wants to order with no item: a question, not the menu (FR-219)",
+    customer: ["oi, quero fazer um pedido"],
+    expect: { order: null, neverSays: ["R$"] },
+  },
+  {
+    name: "suggestion, then a drink after the drink question (FR-219)",
+    customer: ["me indica alguma coisa?", "pode ser a de carne grande", "uma coca lata", "retirada", "sim"],
+    expect: {
+      order: {
+        fulfillment: "pickup",
+        items: [
+          { name: "Marmita de Carne", size: "Grande", qty: 1 },
+          { name: "Coca-Cola Lata", size: null, qty: 1 },
+        ],
+      },
+    },
+  },
+  {
     name: "restaurant closed: place_order refuses",
     settings: { closedToday: true },
     customer: ["quero 1 marmita de frango grande", "retirada", "sim"],

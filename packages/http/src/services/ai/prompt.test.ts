@@ -1,4 +1,4 @@
-// covers FR-184, FR-198
+// covers FR-184, FR-198, FR-219
 import { describe, expect, test } from "bun:test";
 
 import { AI_INSTRUCTIONS, renderRestaurantBlock, renderTurnContext } from "./prompt";
@@ -16,6 +16,11 @@ describe("prompt", () => {
   test("the instructions never ask for payment and name the three fields", () => {
     expect(AI_INSTRUCTIONS).toContain("Do not ask about payment");
     expect(AI_INSTRUCTIONS).toContain("Retirada ou Entrega?");
+  });
+  test("the instructions ask first and recommend meals before drinks", () => {
+    expect(AI_INSTRUCTIONS).toContain("Never send the menu on your own.");
+    expect(AI_INSTRUCTIONS).toContain("recommend two or three meals (kind meal)");
+    expect(AI_INSTRUCTIONS).toContain("Vai querer alguma bebida?");
   });
   test("the restaurant block lists the menu with ids and is stable", () => {
     const input = {
