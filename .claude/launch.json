@@ -15,6 +15,39 @@
       "url": "http://localhost:3101"
     },
     {
+      "name": "uatis",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "--cwd", "../backend-uatis", "dev"],
+      "port": 3300
+    },
+    {
+      "name": "webnf-api",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "--cwd", "../web-nf/apps/api", "dev"],
+      "port": 3001,
+      "url": "http://localhost:3001"
+    },
+    {
+      "name": "webnf-generation",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "--cwd", "../web-nf/apps/generation-api", "dev"],
+      "port": 3002,
+      "url": "http://localhost:3002"
+    },
+    {
+      "name": "webnf-worker",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "--cwd", "../web-nf/apps/worker", "dev"],
+      "port": 8080,
+      "url": "http://localhost:8080"
+    },
+    {
+      "name": "webnf",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "--cwd", "../web-nf", "dev"],
+      "port": 3000
+    },
+    {
       "name": "worker",
       "runtimeExecutable": "bun",
       "runtimeArgs": ["run", "--cwd", "apps/worker", "dev"],
