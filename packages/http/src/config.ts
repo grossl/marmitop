@@ -16,9 +16,9 @@ export interface ServerConfig {
   readonly kekVersion: number;
   /** `MT_KEK_PREVIOUS`, only during a KEK rotation. Its version is `kekVersion - 1`. */
   readonly kekPrevious: Uint8Array | undefined;
-  /** `MT_UATIS_FAKE=1` selects `FakeGateway` (ADR-017). */
+  /** `MT_UATIS_FAKE=1` selects `FakeGateway` (ADR-017). Refused when `MT_ENV` is production. */
   readonly uatisFake: boolean;
-  /** `MT_WEBNF_FAKE=1` selects `FakeInvoiceGateway` (ADR-017). */
+  /** `MT_WEBNF_FAKE=1` selects `FakeInvoiceGateway` (ADR-017). Refused when `MT_ENV` is production. */
   readonly webnfFake: boolean;
   readonly env: MtEnv;
   /**
@@ -69,6 +69,12 @@ export function readServerConfig(env_: Env = process.env): ConfigResult {
   const env = readEnvName(env_.MT_ENV);
   const allowPrivateHosts = env_.MT_ALLOW_PRIVATE_HOSTS === "1";
   if (allowPrivateHosts && env === "production") missing.push("MT_ALLOW_PRIVATE_HOSTS");
+  // 11.operations.md: the fake gateways must be unset in production, or sends and
+  // invoices would quietly go nowhere.
+  const uatisFake = env_.MT_UATIS_FAKE === "1";
+  if (uatisFake && env === "production") missing.push("MT_UATIS_FAKE");
+  const webnfFake = env_.MT_WEBNF_FAKE === "1";
+  if (webnfFake && env === "production") missing.push("MT_WEBNF_FAKE");
   const pullRaw = env_.MT_UATIS_PULL_SECONDS;
   const uatisPullSeconds = pullRaw === undefined || pullRaw === "" ? 3 : Number(pullRaw);
   if (!Number.isInteger(uatisPullSeconds) || uatisPullSeconds < 1 || uatisPullSeconds > 60) {
@@ -83,8 +89,8 @@ export function readServerConfig(env_: Env = process.env): ConfigResult {
       kek,
       kekVersion,
       kekPrevious,
-      uatisFake: env_.MT_UATIS_FAKE === "1",
-      webnfFake: env_.MT_WEBNF_FAKE === "1",
+      uatisFake,
+      webnfFake,
       env,
       allowPrivateHosts,
       publicUrl: env_.MT_PUBLIC_URL?.trim() || undefined,

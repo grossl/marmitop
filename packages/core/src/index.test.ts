@@ -40,7 +40,8 @@ describe("@mt/core public surface", () => {
   test("core imports nothing internal and no adapter or I/O module", async () => {
     const { Glob } = await import("bun");
     const glob = new Glob("**/*.ts");
-    const root = new URL(".", import.meta.url).pathname;
+    // import.meta.dir, not URL.pathname: the pathname keeps a space as %20.
+    const root = `${import.meta.dir}/`;
     const forbidden =
       /from ['"](@mt\/|node:(fs|net|http|https|child_process|dns|dgram|tls|worker_threads)|postgres|hono|next)/;
     for await (const file of glob.scan({ cwd: root })) {

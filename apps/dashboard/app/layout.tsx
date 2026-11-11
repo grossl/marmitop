@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { headers } from 'next/headers'
 import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
@@ -30,15 +31,18 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // The proxy's per-request CSP nonce (lib/csp.ts). Reading headers makes every page dynamic,
+  // which a nonce needs: a prerendered page would carry no nonce.
+  const nonce = (await headers()).get('x-nonce') ?? undefined
   return (
     <html lang="pt-BR" className="bg-background" suppressHydrationWarning>
       <body className="font-sans antialiased">
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange nonce={nonce}>
           {children}
         </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}

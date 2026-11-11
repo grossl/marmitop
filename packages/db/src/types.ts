@@ -73,7 +73,7 @@ export type JobQueue = "mt_outbound_messages" | "mt_webhook_deliveries" | "mt_in
 export type JobSubjectType = "message" | "webhook_delivery" | "order_invoice" | "sync" | "ai_turn";
 export type JobOutcome = "ok" | "transient_error" | "permanent_error";
 export type UsageEventKind = "order.created" | "message.sent" | "invoice.issued" | "ai.reply";
-export type RateClass = "read" | "write" | "webhook" | "menu_order";
+export type RateClass = "read" | "write" | "webhook" | "menu_order" | "menu_order_client";
 export type AiMode = "auto" | "paused";
 export type AiPauseReason =
   | "attendant"

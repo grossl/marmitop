@@ -81,6 +81,14 @@ describe("readServerConfig", () => {
     if (!result.ok) expect(result.missing).toEqual(["MT_ALLOW_PRIVATE_HOSTS"]);
   });
 
+  test("MT_UATIS_FAKE and MT_WEBNF_FAKE in production are refused", () => {
+    const base = { DATABASE_URL: "postgres://x", MT_KEK: KEK };
+    const prod = readServerConfig({ ...base, MT_UATIS_FAKE: "1", MT_WEBNF_FAKE: "1" });
+    expect(prod.ok ? [] : prod.missing).toEqual(["MT_UATIS_FAKE", "MT_WEBNF_FAKE"]);
+    const dev = readServerConfig({ ...base, MT_ENV: "development", MT_UATIS_FAKE: "1", MT_WEBNF_FAKE: "1" });
+    expect(dev.ok && dev.config.uatisFake && dev.config.webnfFake).toBe(true);
+  });
+
   // covers FR-172, FR-174 (ADR-021, ADR-023)
   test("reads MT_PUBLIC_URL as given and MT_UATIS_PULL_SECONDS with default 3", () => {
     const base = { DATABASE_URL: "postgres://x", MT_KEK: KEK };

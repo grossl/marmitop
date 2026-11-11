@@ -30,6 +30,11 @@ if (config.uatisFake) {
 const deps = createServiceDeps(config);
 // FR-198: the AI assistant model. Never log ai.apiKey.
 const ai = readAiConfig();
+// 11.operations.md: never run production with an empty key, or every AI turn pauses.
+if (ai.apiKey === null && config.env === "production") {
+  log.error("worker cannot start: missing or invalid configuration", { variables: ["ANTHROPIC_API_KEY"] });
+  process.exit(1);
+}
 const model =
   ai.apiKey === null
     ? new ScriptedAssistantModel([])

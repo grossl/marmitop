@@ -1,9 +1,11 @@
 "use server";
 
 import { type PreparedPublicOrder, type PublicOrderInput, preparePublicOrder, toActionError } from "@mt/http";
+import { headers } from "next/headers";
 import { unstable_rethrow } from "next/navigation";
 
 import type { ActionResult } from "@/lib/server/action-core";
+import { clientIpFrom } from "@/lib/server/client-ip";
 import { requireDeps } from "@/lib/server/deps";
 
 // Public menu checkout (ADR-031, ADR-033, FR-232, FR-238). The one Server Action without a
@@ -15,7 +17,9 @@ export async function preparePublicOrderAction(
   input: PublicOrderInput,
 ): Promise<ActionResult<PreparedPublicOrder>> {
   try {
-    return { ok: true, data: await preparePublicOrder(requireDeps(), publicId, input) };
+    // FR-235: the per-visitor limit keys on the IP address, hashed before it is stored.
+    const clientKey = clientIpFrom(await headers());
+    return { ok: true, data: await preparePublicOrder(requireDeps(), publicId, input, clientKey) };
   } catch (error) {
     unstable_rethrow(error);
     const actionError = toActionError(error);

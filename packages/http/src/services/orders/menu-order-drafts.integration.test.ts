@@ -10,7 +10,7 @@ import { saveMenuItem } from "../catalog/menu";
 import { getPublicMenu } from "../catalog/public-menu";
 import { simulateInboundMessage } from "../messaging";
 import { applyGatewayMessage } from "../whatsapp/gateway-events";
-import { PUBLIC_ORDER_LIMITS, type PublicOrderInput, preparePublicOrder } from "./menu-order-drafts";
+import { clientRateSubject, PUBLIC_ORDER_LIMITS, type PublicOrderInput, preparePublicOrder } from "./menu-order-drafts";
 
 let db: Db;
 let deps: ServiceDeps;
@@ -376,5 +376,27 @@ describe("rate limit (FR-235)", () => {
       await preparePublicOrder(later, publicId, order());
     }
     expect(code(await caught(() => preparePublicOrder(later, publicId, order())))).toBe("rate_limited");
+  });
+
+  test("one visitor is limited per minute without spending the restaurant budget", async () => {
+    const later = createTestServiceDeps(db, { clock: new FixedClock("2026-10-13T15:09:00Z") });
+    for (let i = 0; i < PUBLIC_ORDER_LIMITS.client; i += 1) {
+      await preparePublicOrder(later, publicId, order(), "203.0.113.7");
+    }
+    const refused = await caught(() => preparePublicOrder(later, publicId, order(), "203.0.113.7"));
+    expect(code(refused)).toBe("rate_limited");
+    // Another visitor still checks out, and the refused call did not count for the restaurant.
+    await preparePublicOrder(later, publicId, order(), "198.51.100.2");
+    const [row] = await db<{ count: number }[]>`
+      select count from public.rate_counters
+      where subject_id = ${a.restaurantId} and class = 'menu_order' and window_start = '2026-10-13T15:09:00Z'`;
+    expect(row?.count).toBe(PUBLIC_ORDER_LIMITS.client + 1);
+  });
+
+  test("the visitor counter stores a hash of the address, never the address", async () => {
+    const rows = await db<{ subject_id: string }[]>`
+      select subject_id::text from public.rate_counters where class = 'menu_order_client'`;
+    // subject_id is a uuid column, so it cannot hold an address; the subject is the hash.
+    expect(rows.map((r) => r.subject_id)).toContain(clientRateSubject("203.0.113.7", a.restaurantId));
   });
 });

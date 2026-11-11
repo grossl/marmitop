@@ -71,10 +71,15 @@ const INT8_AS_NUMBER = {
   },
 };
 
-/** Creates a postgres.js client. */
+/**
+ * Creates a postgres.js client. `prepare: false` keeps it working behind the
+ * Supabase transaction pooler (port 6543), which cannot hold named prepared
+ * statements across transactions (11.operations.md "Configuration and secrets").
+ */
 export function createDb(url: string, options: DbOptions = {}): Db {
   return postgres(url, {
     max: 10,
+    prepare: false,
     onnotice: () => {},
     ...options,
     types: { int8: INT8_AS_NUMBER, ...(options.types ?? {}) },

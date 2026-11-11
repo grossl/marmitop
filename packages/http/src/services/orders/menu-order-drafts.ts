@@ -8,7 +8,7 @@
 // code, the history row, usage, `order_received`, and `order.created` match every other
 // order (ADR-006, ADR-017).
 
-import { randomInt } from "node:crypto";
+import { createHash, randomInt } from "node:crypto";
 
 import {
   AppError,
@@ -30,8 +30,8 @@ import { hitRateCounter } from "../whatsapp/inbound-webhook";
 import { createOrderInTx, loadOrderMenu } from "./create-order";
 import { loadOrderSettings } from "./order-settings";
 
-/** FR-235: checkouts a minute per restaurant. */
-export const PUBLIC_ORDER_LIMITS = { restaurant: 20 } as const;
+/** FR-235: checkouts a minute per restaurant, and per visitor of one restaurant. */
+export const PUBLIC_ORDER_LIMITS = { restaurant: 20, client: 5 } as const;
 
 /** 31 characters: `A`–`Z` and `2`–`9` without I, L, and O, which read like 1 and 0. */
 const REFERENCE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -65,19 +65,33 @@ async function resolveRestaurantId(deps: ServiceDeps, publicId: string): Promise
   throw new AppError("not_found", "Restaurant not found.");
 }
 
-async function enforceRateLimit(deps: ServiceDeps, restaurantId: string): Promise<void> {
-  const decision = await hitRateCounter(
-    deps.db,
-    restaurantId,
-    "menu_order",
-    PUBLIC_ORDER_LIMITS.restaurant,
-    deps.clock.now(),
-  );
-  if (!decision.allowed) {
-    throw new AppError("rate_limited", "Too many orders. Try again in a minute.", {
-      details: [{ path: "", code: "rate_limited", message: "Muitos pedidos seguidos. Tente de novo em um minuto." }],
-    });
+/**
+ * The counter subject for one visitor of one restaurant: a uuid-shaped SHA-256 of the client key
+ * (the IP address) and the restaurant id. The address itself is never stored (07.security.md).
+ */
+export function clientRateSubject(clientKey: string, restaurantId: string): string {
+  const hex = createHash("sha256").update(`menu_order_client:${restaurantId}:${clientKey}`).digest("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+const rateLimited = () =>
+  new AppError("rate_limited", "Too many orders. Try again in a minute.", {
+    details: [{ path: "", code: "rate_limited", message: "Muitos pedidos seguidos. Tente de novo em um minuto." }],
+  });
+
+/**
+ * FR-235. The visitor counter runs first, so one visitor over its limit does not spend the
+ * restaurant's budget and block other customers. No client key (no address header) skips it.
+ */
+async function enforceRateLimit(deps: ServiceDeps, restaurantId: string, clientKey: string | null): Promise<void> {
+  const now = deps.clock.now();
+  if (clientKey) {
+    const subject = clientRateSubject(clientKey, restaurantId);
+    const client = await hitRateCounter(deps.db, subject, "menu_order_client", PUBLIC_ORDER_LIMITS.client, now);
+    if (!client.allowed) throw rateLimited();
   }
+  const decision = await hitRateCounter(deps.db, restaurantId, "menu_order", PUBLIC_ORDER_LIMITS.restaurant, now);
+  if (!decision.allowed) throw rateLimited();
 }
 
 const closedError = () =>
@@ -93,10 +107,12 @@ export async function preparePublicOrder(
   deps: ServiceDeps,
   publicId: string,
   rawInput: PublicOrderInput,
+  /** The visitor's IP address, for the per-visitor limit. Null when unknown. */
+  clientKey: string | null = null,
 ): Promise<PreparedPublicOrder> {
   const input = parseOrThrow(publicOrderSchema, rawInput);
   const restaurantId = await resolveRestaurantId(deps, publicId);
-  await enforceRateLimit(deps, restaurantId);
+  await enforceRateLimit(deps, restaurantId, clientKey);
 
   return withRestaurantContext(
     deps.db,
