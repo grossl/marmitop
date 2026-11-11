@@ -1,4 +1,4 @@
-// covers FR-085, FR-170, FR-171, FR-172, FR-173, FR-175, FR-176, FR-177, FR-178, FR-179 (ADR-021, ADR-023)
+// covers FR-085, FR-170, FR-171, FR-172 (ADR-041), FR-173, FR-175, FR-176, FR-177, FR-178, FR-179 (ADR-021, ADR-023)
 // Needs the local stack (`bun run dev:stack`) or TEST_DATABASE_URL.
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { AppError, FakeGateway, GatewayError, parseUatisWebhookEvent, signWebhook } from "@mt/core";
@@ -11,7 +11,7 @@ import { createDbUatisInboundStore, receiveUatisWebhook } from "../whatsapp/inbo
 import { applyUatisEvent } from "../whatsapp/uatis-events";
 import { connectWhatsApp } from "./integrations";
 import { openSecret } from "./internal";
-import { disableUatisWebhook, enableUatisWebhook, getUatisWebhookStatus } from "./uatis-webhook";
+import { disableUatisWebhook, enableUatisWebhook, getUatisWebhookStatus, PUSH_REQUIRED_ERROR } from "./uatis-webhook";
 
 const PUBLIC = "https://api.marmitop.example.com";
 const NOW = new Date("2026-10-13T15:00:00Z");
@@ -26,6 +26,12 @@ const admin = (f = a) => userCtx(f.restaurantId, f.adminId, "admin");
 const attendant = () => userCtx(a.restaurantId, a.attendantId, "attendant");
 const depsWith = (publicUrl: string | undefined): ServiceDeps =>
   createTestServiceDeps(db, { gateways: { whatsapp: () => gateway, invoices: () => { throw new Error("unused"); } }, publicUrl });
+const prodDepsWith = (publicUrl: string | undefined): ServiceDeps =>
+  createTestServiceDeps(
+    db,
+    { gateways: { whatsapp: () => gateway, invoices: () => { throw new Error("unused"); } }, publicUrl },
+    { env: "production" },
+  );
 
 interface IntegRow {
   uatis_webhook_id: string | null;
@@ -152,6 +158,24 @@ describe("enableUatisWebhook", () => {
     expect(await integ()).toMatchObject({ uatis_webhook_id: null, uatis_webhook_mode: null, uatis_organization_id: null });
   });
 
+  test.each([["http://localhost:3101"], ["https://10.0.0.5"], [undefined]])(
+    "production with MT_PUBLIC_URL %p refuses pull, calls nothing, and keeps the stored webhook (ADR-041)",
+    async (publicUrl) => {
+      await enableUatisWebhook(depsWith(PUBLIC), admin(), undefined);
+      const before = await integ();
+      gateway = new FakeGateway();
+      const result = await enableUatisWebhook(prodDepsWith(publicUrl), admin(), undefined);
+      expect(result).toEqual({ ok: false, error: PUSH_REQUIRED_ERROR });
+      expect(gateway.calls).toEqual([]);
+      expect(await integ()).toEqual(before);
+    },
+  );
+
+  test("production with a public MT_PUBLIC_URL registers push (ADR-041)", async () => {
+    const result = await enableUatisWebhook(prodDepsWith(PUBLIC), admin(), undefined);
+    expect(result).toMatchObject({ ok: true, mode: "push" });
+  });
+
   test("an attendant is refused (FR-179)", async () => {
     const deps = depsWith(PUBLIC);
     expect(code(await enableUatisWebhook(deps, attendant(), undefined).catch((e) => e))).toBe("forbidden");
@@ -233,6 +257,15 @@ describe("getUatisWebhookStatus (FR-178)", () => {
     expect(status).toMatchObject({ state: "active", mode: "push", webhookId: enabled.webhookId, deliveriesError: null });
     expect(status.lastWebhookAt).toBe(NOW.toISOString());
     expect(status.deliveries?.map((d) => d.id)).toEqual(attempts.slice(0, 5).map((d) => d.id));
+  });
+
+  test("pushRequired is true in production only, so a leftover pull webhook gets a warning (ADR-041)", async () => {
+    const enabled = await enableUatisWebhook(depsWith(undefined), admin(), undefined);
+    expect(enabled).toMatchObject({ ok: true, mode: "pull" });
+    const prod = await getUatisWebhookStatus(prodDepsWith(PUBLIC), admin(), undefined);
+    expect(prod).toMatchObject({ state: "active", mode: "pull", pushRequired: true, nextMode: "push" });
+    const dev = await getUatisWebhookStatus(depsWith(undefined), admin(), undefined);
+    expect(dev).toMatchObject({ mode: "pull", pushRequired: false });
   });
 
   test("a gateway failure shows a note instead of the attempts and never throws", async () => {

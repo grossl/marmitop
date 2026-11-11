@@ -4,7 +4,8 @@
 // 06.api-spec.md Appendix A).
 //
 //   enableUatisWebhook     read the organization, delete the stored webhook, register a new one:
-//                          push when MT_PUBLIC_URL is public https:443, pull otherwise
+//                          push when MT_PUBLIC_URL is public https:443, pull otherwise; production
+//                          refuses pull (ADR-041)
 //   disableUatisWebhook    delete it and clear the columns; the webhook secret stays
 //   getUatisWebhookStatus  state, mode, next mode, last push, last feed read, five attempts
 //
@@ -34,6 +35,10 @@ export const UATIS_WEBHOOK_EVENTS: readonly UatisWebhookEventName[] = ["message.
 
 const DESCRIPTION = "Marmitop";
 
+/** ADR-041, FR-172: production never registers pull. */
+export const PUSH_REQUIRED_ERROR =
+  "Em produção o webhook precisa do modo Push: configure MT_PUBLIC_URL com a URL https pública da API.";
+
 export type EnableUatisWebhookResult =
   | { readonly ok: true; readonly webhookId: string; readonly mode: UatisWebhookMode }
   | { readonly ok: false; readonly error: string };
@@ -54,6 +59,8 @@ export interface UatisWebhookStatus {
   readonly mode: UatisWebhookMode | null;
   /** The mode the next "Ativar webhook" picks (FR-172). */
   readonly nextMode: UatisWebhookMode;
+  /** Production: pull is refused, and a pull webhook is a leftover to register again (ADR-041). */
+  readonly pushRequired: boolean;
   readonly publicUrl: {
     readonly ok: boolean;
     /** `MT_PUBLIC_URL` as configured; not a secret. */
@@ -125,8 +132,10 @@ export const enableUatisWebhook = defineService({
   input: z.undefined(),
   run: async ({ tx, deps, ctx }): Promise<EnableUatisWebhookResult> => {
     const row = await loadRow(tx, ctx, true);
-    const gateway = await gatewayFor(tx, deps, ctx, row);
     const publicUrl = checkPublicBaseUrl(deps.publicUrl);
+    // ADR-041: before any gateway call, so the stored webhook stays as it was.
+    if (!publicUrl.ok && deps.env === "production") return { ok: false, error: PUSH_REQUIRED_ERROR };
+    const gateway = await gatewayFor(tx, deps, ctx, row);
     const mode: UatisWebhookMode = publicUrl.ok ? "push" : "pull";
 
     let removedOld = false;
@@ -240,6 +249,7 @@ export const getUatisWebhookStatus = defineService({
       state: row.uatis_webhook_id === null ? "not_registered" : "active",
       mode: row.uatis_webhook_mode,
       nextMode: publicUrl.ok ? "push" : "pull",
+      pushRequired: deps.env === "production",
       publicUrl: {
         ok: publicUrl.ok,
         url: deps.publicUrl ?? null,

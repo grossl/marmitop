@@ -11,7 +11,13 @@ export {
   resolveUserContext,
 } from "./auth/membership";
 export { hasRole, requireRole } from "./auth/roles";
-export { type ConfigResult, type MtEnv, readServerConfig, type ServerConfig } from "./config";
+export {
+  type ConfigResult,
+  type MtEnv,
+  type ReadServerConfigOptions,
+  readServerConfig,
+  type ServerConfig,
+} from "./config";
 export {
   type ApiKeyContext,
   type Role,

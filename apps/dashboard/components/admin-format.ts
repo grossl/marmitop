@@ -110,11 +110,27 @@ export function publicUrlReasonText(reason: PublicUrlReason): string {
 
 export function uatisNextModeText(status: {
   nextMode: UatisMode;
+  pushRequired?: boolean;
   publicUrl: { ok: boolean; url: string | null; reason: PublicUrlReason | null };
 }): string {
   const name = status.publicUrl.url ? `MT_PUBLIC_URL (${status.publicUrl.url})` : "MT_PUBLIC_URL";
   const why = status.publicUrl.ok
     ? "é uma URL pública https"
     : publicUrlReasonText(status.publicUrl.reason ?? "missing");
+  // ADR-041: production refuses pull, so there is no pull to announce.
+  if (status.pushRequired && !status.publicUrl.ok) return `Em produção o modo Pull não é permitido: ${name} ${why}.`;
   return `Ao ativar, o modo será ${uatisModeLabel(status.nextMode)}: ${name} ${why}.`;
 }
+
+/** FR-178, ADR-041: a pull webhook in production is a leftover; the admin registers again. */
+export function uatisPullInProduction(status: {
+  state: string;
+  mode: UatisMode | null;
+  pushRequired: boolean;
+}): boolean {
+  return status.pushRequired && status.state === "active" && status.mode === "pull";
+}
+
+export const UATIS_PULL_IN_PRODUCTION_TITLE = "Modo Pull em produção";
+export const UATIS_PULL_IN_PRODUCTION_TEXT =
+  'Este webhook foi registrado em modo Pull. Em produção o Marmitop usa só o modo Push. Clique em "Registrar novamente" para passar para Push e receber as mensagens assim que chegam.';

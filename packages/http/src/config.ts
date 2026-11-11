@@ -4,7 +4,7 @@
 // Never throws and never echoes a value: a missing or malformed variable is
 // reported by name, so the dashboard can render a setup notice (NFR-011).
 
-import { parseKek } from "@mt/core";
+import { checkPublicBaseUrl, parseKek } from "@mt/core";
 
 export type MtEnv = "development" | "test" | "production";
 
@@ -29,7 +29,8 @@ export interface ServerConfig {
   /**
    * `MT_PUBLIC_URL`: the public base URL of apps/api. "Ativar webhook" registers a push webhook
    * when it is public https on port 443, and a pull webhook otherwise (ADR-021, ADR-023, FR-172).
-   * Kept as given; `checkPublicBaseUrl` decides. Undefined when unset.
+   * Kept as given; `checkPublicBaseUrl` decides. Undefined when unset. Required in production
+   * unless `requirePublicUrl: false` (ADR-041).
    */
   readonly publicUrl: string | undefined;
   /** `MT_UATIS_PULL_SECONDS`, 1..60, default 3: the event-feed cadence in pull mode (FR-174). */
@@ -41,6 +42,14 @@ export type ConfigResult =
   | { readonly ok: false; readonly missing: readonly string[] };
 
 type Env = Readonly<Record<string, string | undefined>>;
+
+export interface ReadServerConfigOptions {
+  /**
+   * Default true. In production a `MT_PUBLIC_URL` that fails FR-172 is refused, so "Ativar webhook"
+   * can never fall back to pull (ADR-041). apps/worker never reads it and passes false.
+   */
+  readonly requirePublicUrl?: boolean;
+}
 
 function tryKek(value: string | undefined): Uint8Array | undefined {
   if (!value) return undefined;
@@ -55,7 +64,7 @@ function readEnvName(value: string | undefined): MtEnv {
   return value === "development" || value === "test" ? value : "production";
 }
 
-export function readServerConfig(env_: Env = process.env): ConfigResult {
+export function readServerConfig(env_: Env = process.env, options: ReadServerConfigOptions = {}): ConfigResult {
   const missing: string[] = [];
   const databaseUrl = env_.DATABASE_URL;
   if (!databaseUrl) missing.push("DATABASE_URL");
@@ -75,6 +84,10 @@ export function readServerConfig(env_: Env = process.env): ConfigResult {
   if (uatisFake && env === "production") missing.push("MT_UATIS_FAKE");
   const webnfFake = env_.MT_WEBNF_FAKE === "1";
   if (webnfFake && env === "production") missing.push("MT_WEBNF_FAKE");
+  const publicUrl = env_.MT_PUBLIC_URL?.trim() || undefined;
+  if ((options.requirePublicUrl ?? true) && env === "production" && !checkPublicBaseUrl(publicUrl).ok) {
+    missing.push("MT_PUBLIC_URL");
+  }
   const pullRaw = env_.MT_UATIS_PULL_SECONDS;
   const uatisPullSeconds = pullRaw === undefined || pullRaw === "" ? 3 : Number(pullRaw);
   if (!Number.isInteger(uatisPullSeconds) || uatisPullSeconds < 1 || uatisPullSeconds > 60) {
@@ -93,7 +106,7 @@ export function readServerConfig(env_: Env = process.env): ConfigResult {
       webnfFake,
       env,
       allowPrivateHosts,
-      publicUrl: env_.MT_PUBLIC_URL?.trim() || undefined,
+      publicUrl,
       uatisPullSeconds,
     },
   };

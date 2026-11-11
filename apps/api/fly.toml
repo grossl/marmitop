@@ -3,7 +3,8 @@
 #   fly deploy --config apps/api/fly.toml --dockerfile apps/api/Dockerfile .
 #
 # Secrets (fly secrets set -c apps/api/fly.toml ...): DATABASE_URL (app_service, sslmode=require),
-# MT_KEK, SUPABASE_URL, SUPABASE_JWT_JWKS, MT_PUBLIC_URL (this app's https URL). Never set
+# MT_KEK, SUPABASE_URL, SUPABASE_JWT_JWKS, MT_PUBLIC_URL (this app's https URL; the api refuses to start
+# without it, ADR-041). Never set
 # MIGRATION_DATABASE_URL here: migrations run from a trusted shell, not from an app.
 
 app = "marmitop-api"

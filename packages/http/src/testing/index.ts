@@ -6,10 +6,16 @@
 import { FakeSecretBox, FixedClock } from "@mt/core";
 import type { Db } from "@mt/db";
 
+import type { ServerConfig } from "../config";
 import { createServiceDeps, type ServiceDeps, type ServiceDepsOverrides } from "../deps";
 import type { UserContext } from "../context";
 
-export function createTestServiceDeps(db: Db, overrides: ServiceDepsOverrides = {}): ServiceDeps {
+/** `config` overrides the test config, for example `{ env: "production" }` (ADR-041 tests). */
+export function createTestServiceDeps(
+  db: Db,
+  overrides: ServiceDepsOverrides = {},
+  config: Partial<ServerConfig> = {},
+): ServiceDeps {
   return createServiceDeps(
     {
       databaseUrl: "postgres://unused",
@@ -22,6 +28,7 @@ export function createTestServiceDeps(db: Db, overrides: ServiceDepsOverrides = 
       allowPrivateHosts: true,
       publicUrl: undefined,
       uatisPullSeconds: 3,
+      ...config,
     },
     { db, secretBox: new FakeSecretBox(), clock: new FixedClock("2026-10-13T15:00:00Z"), ...overrides },
   );

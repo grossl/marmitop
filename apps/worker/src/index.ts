@@ -7,7 +7,7 @@ import { createServiceDeps, readServerConfig } from "@mt/http";
 
 import { AnthropicAssistantModel } from "./ai/anthropic-model";
 import { readAiConfig } from "./ai/config";
-import { FeedPullTimer } from "./feed-timer";
+import { FeedPullTimer, feedTimerIntervalMs } from "./feed-timer";
 import { createLogger } from "./framework/logger";
 import { PgmqQueueClient } from "./framework/pgmq-client";
 import { QueueWorker } from "./framework/worker";
@@ -15,7 +15,8 @@ import { healthResponse } from "./health";
 import { buildRegistry } from "./registry";
 
 const log = createLogger(process.env.MT_LOG_LEVEL);
-const result = readServerConfig();
+// The worker never reads MT_PUBLIC_URL, so it does not require it (ADR-041).
+const result = readServerConfig(process.env, { requirePublicUrl: false });
 if (!result.ok) {
   log.error("worker cannot start: missing or invalid configuration", { variables: result.missing });
   process.exit(1);
@@ -56,9 +57,11 @@ const server = Bun.serve({
       ? healthResponse(worker.health())
       : new Response("not found", { status: 404 }),
 });
-// ADR-023, FR-174: enqueue event-feed reads every MT_UATIS_PULL_SECONDS.
+// ADR-023, FR-174: enqueue event-feed reads every MT_UATIS_PULL_SECONDS; every 60 s in production (ADR-041).
+const feedTimerMs = feedTimerIntervalMs(config.env, config.uatisPullSeconds);
 const feedTimer = new FeedPullTimer({
   pullSeconds: config.uatisPullSeconds,
+  intervalMs: feedTimerMs,
   enqueue: (seconds) =>
     withoutContext(deps.db, async (tx) => {
       const [row] = await tx<{ n: number }[]>`select mt.enqueue_uatis_feed_pulls(${seconds}::int) as n`;
@@ -68,7 +71,7 @@ const feedTimer = new FeedPullTimer({
 });
 worker.start();
 feedTimer.start();
-log.info("worker health listening", { port: server.port, uatisPullSeconds: config.uatisPullSeconds });
+log.info("worker health listening", { port: server.port, uatisPullSeconds: config.uatisPullSeconds, feedTimerMs });
 
 let stopping = false;
 async function shutdown(signal: string) {

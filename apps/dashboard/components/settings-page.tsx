@@ -21,6 +21,9 @@ import {
   uatisModeExplanation,
   uatisModeLabel,
   uatisNextModeText,
+  uatisPullInProduction,
+  UATIS_PULL_IN_PRODUCTION_TEXT,
+  UATIS_PULL_IN_PRODUCTION_TITLE,
   usagePercent,
   WEEKDAY_NAMES,
   WEEKDAY_ORDER,
@@ -780,6 +783,16 @@ function UatisWebhookPanel({ status }: { status: UatisWebhookStatus | null }) {
           <p className="text-sm text-muted-foreground">
             Sem webhook, o Marmitop consulta as mensagens recebidas a cada 30 segundos e não recebe as confirmações de entrega e leitura.
           </p>
+        )}
+        {uatisPullInProduction(status) && (
+          <div
+            className="rounded-lg border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 p-4"
+            role="alert"
+            data-testid="uatis-pull-in-production"
+          >
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-300">{UATIS_PULL_IN_PRODUCTION_TITLE}</p>
+            <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">{UATIS_PULL_IN_PRODUCTION_TEXT}</p>
+          </div>
         )}
         <p className="text-sm text-muted-foreground">{uatisNextModeText(status)}</p>
         {active && (
