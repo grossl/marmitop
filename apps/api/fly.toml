@@ -1,0 +1,34 @@
+# apps/api on Fly.io, São Paulo (11.operations.md "Deploy targets"). Deploy from the repository root:
+#
+#   fly deploy --config apps/api/fly.toml --dockerfile apps/api/Dockerfile .
+#
+# Secrets (fly secrets set -c apps/api/fly.toml ...): DATABASE_URL (app_service, sslmode=require),
+# MT_KEK, SUPABASE_URL, SUPABASE_JWT_JWKS, MT_PUBLIC_URL (this app's https URL). Never set
+# MIGRATION_DATABASE_URL here: migrations run from a trusted shell, not from an app.
+
+app = "marmitop-api"
+primary_region = "gru"
+
+[env]
+  MT_ENV = "production"
+  MT_LOG_LEVEL = "info"
+  PORT = "3101"
+
+[http_service]
+  internal_port = 3101
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  # Webhooks from backend-uatis and web-nf must not wait on a cold start.
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/v1/health"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

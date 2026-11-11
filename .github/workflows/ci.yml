@@ -1,0 +1,59 @@
+# CI (10.testing.md): typecheck, every test (unit and integration), dependency audit, the dashboard
+# build, and the api and worker images. Integration tests use database mt_test on a local Supabase
+# Postgres, as in development (port 54422 from supabase/config.toml).
+name: CI
+
+on:
+  push:
+    branches: [master, main, "feat/**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Supabase Postgres
+        run: supabase db start
+
+      - run: bun install --frozen-lockfile
+
+      - name: Audit dependencies
+        run: bun audit
+
+      - run: bun run typecheck
+
+      - run: bun run test
+
+      - name: Build dashboard
+        run: bun run --cwd apps/dashboard build
+
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build api image
+        run: docker build -f apps/api/Dockerfile -t marmitop-api .
+      - name: Build worker image
+        run: docker build -f apps/worker/Dockerfile -t marmitop-worker .
+      - name: The api refuses a fake gateway in production
+        run: |
+          kek=$(openssl rand -base64 32)
+          if docker run --rm -e DATABASE_URL=postgres://u:p@127.0.0.1:1/db -e MT_KEK="$kek" -e MT_UATIS_FAKE=1 marmitop-api; then
+            echo "the api started with MT_UATIS_FAKE=1 in production" && exit 1
+          fi

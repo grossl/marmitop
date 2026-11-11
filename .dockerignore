@@ -1,0 +1,27 @@
+# Build context for apps/api/Dockerfile and apps/worker/Dockerfile (11.operations.md).
+# Env files never enter an image: the host's secret store supplies them.
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/coverage
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+!**/.env.example
+.git
+.claude
+.superpowers
+docs
+supabase/.branches
+supabase/.temp
+supabase/seed.sql
+# The dashboard deploys to Vercel and the print agent runs on the counter computer.
+# Their manifests stay so `bun install --frozen-lockfile` sees every workspace.
+apps/dashboard/**
+!apps/dashboard/package.json
+apps/print-agent/**
+!apps/print-agent/package.json
+packages/ui/**
+!packages/ui/package.json
+**/.DS_Store

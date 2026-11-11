@@ -1,0 +1,31 @@
+# apps/worker on Fly.io, São Paulo (11.operations.md "Deploy targets"). Always on; several machines
+# are safe (ADR-007). Deploy from the repository root:
+#
+#   fly deploy --config apps/worker/fly.toml --dockerfile apps/worker/Dockerfile .
+#
+# Secrets (fly secrets set -c apps/worker/fly.toml ...): DATABASE_URL (app_service, sslmode=require),
+# MT_KEK, SUPABASE_URL, ANTHROPIC_API_KEY. The worker refuses to start in production without the
+# AI key or with a fake gateway flag set.
+
+app = "marmitop-worker"
+primary_region = "gru"
+
+[env]
+  MT_ENV = "production"
+  MT_LOG_LEVEL = "info"
+  MT_WORKER_CONCURRENCY = "4"
+  WORKER_HEALTH_PORT = "8181"
+
+# No public service: the health server is for Fly's checks only.
+[checks]
+  [checks.health]
+    type = "http"
+    port = 8181
+    path = "/health"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
