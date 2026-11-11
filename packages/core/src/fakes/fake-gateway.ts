@@ -11,11 +11,8 @@ import type {
   ConnectionCheck,
   CreatedUatisWebhook,
   CreateWebhookInput,
-  UatisFeedEvent,
-  UatisFeedPage,
   UatisOrganization,
   UatisWebhookDelivery,
-  UatisWebhookInfo,
   ListMessagesInput,
   ListMessagesResult,
   SendResult,
@@ -42,23 +39,15 @@ export type RecordedCall =
   | { readonly method: "testConnection" }
   | { readonly method: "getOrganization" }
   | { readonly method: "createWebhook"; readonly input: CreateWebhookInput }
-  | { readonly method: "getWebhook"; readonly webhookId: string }
   | { readonly method: "deleteWebhook"; readonly webhookId: string }
-  | { readonly method: "listWebhookDeliveries"; readonly webhookId: string }
-  | { readonly method: "listWebhookEvents"; readonly webhookId: string; readonly after: string | null };
+  | { readonly method: "listWebhookDeliveries"; readonly webhookId: string };
 
 /** A webhook registered on the fake (ADR-021). The secret is kept so tests can sign as backend-uatis. */
 export interface FakeWebhook extends CreatedUatisWebhook {
   readonly description: string | null;
 }
 
-export type ManagementMethod =
-  | "getOrganization"
-  | "getWebhook"
-  | "createWebhook"
-  | "deleteWebhook"
-  | "listWebhookDeliveries"
-  | "listWebhookEvents";
+export type ManagementMethod = "getOrganization" | "createWebhook" | "deleteWebhook" | "listWebhookDeliveries";
 
 export interface SimulateInbound {
   /** Customer phone, any format `normalizePhoneE164` accepts. */
@@ -77,9 +66,6 @@ export class FakeGateway implements WhatsAppGateway {
   readonly webhooks = new Map<string, FakeWebhook>();
   /** Attempts by webhook id, newest first. Tests and dev tools push to it. */
   readonly deliveries = new Map<string, UatisWebhookDelivery[]>();
-  /** The event log per webhook, oldest first (ADR-023). Cursors are positions in a global sequence. */
-  readonly feeds = new Map<string, UatisFeedEvent[]>();
-  private feedSeq = 0;
   private readonly managementErrors = new Map<ManagementMethod, Error[]>();
 
   private readonly clock: Clock;
@@ -121,7 +107,6 @@ export class FakeGateway implements WhatsAppGateway {
       createdAt: input.at ?? this.clock.now(),
     };
     this.messages.push(message);
-    this.emit("message.created", message);
     return message;
   }
 
@@ -131,38 +116,6 @@ export class FakeGateway implements WhatsAppGateway {
     const m = this.messages[i];
     if (m) {
       this.messages[i] = { ...m, status };
-      this.emit("message.updated", { ...m, status });
-    }
-  }
-
-  /** Appends the backend-uatis envelope of `message` to every webhook subscribed to `type` (ADR-023). */
-  private emit(type: "message.created" | "message.updated", m: GatewayMessage): void {
-    for (const hook of this.webhooks.values()) {
-      if (!hook.events.includes(type)) continue;
-      const feed = this.feeds.get(hook.id) ?? [];
-      this.feedSeq++;
-      const state = m.direction === "in" && m.status === "delivered" ? "received" : (m.status ?? "pending");
-      feed.push({
-        cursor: String(this.feedSeq).padStart(12, "0"),
-        event: {
-          id: crypto.randomUUID(),
-          type,
-          created_at: this.clock.now().toISOString(),
-          organization_id: this.organization.id,
-          data: {
-            message: {
-              id: m.externalId,
-              conversation_id: m.conversationExternalId,
-              direction: m.direction,
-              content: { version: "1", type: "text", kind: "text", text: m.body },
-              status: { state, errors: [] },
-              contact_address: m.contactAddress?.replace(/^\+/, "") ?? null,
-              created_at: m.createdAt.toISOString(),
-            },
-          },
-        },
-      });
-      this.feeds.set(hook.id, feed);
     }
   }
 
@@ -196,7 +149,6 @@ export class FakeGateway implements WhatsAppGateway {
       createdAt: this.clock.now(),
     };
     this.messages.push(sent);
-    this.emit("message.created", sent);
     return result;
   }
 
@@ -262,26 +214,17 @@ export class FakeGateway implements WhatsAppGateway {
       events: [...input.events],
       status: "active",
       description: input.description,
-      secret: input.mode === "push" ? `whsec_fake_${crypto.randomUUID().replaceAll("-", "")}` : null,
+      secret: `whsec_fake_${crypto.randomUUID().replaceAll("-", "")}`,
     };
     this.webhooks.set(id, hook);
     this.deliveries.set(id, []);
-    this.feeds.set(id, []);
     return { id: hook.id, mode: hook.mode, url: hook.url, events: hook.events, status: hook.status, secret: hook.secret };
-  }
-
-  async getWebhook(webhookId: string): Promise<UatisWebhookInfo | null> {
-    this.calls.push({ method: "getWebhook", webhookId });
-    this.takeManagementError("getWebhook");
-    const hook = this.webhooks.get(webhookId);
-    return hook ? { id: hook.id, mode: hook.mode, url: hook.url, status: hook.status } : null;
   }
 
   async deleteWebhook(webhookId: string): Promise<{ deleted: boolean }> {
     this.calls.push({ method: "deleteWebhook", webhookId });
     this.takeManagementError("deleteWebhook");
     this.deliveries.delete(webhookId);
-    this.feeds.delete(webhookId);
     return { deleted: this.webhooks.delete(webhookId) };
   }
 
@@ -293,22 +236,5 @@ export class FakeGateway implements WhatsAppGateway {
     this.takeManagementError("listWebhookDeliveries");
     if (!this.webhooks.has(webhookId)) throw GatewayError.http(404, "not_found", "No webhook with this id.");
     return (this.deliveries.get(webhookId) ?? []).slice(0, Math.max(1, options.limit ?? 50));
-  }
-
-  async listWebhookEvents(
-    webhookId: string,
-    options: { readonly after: string | null; readonly limit?: number },
-  ): Promise<UatisFeedPage> {
-    this.calls.push({ method: "listWebhookEvents", webhookId, after: options.after });
-    this.takeManagementError("listWebhookEvents");
-    const feed = this.feeds.get(webhookId);
-    if (!this.webhooks.has(webhookId) || feed === undefined) {
-      throw GatewayError.http(404, "not_found", "No webhook with this id.");
-    }
-    const limit = Math.min(100, Math.max(1, options.limit ?? 50));
-    const after = options.after;
-    const rest = after === null ? feed : feed.filter((e) => e.cursor > after);
-    const events = rest.slice(0, limit);
-    return { events, nextCursor: events.at(-1)?.cursor ?? after };
   }
 }

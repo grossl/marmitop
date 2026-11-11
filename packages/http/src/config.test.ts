@@ -100,30 +100,16 @@ describe("readServerConfig", () => {
     expect(dev.ok && dev.config.uatisFake && dev.config.webnfFake).toBe(true);
   });
 
-  // covers FR-172, FR-174 (ADR-021, ADR-023)
-  test("reads MT_PUBLIC_URL as given and MT_UATIS_PULL_SECONDS with default 3", () => {
+  // covers FR-172 (ADR-021)
+  test("reads MT_PUBLIC_URL as given, trimmed", () => {
     const base = { DATABASE_URL: "postgres://x", MT_KEK: KEK, MT_ENV: "development" };
     const a = readServerConfig({ ...base, MT_PUBLIC_URL: " https://api.example.com " });
     expect(a.ok && a.config.publicUrl).toBe("https://api.example.com");
-    expect(a.ok && a.config.uatisPullSeconds).toBe(3);
-    const b = readServerConfig({ ...base, MT_UATIS_PULL_SECONDS: "5" });
+    const b = readServerConfig(base);
     expect(b.ok && b.config.publicUrl).toBeUndefined();
-    expect(b.ok && b.config.uatisPullSeconds).toBe(5);
   });
 
-  test("refuses an MT_UATIS_PULL_SECONDS outside 1..60", () => {
-    for (const v of ["0", "61", "2.5", "x"]) {
-      const r = readServerConfig({
-        DATABASE_URL: "postgres://x",
-        MT_KEK: KEK,
-        MT_PUBLIC_URL: PUBLIC,
-        MT_UATIS_PULL_SECONDS: v,
-      });
-      expect(r.ok ? [] : r.missing).toEqual(["MT_UATIS_PULL_SECONDS"]);
-    }
-  });
-
-  // covers FR-172 (ADR-041): production never falls back to pull.
+  // covers FR-172 (ADR-041): production always has a push target.
   test("production refuses an MT_PUBLIC_URL that fails FR-172; an unset MT_ENV counts as production", () => {
     const base = { DATABASE_URL: "postgres://x", MT_KEK: KEK };
     for (const url of [
@@ -143,7 +129,7 @@ describe("readServerConfig", () => {
     expect(ok.ok && ok.config.publicUrl).toBe(PUBLIC);
   });
 
-  test("development and test accept any MT_PUBLIC_URL, so local work keeps pull", () => {
+  test("development and test accept any MT_PUBLIC_URL; the service checks it on Ativar webhook", () => {
     const base = { DATABASE_URL: "postgres://x", MT_KEK: KEK };
     for (const env of ["development", "test"]) {
       expect(readServerConfig({ ...base, MT_ENV: env }).ok).toBe(true);

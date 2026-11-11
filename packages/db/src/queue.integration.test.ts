@@ -1,6 +1,6 @@
 // packages/db/src/queue.integration.test.ts
 //
-// covers FR-107, FR-108, NFR-022
+// covers FR-107, FR-108, FR-174, NFR-022 (ADR-042)
 //
 // The four pgmq queues and the functions pg_cron drives (05.data-model.md
 // "Queues (pgmq)", "pg_cron schedules"; ADR-007). The schedules themselves
@@ -128,107 +128,53 @@ describe("queue helpers on app_service", () => {
 });
 
 describe("scheduled functions", () => {
-  test("mt.enqueue_whatsapp_sync enqueues one message per connected restaurant, and not twice", async () => {
-    await db`update public.integrations_whatsapp set status = 'disconnected' where restaurant_id = ${b.restaurantId}`;
-    const [first] = await db<{ n: number }[]>`select mt.enqueue_whatsapp_sync() as n`;
-    const [second] = await db<{ n: number }[]>`select mt.enqueue_whatsapp_sync() as n`;
-    expect([first?.n, second?.n]).toEqual([1, 0]);
-    const rows = await db<{ message: Record<string, unknown> }[]>`select message from pgmq.q_mt_sync`;
-    expect(rows.map((r) => r.message)).toEqual([{ v: 1, restaurantId: a.restaurantId, op: "whatsapp_reconcile" }]);
-    await db`update public.integrations_whatsapp set status = 'connected' where restaurant_id = ${b.restaurantId}`;
-  });
-
-  // covers FR-174 (ADR-023): restaurants with a registered webhook read the event feed; the
-  // timestamp poll covers the rest.
-  describe("event feed cadence", () => {
-    const setA = (mode: "push" | "pull" | null, syncedAgo: string | null) => db`
-      update public.integrations_whatsapp set
-        uatis_webhook_id = ${mode === null ? null : "11111111-1111-4111-8111-111111111111"},
-        uatis_webhook_mode = ${mode},
-        last_synced_at = case when ${syncedAgo}::text is null then null else now() - ${syncedAgo}::interval end
-      where restaurant_id = ${a.restaurantId}
-    `;
+  // covers FR-174 (ADR-042): "Atualizar" enqueues one timestamp poll for the context's restaurant.
+  describe("mt.request_whatsapp_refresh", () => {
+    const refresh = (f: RestaurantFixture) =>
+      asService(db, f.systemCtx, async (tx) => {
+        const [row] = await tx<{ r: string }[]>`select mt.request_whatsapp_refresh() as r`;
+        return row?.r;
+      });
     const queued = async () => {
-      const rows = await db<{ id: string; op: string }[]>`
-        select message ->> 'restaurantId' as id, message ->> 'op' as op from pgmq.q_mt_sync order by msg_id`;
-      return rows.map((r) => `${r.op}:${r.id === a.restaurantId ? "a" : "b"}`);
+      const rows = await db<{ message: Record<string, unknown> }[]>`select message from pgmq.q_mt_sync order by msg_id`;
+      return rows.map((r) => r.message);
     };
-    const feedPulls = (seconds: number) => db`select mt.enqueue_uatis_feed_pulls(${seconds}::int)`;
 
-    beforeEach(async () => {
+    test("enqueues one job for the context's restaurant, and not twice", async () => {
+      expect(await refresh(a)).toBe("enqueued");
+      expect(await refresh(a)).toBe("already_queued");
+      expect(await queued()).toEqual([{ v: 1, restaurantId: a.restaurantId, op: "whatsapp_reconcile" }]);
+    });
+
+    test("restaurant B's refresh never enqueues for restaurant A", async () => {
+      expect(await refresh(b)).toBe("enqueued");
+      expect(await queued()).toEqual([{ v: 1, restaurantId: b.restaurantId, op: "whatsapp_reconcile" }]);
+    });
+
+    test("a disconnected integration enqueues nothing", async () => {
       await db`update public.integrations_whatsapp set status = 'disconnected' where restaurant_id = ${b.restaurantId}`;
-    });
-    afterAll(async () => {
-      await setA(null, null);
-      await db`update public.integrations_whatsapp set status = 'connected' where restaurant_id = ${b.restaurantId}`;
-    });
-
-    const polledAgo = (ago: string | null) => db`
-      update public.integrations_whatsapp set
-        last_polled_at = case when ${ago}::text is null then null else now() - ${ago}::interval end
-      where restaurant_id = ${a.restaurantId}`;
-
-    test("push mode: the timestamp poll skips the restaurant", async () => {
-      await setA("push", null);
-      await polledAgo("1 hour");
-      await db`select mt.enqueue_whatsapp_sync()`;
-      expect(await queued()).toEqual([]);
+      try {
+        expect(await refresh(b)).toBe("not_connected");
+        expect(await queued()).toEqual([]);
+      } finally {
+        await db`update public.integrations_whatsapp set status = 'connected' where restaurant_id = ${b.restaurantId}`;
+      }
     });
 
-    test("pull mode: the timestamp poll still runs every 10 minutes as a safety net", async () => {
-      await setA("pull", null);
-      await polledAgo("1 minute");
-      await db`select mt.enqueue_whatsapp_sync()`;
-      expect(await queued()).toEqual([]);
-      await polledAgo("11 minutes");
-      await db`select mt.enqueue_whatsapp_sync()`;
-      expect(await queued()).toEqual(["whatsapp_reconcile:a"]);
+    test("without a restaurant context it refuses", async () => {
+      const code = await errorCode(() =>
+        withoutContext(db, (tx) => tx`select mt.request_whatsapp_refresh()`, "app_service"),
+      );
+      expect(code).toBe(INSUFFICIENT_PRIVILEGE);
     });
 
-    test("pull mode: read 4 seconds ago with pull_seconds 3 enqueues one feed pull, and not twice", async () => {
-      await setA("pull", "4 seconds");
-      await feedPulls(3);
-      await feedPulls(3);
-      expect(await queued()).toEqual(["uatis_feed_pull:a"]);
-    });
-
-    test("pull mode: read 1 second ago enqueues nothing", async () => {
-      await setA("pull", "1 second");
-      await feedPulls(3);
-      expect(await queued()).toEqual([]);
-    });
-
-    test("push mode: read 1 minute ago enqueues nothing; 6 minutes ago enqueues one", async () => {
-      await setA("push", "1 minute");
-      await feedPulls(3);
-      expect(await queued()).toEqual([]);
-      await setA("push", "6 minutes");
-      await feedPulls(3);
-      expect(await queued()).toEqual(["uatis_feed_pull:a"]);
-    });
-
-    test("never read: enqueues one", async () => {
-      await setA("push", null);
-      await feedPulls(3);
-      expect(await queued()).toEqual(["uatis_feed_pull:a"]);
-    });
-
-    test("no webhook: no feed pull, and the timestamp poll runs", async () => {
-      await setA(null, null);
-      await feedPulls(3);
-      await db`select mt.enqueue_whatsapp_sync()`;
-      expect(await queued()).toEqual(["whatsapp_reconcile:a"]);
-    });
-
-    test("app_service may call mt.enqueue_uatis_feed_pulls (the worker timer)", async () => {
-      await setA("pull", null);
-      await withoutContext(db, (tx) => tx`select mt.enqueue_uatis_feed_pulls(3)`, "app_service");
-      expect(await queued()).toEqual(["uatis_feed_pull:a"]);
-    });
-
-    test("the mode check: a webhook id needs a mode", async () => {
+    test("the polling functions are gone and the mode check allows push only", async () => {
+      const [fns] = await db<{ n: number }[]>`
+        select count(*)::int as n from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'mt' and p.proname in ('enqueue_whatsapp_sync', 'enqueue_uatis_feed_pulls')`;
+      expect(fns?.n).toBe(0);
       const code = await errorCode(
-        () => db`update public.integrations_whatsapp set uatis_webhook_id = gen_random_uuid(), uatis_webhook_mode = null
+        () => db`update public.integrations_whatsapp set uatis_webhook_id = gen_random_uuid(), uatis_webhook_mode = 'pull'
                  where restaurant_id = ${a.restaurantId}`,
       );
       expect(code).toBe("23514");
@@ -298,7 +244,7 @@ describe("scheduled functions", () => {
   });
 
   test("app_service cannot call the scheduled functions", async () => {
-    const code = await errorCode(() => withoutContext(db, (tx) => tx`select mt.enqueue_whatsapp_sync()`));
+    const code = await errorCode(() => withoutContext(db, (tx) => tx`select mt.enqueue_invoice_polls()`));
     expect(code).toBe(INSUFFICIENT_PRIVILEGE);
   });
 });

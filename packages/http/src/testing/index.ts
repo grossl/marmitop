@@ -27,7 +27,6 @@ export function createTestServiceDeps(
       env: "test",
       allowPrivateHosts: true,
       publicUrl: undefined,
-      uatisPullSeconds: 3,
       ...config,
     },
     { db, secretBox: new FakeSecretBox(), clock: new FixedClock("2026-10-13T15:00:00Z"), ...overrides },

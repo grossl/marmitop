@@ -27,14 +27,13 @@ export interface ServerConfig {
    */
   readonly allowPrivateHosts: boolean;
   /**
-   * `MT_PUBLIC_URL`: the public base URL of apps/api. "Ativar webhook" registers a push webhook
-   * when it is public https on port 443, and a pull webhook otherwise (ADR-021, ADR-023, FR-172).
+   * `MT_PUBLIC_URL`: the public base URL of apps/api. "Ativar webhook" registers the push webhook
+   * there when it qualifies (FR-172): public https on port 443, or any http URL with
+   * `MT_ALLOW_PRIVATE_HOSTS=1` (ADR-021, ADR-042).
    * Kept as given; `checkPublicBaseUrl` decides. Undefined when unset. Required in production
    * unless `requirePublicUrl: false` (ADR-041).
    */
   readonly publicUrl: string | undefined;
-  /** `MT_UATIS_PULL_SECONDS`, 1..60, default 3: the event-feed cadence in pull mode (FR-174). */
-  readonly uatisPullSeconds: number;
 }
 
 export type ConfigResult =
@@ -46,7 +45,7 @@ type Env = Readonly<Record<string, string | undefined>>;
 export interface ReadServerConfigOptions {
   /**
    * Default true. In production a `MT_PUBLIC_URL` that fails FR-172 is refused, so "Ativar webhook"
-   * can never fall back to pull (ADR-041). apps/worker never reads it and passes false.
+   * always has a push target (ADR-041). apps/worker never reads it and passes false.
    */
   readonly requirePublicUrl?: boolean;
 }
@@ -88,11 +87,6 @@ export function readServerConfig(env_: Env = process.env, options: ReadServerCon
   if ((options.requirePublicUrl ?? true) && env === "production" && !checkPublicBaseUrl(publicUrl).ok) {
     missing.push("MT_PUBLIC_URL");
   }
-  const pullRaw = env_.MT_UATIS_PULL_SECONDS;
-  const uatisPullSeconds = pullRaw === undefined || pullRaw === "" ? 3 : Number(pullRaw);
-  if (!Number.isInteger(uatisPullSeconds) || uatisPullSeconds < 1 || uatisPullSeconds > 60) {
-    missing.push("MT_UATIS_PULL_SECONDS");
-  }
   if (missing.length > 0 || !databaseUrl || !kek) return { ok: false, missing };
 
   return {
@@ -107,7 +101,6 @@ export function readServerConfig(env_: Env = process.env, options: ReadServerCon
       env,
       allowPrivateHosts,
       publicUrl,
-      uatisPullSeconds,
     },
   };
 }

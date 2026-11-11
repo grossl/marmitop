@@ -147,14 +147,21 @@ export type PublicUrlCheck =
   | { readonly ok: true; readonly url: string }
   | { readonly ok: false; readonly reason: PublicUrlRejection };
 
+export interface PublicBaseUrlOptions {
+  /**
+   * `MT_ALLOW_PRIVATE_HOSTS=1` (development only, refused in production): also accept `http`,
+   * any port, and a private or loopback host, so a local backend-uatis can push to the local api
+   * with no tunnel (ADR-042). User info, query, and fragment stay refused.
+   */
+  readonly allowPrivateHosts?: boolean;
+}
+
 /**
- * The backend-uatis worker delivers only to `http`/`https` on the default port and refuses
- * private, loopback, and link-local targets, with no development override. Marmitop asks for
- * more: `https` only. `MT_ALLOW_PRIVATE_HOSTS` deliberately plays no part here. A hostname
- * that resolves to a private address passes this text check; backend-uatis then records
- * `ssrf_blocked` on the delivery, which Settings shows.
+ * Production rule: `https` on the default port, on a public host. A hostname that resolves to a
+ * private address passes this text check; backend-uatis then records `ssrf_blocked` on the
+ * delivery, which Settings shows.
  */
-export function checkPublicBaseUrl(input: string | undefined | null): PublicUrlCheck {
+export function checkPublicBaseUrl(input: string | undefined | null, options: PublicBaseUrlOptions = {}): PublicUrlCheck {
   const text = input?.trim() ?? "";
   if (text === "") return { ok: false, reason: "missing" };
   let url: URL;
@@ -163,14 +170,17 @@ export function checkPublicBaseUrl(input: string | undefined | null): PublicUrlC
   } catch {
     return { ok: false, reason: "invalid_url" };
   }
-  if (url.protocol !== "https:") return { ok: false, reason: "not_https" };
+  const relaxed = options.allowPrivateHosts === true;
+  if (url.protocol !== "https:" && !(relaxed && url.protocol === "http:")) return { ok: false, reason: "not_https" };
   if (url.username !== "" || url.password !== "") return { ok: false, reason: "userinfo_not_allowed" };
-  if (url.port !== "") return { ok: false, reason: "port_not_allowed" };
+  if (url.port !== "" && !relaxed) return { ok: false, reason: "port_not_allowed" };
   if (url.search !== "" || url.hash !== "" || text.includes("?") || text.includes("#")) {
     return { ok: false, reason: "query_not_allowed" };
   }
-  const literal = checkOutboundUrl(text, { allowPrivateHosts: false });
-  if (!literal.ok) return { ok: false, reason: "private_host" };
+  if (!relaxed) {
+    const literal = checkOutboundUrl(text, { allowPrivateHosts: false });
+    if (!literal.ok) return { ok: false, reason: "private_host" };
+  }
   return { ok: true, url: `${url.origin}${url.pathname.replace(/\/+$/, "")}` };
 }
 

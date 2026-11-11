@@ -1,4 +1,4 @@
-// covers FR-085, FR-170, FR-171, FR-172 (ADR-041), FR-173, FR-175, FR-176, FR-177, FR-178, FR-179 (ADR-021, ADR-023)
+// covers FR-085, FR-170, FR-171, FR-172 (ADR-041, ADR-042), FR-173, FR-175, FR-176, FR-177, FR-178, FR-179 (ADR-021, ADR-023)
 // Needs the local stack (`bun run dev:stack`) or TEST_DATABASE_URL.
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { AppError, FakeGateway, GatewayError, parseUatisWebhookEvent, signWebhook } from "@mt/core";
@@ -11,7 +11,7 @@ import { createDbUatisInboundStore, receiveUatisWebhook } from "../whatsapp/inbo
 import { applyUatisEvent } from "../whatsapp/uatis-events";
 import { connectWhatsApp } from "./integrations";
 import { openSecret } from "./internal";
-import { disableUatisWebhook, enableUatisWebhook, getUatisWebhookStatus, PUSH_REQUIRED_ERROR } from "./uatis-webhook";
+import { disableUatisWebhook, enableUatisWebhook, getUatisWebhookStatus, PUBLIC_URL_REQUIRED_ERROR } from "./uatis-webhook";
 
 const PUBLIC = "https://api.marmitop.example.com";
 const NOW = new Date("2026-10-13T15:00:00Z");
@@ -26,24 +26,24 @@ const admin = (f = a) => userCtx(f.restaurantId, f.adminId, "admin");
 const attendant = () => userCtx(a.restaurantId, a.attendantId, "attendant");
 const depsWith = (publicUrl: string | undefined): ServiceDeps =>
   createTestServiceDeps(db, { gateways: { whatsapp: () => gateway, invoices: () => { throw new Error("unused"); } }, publicUrl });
+/** Production rules: MT_ALLOW_PRIVATE_HOSTS is off (it is refused in production). */
 const prodDepsWith = (publicUrl: string | undefined): ServiceDeps =>
   createTestServiceDeps(
     db,
     { gateways: { whatsapp: () => gateway, invoices: () => { throw new Error("unused"); } }, publicUrl },
-    { env: "production" },
+    { env: "production", allowPrivateHosts: false },
   );
 
 interface IntegRow {
   uatis_webhook_id: string | null;
   uatis_webhook_mode: string | null;
   uatis_organization_id: string | null;
-  uatis_feed_cursor: string | null;
   webhook_secret_id: string | null;
   last_webhook_at: Date | null;
 }
 async function integ(f = a): Promise<IntegRow> {
   const [row] = await db<IntegRow[]>`
-    select uatis_webhook_id, uatis_webhook_mode, uatis_organization_id, uatis_feed_cursor, webhook_secret_id, last_webhook_at
+    select uatis_webhook_id, uatis_webhook_mode, uatis_organization_id, webhook_secret_id, last_webhook_at
     from public.integrations_whatsapp where restaurant_id = ${f.restaurantId}`;
   if (!row) throw new Error("no integration row");
   return row;
@@ -77,7 +77,6 @@ describe("enableUatisWebhook", () => {
   test("a public MT_PUBLIC_URL registers push, seals the returned secret, and stores the ids", async () => {
     const deps = depsWith(PUBLIC);
     const before = await integ();
-    await db`update public.integrations_whatsapp set uatis_feed_cursor = 'old' where restaurant_id = ${a.restaurantId}`;
     const result = await enableUatisWebhook(deps, admin(), undefined);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -95,7 +94,6 @@ describe("enableUatisWebhook", () => {
       uatis_webhook_id: result.webhookId,
       uatis_webhook_mode: "push",
       uatis_organization_id: gateway.organization.id,
-      uatis_feed_cursor: null,
     });
     expect(row.webhook_secret_id).not.toBe(before.webhook_secret_id);
     const opened = await asService(db, { restaurantId: a.restaurantId, actorType: "system" }, (tx) =>
@@ -112,20 +110,15 @@ describe("enableUatisWebhook", () => {
     expect(JSON.stringify(audit?.context)).not.toContain(hook?.secret ?? "x");
   });
 
-  test.each([["http://localhost:3101"], ["https://10.0.0.5"], [undefined]])(
-    "MT_PUBLIC_URL %p registers pull and keeps the stored secret",
-    async (publicUrl) => {
-      const deps = depsWith(publicUrl);
-      const before = await integ();
-      const result = await enableUatisWebhook(deps, admin(), undefined);
-      expect(result).toMatchObject({ ok: true, mode: "pull" });
-      if (!result.ok) return;
-      expect(gateway.webhooks.get(result.webhookId)).toMatchObject({ mode: "pull", url: null, secret: null });
-      const row = await integ();
-      expect(row).toMatchObject({ uatis_webhook_mode: "pull", uatis_webhook_id: result.webhookId });
-      expect(row.webhook_secret_id).toBe(before.webhook_secret_id);
-    },
-  );
+  test("with MT_ALLOW_PRIVATE_HOSTS a local http URL registers push (development, ADR-042)", async () => {
+    const result = await enableUatisWebhook(depsWith("http://localhost:3101"), admin(), undefined);
+    expect(result).toMatchObject({ ok: true, mode: "push" });
+    if (!result.ok) return;
+    expect(gateway.webhooks.get(result.webhookId)).toMatchObject({
+      mode: "push",
+      url: `http://localhost:3101/v1/webhooks/uatis/${a.restaurantId}`,
+    });
+  });
 
   test("registering again deletes the previous webhook first (FR-171)", async () => {
     const deps = depsWith(PUBLIC);
@@ -159,13 +152,13 @@ describe("enableUatisWebhook", () => {
   });
 
   test.each([["http://localhost:3101"], ["https://10.0.0.5"], [undefined]])(
-    "production with MT_PUBLIC_URL %p refuses pull, calls nothing, and keeps the stored webhook (ADR-041)",
+    "without MT_ALLOW_PRIVATE_HOSTS, MT_PUBLIC_URL %p is refused, calls nothing, and keeps the stored webhook (FR-172)",
     async (publicUrl) => {
       await enableUatisWebhook(depsWith(PUBLIC), admin(), undefined);
       const before = await integ();
       gateway = new FakeGateway();
       const result = await enableUatisWebhook(prodDepsWith(publicUrl), admin(), undefined);
-      expect(result).toEqual({ ok: false, error: PUSH_REQUIRED_ERROR });
+      expect(result).toEqual({ ok: false, error: PUBLIC_URL_REQUIRED_ERROR });
       expect(gateway.calls).toEqual([]);
       expect(await integ()).toEqual(before);
     },
@@ -203,7 +196,6 @@ describe("disableUatisWebhook (FR-173)", () => {
       uatis_webhook_id: null,
       uatis_webhook_mode: null,
       uatis_organization_id: null,
-      uatis_feed_cursor: null,
       webhook_secret_id: secretId,
     });
     const [audit] = await db`select 1 from public.audit_logs where restaurant_id = ${a.restaurantId}
@@ -223,18 +215,19 @@ describe("disableUatisWebhook (FR-173)", () => {
 });
 
 describe("getUatisWebhookStatus (FR-178)", () => {
-  test("not registered: says which mode the next activation picks", async () => {
-    await disableUatisWebhook(depsWith(undefined), admin(), undefined);
-    const status = await getUatisWebhookStatus(depsWith("http://localhost:3101"), admin(), undefined);
+  test("not registered: says whether MT_PUBLIC_URL qualifies and why", async () => {
+    await disableUatisWebhook(depsWith(PUBLIC), admin(), undefined);
+    const status = await getUatisWebhookStatus(prodDepsWith("http://localhost:3101"), admin(), undefined);
     expect(status).toMatchObject({
       state: "not_registered",
       mode: null,
-      nextMode: "pull",
       publicUrl: { ok: false, reason: "not_https" },
       deliveries: null,
     });
-    const pushNext = await getUatisWebhookStatus(depsWith(PUBLIC), admin(), undefined);
-    expect(pushNext).toMatchObject({ nextMode: "push", publicUrl: { ok: true, url: PUBLIC } });
+    const ok = await getUatisWebhookStatus(depsWith(PUBLIC), admin(), undefined);
+    expect(ok).toMatchObject({ publicUrl: { ok: true, url: PUBLIC } });
+    const local = await getUatisWebhookStatus(depsWith("http://localhost:3101"), admin(), undefined);
+    expect(local).toMatchObject({ publicUrl: { ok: true, url: "http://localhost:3101" } });
   });
 
   test("active: mode, the five newest attempts, and the last push time", async () => {
@@ -257,15 +250,6 @@ describe("getUatisWebhookStatus (FR-178)", () => {
     expect(status).toMatchObject({ state: "active", mode: "push", webhookId: enabled.webhookId, deliveriesError: null });
     expect(status.lastWebhookAt).toBe(NOW.toISOString());
     expect(status.deliveries?.map((d) => d.id)).toEqual(attempts.slice(0, 5).map((d) => d.id));
-  });
-
-  test("pushRequired is true in production only, so a leftover pull webhook gets a warning (ADR-041)", async () => {
-    const enabled = await enableUatisWebhook(depsWith(undefined), admin(), undefined);
-    expect(enabled).toMatchObject({ ok: true, mode: "pull" });
-    const prod = await getUatisWebhookStatus(prodDepsWith(PUBLIC), admin(), undefined);
-    expect(prod).toMatchObject({ state: "active", mode: "pull", pushRequired: true, nextMode: "push" });
-    const dev = await getUatisWebhookStatus(depsWith(undefined), admin(), undefined);
-    expect(dev).toMatchObject({ mode: "pull", pushRequired: false });
   });
 
   test("a gateway failure shows a note instead of the attempts and never throws", async () => {
@@ -353,15 +337,15 @@ describe("push route against the database (FR-175, FR-176, FR-177)", () => {
     expect(rows).toHaveLength(0);
   });
 
-  test("an event first read from the feed is a duplicate when pushed (dedupe across push and pull)", async () => {
+  test("an event already applied is a duplicate when pushed again (receipt dedupe)", async () => {
     const { deps, secret } = await pushSetup();
     const deliveryId = crypto.randomUUID();
     const messageId = crypto.randomUUID();
     const raw = inboundBody(gateway.organization.id, deliveryId, messageId);
-    const pulled = await asService(db, { restaurantId: b.restaurantId, actorType: "system" }, (tx) =>
-      applyUatisEvent(tx, deps, b.restaurantId, parseUatisWebhookEvent(JSON.parse(raw)), { eventId: deliveryId, source: "pull" }),
+    const first = await asService(db, { restaurantId: b.restaurantId, actorType: "system" }, (tx) =>
+      applyUatisEvent(tx, deps, b.restaurantId, parseUatisWebhookEvent(JSON.parse(raw)), { eventId: deliveryId, source: "push" }),
     );
-    expect(pulled.action).toBe("ingested");
+    expect(first.action).toBe("ingested");
     const [conv] = await db<{ unread_count: number }[]>`
       select c.unread_count from public.conversations c join public.messages m on m.conversation_id = c.id
       where m.external_id = ${messageId}`;

@@ -72,9 +72,10 @@ export function canRedeliver(status: DeliveryStatus): boolean {
   return status === "delivered" || status === "exhausted";
 }
 
-// ─── backend-uatis webhook panel (ADR-021, ADR-023; FR-172, FR-178) ───────────
+// ─── backend-uatis webhook panel (ADR-021, ADR-042; FR-172, FR-178) ───────────
 
-export type UatisMode = "push" | "pull";
+/** ADR-042: push is the only mode. */
+export type UatisMode = "push";
 export type PublicUrlReason =
   | "missing"
   | "invalid_url"
@@ -84,15 +85,14 @@ export type PublicUrlReason =
   | "query_not_allowed"
   | "private_host";
 
-export function uatisModeLabel(mode: UatisMode): string {
-  return mode === "push" ? "Push" : "Pull";
+export function uatisModeLabel(_mode: UatisMode): string {
+  return "Push";
 }
 
-export function uatisModeExplanation(mode: UatisMode): string {
-  return mode === "push"
-    ? "O backend-uatis envia cada evento para o Marmitop assim que ele acontece. A cada 5 minutos o Marmitop também lê o feed de eventos para recuperar algum envio perdido."
-    : "O Marmitop busca os eventos no backend-uatis a cada poucos segundos, sem URL pública e sem túnel. É o modo usado em desenvolvimento local.";
-}
+export const UATIS_PUSH_EXPLANATION =
+  "O backend-uatis envia cada mensagem para o Marmitop assim que ela chega. Se alguma não aparecer, use \"Atualizar\" em Conversas.";
+export const UATIS_NOT_REGISTERED_EXPLANATION =
+  "Sem webhook, as mensagens recebidas só aparecem quando alguém clica em \"Atualizar\" em Conversas, e as confirmações de entrega e leitura não chegam.";
 
 const PUBLIC_URL_REASONS: Record<PublicUrlReason, string> = {
   missing: "não está definida",
@@ -108,29 +108,8 @@ export function publicUrlReasonText(reason: PublicUrlReason): string {
   return PUBLIC_URL_REASONS[reason];
 }
 
-export function uatisNextModeText(status: {
-  nextMode: UatisMode;
-  pushRequired?: boolean;
-  publicUrl: { ok: boolean; url: string | null; reason: PublicUrlReason | null };
-}): string {
-  const name = status.publicUrl.url ? `MT_PUBLIC_URL (${status.publicUrl.url})` : "MT_PUBLIC_URL";
-  const why = status.publicUrl.ok
-    ? "é uma URL pública https"
-    : publicUrlReasonText(status.publicUrl.reason ?? "missing");
-  // ADR-041: production refuses pull, so there is no pull to announce.
-  if (status.pushRequired && !status.publicUrl.ok) return `Em produção o modo Pull não é permitido: ${name} ${why}.`;
-  return `Ao ativar, o modo será ${uatisModeLabel(status.nextMode)}: ${name} ${why}.`;
+export function uatisPublicUrlText(publicUrl: { ok: boolean; url: string | null; reason: PublicUrlReason | null }): string {
+  const name = publicUrl.url ? `MT_PUBLIC_URL (${publicUrl.url})` : "MT_PUBLIC_URL";
+  if (publicUrl.ok) return `Ao ativar, o backend-uatis enviará as mensagens para ${name}.`;
+  return `Não é possível ativar: ${name} ${publicUrlReasonText(publicUrl.reason ?? "missing")}.`;
 }
-
-/** FR-178, ADR-041: a pull webhook in production is a leftover; the admin registers again. */
-export function uatisPullInProduction(status: {
-  state: string;
-  mode: UatisMode | null;
-  pushRequired: boolean;
-}): boolean {
-  return status.pushRequired && status.state === "active" && status.mode === "pull";
-}
-
-export const UATIS_PULL_IN_PRODUCTION_TITLE = "Modo Pull em produção";
-export const UATIS_PULL_IN_PRODUCTION_TEXT =
-  'Este webhook foi registrado em modo Pull. Em produção o Marmitop usa só o modo Push. Clique em "Registrar novamente" para passar para Push e receber as mensagens assim que chegam.';

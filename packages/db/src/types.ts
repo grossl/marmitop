@@ -203,10 +203,9 @@ export interface IntegrationWhatsappRow {
   last_synced_at: Date | null;
   /** Migration 0019 (ADR-021, FR-170, FR-175, FR-176). */
   uatis_webhook_id: string | null;
-  /** ADR-023. Null exactly when `uatis_webhook_id` is null. */
-  uatis_webhook_mode: "push" | "pull" | null;
+  /** ADR-042: push only. Null exactly when `uatis_webhook_id` is null. */
+  uatis_webhook_mode: "push" | null;
   uatis_organization_id: string | null;
-  uatis_feed_cursor: string | null;
   last_webhook_at: Date | null;
   /** Last timestamp poll (migration 0019, ADR-023). */
   last_polled_at: Date | null;
@@ -218,6 +217,7 @@ export interface UatisEventReceiptRow {
   restaurant_id: string;
   event_id: string;
   event_type: string;
+  /** New rows are `push` (ADR-042); `pull` rows are history. */
   source: "push" | "pull";
   received_at: Date;
 }

@@ -1,7 +1,7 @@
-// One handler for every backend-uatis event, pushed or pulled (ADR-023, FR-176).
+// One handler for every backend-uatis push event (ADR-023, ADR-042, FR-176).
 //
-// The push route (`receiveUatisWebhook`) and the event-feed job (`uatis_feed_pull`) both call
-// `applyUatisEvent` inside the restaurant's `system` transaction:
+// The push route (`receiveUatisWebhook`) calls `applyUatisEvent` inside the restaurant's
+// `system` transaction:
 //
 //   1. record the event id in `uatis_event_receipts`; an id seen before is a duplicate and
 //      nothing else runs. The receipt commits with the rows below, so a rolled-back apply
@@ -16,7 +16,8 @@ import type { Tx } from "@mt/db";
 import type { ServiceDeps } from "../../deps";
 import { type ApplyResult, applyGatewayMessage } from "./gateway-events";
 
-export type UatisEventSource = "push" | "pull";
+/** ADR-042: push is the only source; `pull` rows in `uatis_event_receipts` are history. */
+export type UatisEventSource = "push";
 
 export type UatisEventResult =
   | ApplyResult
@@ -25,7 +26,7 @@ export type UatisEventResult =
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** The id that names one event in both paths: the body `id` (= `X-Uatis-Delivery` = feed `id`). */
+/** The id that names one event: the body `id` (= `X-Uatis-Delivery`). */
 export function uatisEventId(event: UatisWebhookEvent, fallback?: string | null): string | null {
   const fromBody = "deliveryId" in event ? event.deliveryId : null;
   if (fromBody && UUID.test(fromBody)) return fromBody;

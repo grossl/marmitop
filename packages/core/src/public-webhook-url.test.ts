@@ -1,4 +1,5 @@
-// covers FR-172 (ADR-021): MT_PUBLIC_URL must be a public https URL on port 443.
+// covers FR-172 (ADR-021, ADR-042): MT_PUBLIC_URL must be a public https URL on port 443, or any
+// http URL with MT_ALLOW_PRIVATE_HOSTS.
 import { describe, expect, test } from "bun:test";
 
 import { checkPublicBaseUrl, type PublicUrlRejection, uatisWebhookTargetUrl } from "./ssrf";
@@ -41,6 +42,25 @@ describe("checkPublicBaseUrl", () => {
     ["https://x.example.com/#a", "query_not_allowed"],
   ])("refuses %p (%s)", (input, reason) => {
     expect(checkPublicBaseUrl(input)).toEqual({ ok: false, reason });
+  });
+});
+
+describe("checkPublicBaseUrl with allowPrivateHosts (development, ADR-042)", () => {
+  test.each([
+    ["http://localhost:3101", "http://localhost:3101"],
+    ["http://127.0.0.1:3101/", "http://127.0.0.1:3101"],
+    ["http://host.docker.internal:3101", "http://host.docker.internal:3101"],
+    ["https://10.0.0.5:8443", "https://10.0.0.5:8443"],
+  ])("accepts %p", (input, url) => {
+    expect(checkPublicBaseUrl(input, { allowPrivateHosts: true })).toEqual({ ok: true, url });
+  });
+
+  test.each<[string, PublicUrlRejection]>([
+    ["ftp://localhost", "not_https"],
+    ["http://user:pw@localhost:3101", "userinfo_not_allowed"],
+    ["http://localhost:3101/?a=1", "query_not_allowed"],
+  ])("still refuses %p (%s)", (input, reason) => {
+    expect(checkPublicBaseUrl(input, { allowPrivateHosts: true })).toEqual({ ok: false, reason });
   });
 });
 

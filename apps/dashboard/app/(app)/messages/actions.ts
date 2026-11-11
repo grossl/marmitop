@@ -4,6 +4,8 @@ import {
   getConversation,
   listConversations,
   markConversationRead,
+  refreshWhatsApp,
+  refreshWhatsAppText,
   retryMessage,
   sendMessage,
   setConversationAiMode,
@@ -17,6 +19,8 @@ import {
   setConversationAiModeSchema,
   simulateInboundActionSchema,
 } from "@mt/schemas";
+
+import { z } from "zod";
 
 import { adminAction, memberAction } from "@/lib/server/safe-action";
 
@@ -60,4 +64,13 @@ export const simulateInboundMessageAction = adminAction(
 export const setConversationAiModeAction = memberAction(
   { name: "messages.setConversationAiMode", input: setConversationAiModeSchema },
   ({ deps, ctx, input }) => setConversationAiMode(deps, ctx, input),
+);
+
+/** FR-174 (ADR-042): "Atualizar" enqueues one timestamp poll; Realtime shows what it finds. */
+export const refreshWhatsAppAction = memberAction(
+  { name: "messages.refreshWhatsApp", input: z.undefined() },
+  async ({ deps, ctx }) => {
+    const { result } = await refreshWhatsApp(deps, ctx, undefined);
+    return { result, message: refreshWhatsAppText(result) };
+  },
 );

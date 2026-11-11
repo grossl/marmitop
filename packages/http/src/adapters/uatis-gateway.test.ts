@@ -205,21 +205,6 @@ describe("UatisGateway webhook management", () => {
     expect(hook.secret).toBe(server.webhooks.get(hook.id)?.secret ?? "missing");
   });
 
-  test("a pull webhook posts mode pull with no url and gets no secret", async () => {
-    const hook = await gateway.createWebhook({
-      mode: "pull",
-      url: null,
-      events: ["message.created", "message.updated"],
-      description: "Marmitop",
-    });
-    expect(server.requests.at(-1)?.body).toEqual({
-      mode: "pull",
-      events: ["message.created", "message.updated"],
-      description: "Marmitop",
-    });
-    expect(hook).toMatchObject({ mode: "pull", url: null, secret: null });
-  });
-
   test("a 422 for a refused URL is a GatewayError with the code", async () => {
     const e = await failure(
       gateway.createWebhook({ mode: "push", url: "http://127.0.0.1:3101/x", events: ["message.created"], description: null }),
@@ -269,72 +254,5 @@ describe("UatisGateway webhook management", () => {
       ["message.created", "failed", 401],
     ]);
     expect(attempts[0]?.createdAt).toBeInstanceOf(Date);
-  });
-
-  // covers FR-174 (ADR-023): the event feed.
-  describe("listWebhookEvents", () => {
-    async function pullHook() {
-      return gateway.createWebhook({
-        mode: "pull",
-        url: null,
-        events: ["message.created", "message.updated"],
-        description: null,
-      });
-    }
-
-    test("reads GET /v1/webhooks/{id}/events with after and limit, oldest first", async () => {
-      const hook = await pullHook();
-      const first = server.injectInbound("5511988887777", "um");
-      server.injectInbound("5511988887777", "dois");
-      const page = await gateway.listWebhookEvents(hook.id, { after: null, limit: 1 });
-      expect(server.requests.at(-1)).toMatchObject({ method: "GET", path: `/v1/webhooks/${hook.id}/events`, query: { limit: "1" } });
-      expect(page.events).toHaveLength(1);
-      expect(page.nextCursor).toBe(page.events[0]?.cursor ?? "missing");
-      const event = page.events[0]?.event as { type: string; organization_id: string; data: { message: { id: string } } };
-      expect(event.type).toBe("message.created");
-      expect(event.organization_id).toBe(server.organizationId);
-      expect(event.data.message.id).toBe(first.id);
-      const next = await gateway.listWebhookEvents(hook.id, { after: page.events[0]?.cursor ?? null, limit: 50 });
-      expect(server.requests.at(-1)?.query.after).toBe(page.events[0]?.cursor);
-      expect(next.events.map((e) => (e.event as { data: { message: { content: { text: string } } } }).data.message.content.text)).toEqual(["dois"]);
-      expect(next.nextCursor).toBe(next.events[0]?.cursor ?? "missing");
-      const empty = await gateway.listWebhookEvents(hook.id, { after: next.nextCursor, limit: 50 });
-      expect(empty).toEqual({ events: [], nextCursor: next.nextCursor });
-    });
-
-    test("a foreign cursor is a 400 validation_failed", async () => {
-      const hook = await pullHook();
-      const e = await failure(gateway.listWebhookEvents(hook.id, { after: "not-a-cursor" }));
-      expect(e.failure).toMatchObject({ kind: "http", status: 400, code: "validation_failed" });
-    });
-
-    test("getWebhook reads GET /v1/webhooks/{id} with the mode, and 404 is null", async () => {
-      const hook = await pullHook();
-      expect(await gateway.getWebhook(hook.id)).toEqual({ id: hook.id, mode: "pull", url: null, status: "active" });
-      expect(server.requests.at(-1)).toMatchObject({ method: "GET", path: `/v1/webhooks/${hook.id}` });
-      expect(await gateway.getWebhook("00000000-0000-4000-8000-000000000009")).toBeNull();
-    });
-
-    test("a feed event equals the push body byte for byte, apart from the cursor", async () => {
-      const hook = await pullHook();
-      server.injectInbound("5511988887777", "igual");
-      const page = await gateway.listWebhookEvents(hook.id, { after: null });
-      const pushed = server.pushBodies.at(-1);
-      expect(JSON.stringify(page.events[0]?.event)).toBe(pushed ?? "missing");
-    });
-
-    test("410 cursor_expired is a GatewayError with that status and code", async () => {
-      const hook = await pullHook();
-      server.scriptNext(`GET /v1/webhooks/${hook.id}/events`, { kind: "status", status: 410, code: "cursor_expired" });
-      const e = await failure(gateway.listWebhookEvents(hook.id, { after: "old" }));
-      expect(e.failure).toMatchObject({ kind: "http", status: 410, code: "cursor_expired" });
-    });
-
-    test("an older backend-uatis without the feed answers 404", async () => {
-      server.feedSupported = false;
-      const hook = await pullHook();
-      const e = await failure(gateway.listWebhookEvents(hook.id, { after: null }));
-      expect(e.failure).toMatchObject({ kind: "http", status: 404 });
-    });
   });
 });

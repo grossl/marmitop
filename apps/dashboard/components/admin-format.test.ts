@@ -11,10 +11,8 @@ import {
   formatMonthLabel,
   parseBRLToCents,
   publicUrlReasonText,
-  uatisModeExplanation,
   uatisModeLabel,
-  uatisNextModeText,
-  uatisPullInProduction,
+  uatisPublicUrlText,
   usagePercent,
 } from "./admin-format";
 
@@ -73,52 +71,22 @@ describe("webhook deliveries", () => {
   });
 });
 
-// covers FR-172, FR-178 (ADR-021, ADR-023, ADR-041): the WhatsApp webhook panel text.
+// covers FR-172, FR-178 (ADR-021, ADR-042): the WhatsApp webhook panel text.
 describe("uatis webhook text", () => {
-  test("mode labels and explanations", () => {
+  test("push is the only mode", () => {
     expect(uatisModeLabel("push")).toBe("Push");
-    expect(uatisModeLabel("pull")).toBe("Pull");
-    expect(uatisModeExplanation("push")).toContain("envia cada evento");
-    expect(uatisModeExplanation("pull")).toContain("sem URL pública");
   });
 
-  test("the next mode says why", () => {
-    expect(
-      uatisNextModeText({ nextMode: "push", publicUrl: { ok: true, url: "https://api.example.com", reason: null } }),
-    ).toBe("Ao ativar, o modo será Push: MT_PUBLIC_URL (https://api.example.com) é uma URL pública https.");
-    expect(
-      uatisNextModeText({
-        nextMode: "pull",
-        publicUrl: { ok: false, url: "http://localhost:3101", reason: "not_https" },
-      }),
-    ).toBe("Ao ativar, o modo será Pull: MT_PUBLIC_URL (http://localhost:3101) não usa https.");
-    expect(uatisNextModeText({ nextMode: "pull", publicUrl: { ok: false, url: null, reason: "missing" } })).toBe(
-      "Ao ativar, o modo será Pull: MT_PUBLIC_URL não está definida.",
+  test("the MT_PUBLIC_URL line says where pushes go, or why activation is refused", () => {
+    expect(uatisPublicUrlText({ ok: true, url: "https://api.example.com", reason: null })).toBe(
+      "Ao ativar, o backend-uatis enviará as mensagens para MT_PUBLIC_URL (https://api.example.com).",
     );
-  });
-
-  test("production never announces pull (ADR-041)", () => {
-    expect(
-      uatisNextModeText({
-        nextMode: "pull",
-        pushRequired: true,
-        publicUrl: { ok: false, url: null, reason: "missing" },
-      }),
-    ).toBe("Em produção o modo Pull não é permitido: MT_PUBLIC_URL não está definida.");
-    expect(
-      uatisNextModeText({
-        nextMode: "push",
-        pushRequired: true,
-        publicUrl: { ok: true, url: "https://api.example.com", reason: null },
-      }),
-    ).toBe("Ao ativar, o modo será Push: MT_PUBLIC_URL (https://api.example.com) é uma URL pública https.");
-  });
-
-  test("a pull webhook is flagged in production only (ADR-041)", () => {
-    expect(uatisPullInProduction({ state: "active", mode: "pull", pushRequired: true })).toBe(true);
-    expect(uatisPullInProduction({ state: "active", mode: "pull", pushRequired: false })).toBe(false);
-    expect(uatisPullInProduction({ state: "active", mode: "push", pushRequired: true })).toBe(false);
-    expect(uatisPullInProduction({ state: "not_registered", mode: null, pushRequired: true })).toBe(false);
+    expect(uatisPublicUrlText({ ok: false, url: "http://localhost:3101", reason: "not_https" })).toBe(
+      "Não é possível ativar: MT_PUBLIC_URL (http://localhost:3101) não usa https.",
+    );
+    expect(uatisPublicUrlText({ ok: false, url: null, reason: "missing" })).toBe(
+      "Não é possível ativar: MT_PUBLIC_URL não está definida.",
+    );
   });
 
   test("every public URL reason has pt-BR text", () => {

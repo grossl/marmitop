@@ -1,8 +1,6 @@
 // mt_sync op whatsapp_reconcile: the timestamp poll (FR-107, FR-108;
-// ADR-002 Amendment 1). pg_cron enqueues one job every 30 seconds per connected
-// restaurant without a registered backend-uatis webhook (`mt.enqueue_whatsapp_sync`,
-// migration 0019). The event-feed job (`uatis_feed_pull`, ADR-023) calls
-// `runTimestampPoll` as its fallback when the feed answers 404.
+// ADR-002 Amendment 1). Only "Atualizar" in Conversas enqueues it
+// (`mt.request_whatsapp_refresh`, migration 0033, FR-174, ADR-042); no schedule does.
 //
 //   from   = last_sync_cursor − 60 s (or now − 24 h on the first poll)
 //   read   = GET /v1/messages?direction=in&from=… every page (newest first)
@@ -65,14 +63,14 @@ export function createWhatsAppReconcileHandler(deps: ReconcileHandlerDeps): JobH
     subjectId: () => null,
     // Up to MAX_PAGES reads at 10 s each, plus the writes.
     visibilityTimeoutSeconds: 300,
-    // ADR-034: the schedule enqueues the next run; a failure must not back off and block it.
+    // ADR-034: the next press of "Atualizar" enqueues a fresh run; a failure must not back off and block it.
     periodic: true,
 
     run: ({ payload }) => runTimestampPoll(deps, payload.restaurantId),
   };
 }
 
-/** One timestamp poll for one restaurant. Shared by `whatsapp_reconcile` and the feed fallback. */
+/** One timestamp poll for one restaurant. */
 export async function runTimestampPoll(deps: ReconcileHandlerDeps, restaurantId: string): Promise<JobOutcome> {
   const { store } = deps;
   const pageSize = deps.pageSize ?? 100;

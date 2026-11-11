@@ -4,7 +4,6 @@ import {
   invoiceJobSchema,
   outboundMessageJobSchema,
   syncJobSchema,
-  uatisFeedPullJobSchema,
   webhookDeliveryJobSchema,
   webhookEnvelopeSchema,
 } from "./queues";
@@ -40,10 +39,8 @@ describe('queue wire shapes (05.data-model.md "Queues")', () => {
       invoiceJobSchema.safeParse({ v: 1, restaurantId: U, orderInvoiceId: V, op: "poll", pollRound: -1 }).success,
     ).toBe(false);
   });
-  // covers FR-174 (ADR-023)
-  test("mt_sync op uatis_feed_pull has its own schema", () => {
-    expect(uatisFeedPullJobSchema.safeParse({ v: 1, restaurantId: U, op: "uatis_feed_pull" }).success).toBe(true);
-    expect(uatisFeedPullJobSchema.safeParse({ v: 1, restaurantId: U, op: "whatsapp_reconcile" }).success).toBe(false);
+  // covers FR-174 (ADR-042): the event-feed job is gone.
+  test("mt_sync refuses the old uatis_feed_pull op", () => {
     expect(syncJobSchema.safeParse({ v: 1, restaurantId: U, op: "uatis_feed_pull" }).success).toBe(false);
   });
   test("mt_sync op is whatsapp_reconcile", () => {

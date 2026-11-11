@@ -12,11 +12,9 @@
 //                                  403 forbidden for a key whose role is not admin
 //   DELETE /v1/webhooks/{id}       204, or 404 not_found
 //   GET  /v1/webhooks/{id}/deliveries  200 { data: Delivery[], next_cursor: null }, newest first
-//   GET  /v1/webhooks/{id}/events?after&limit  200 { data: [{ cursor, ...envelope }], next_cursor }, oldest
-//                                  first (ADR-023); 404 when `feedSupported` is false (an older backend-uatis)
 //
 // Every inbound inject, send, and status change writes one event per subscribed webhook,
-// push or pull, as `enqueue_webhook_delivery` does. `pushBodies` keeps each rendered body.
+// as `enqueue_webhook_delivery` does. Marmitop registers push only (ADR-042) and never reads the feed. `pushBodies` keeps each rendered body.
 //
 // `uatisWebhookBody` renders the exact envelope the backend-uatis worker posts
 // (its apps/worker/src/body.ts over the `enqueue_webhook_delivery` snapshot).
@@ -49,14 +47,6 @@ export interface FakeUatisWebhook {
   secret: string | null;
   created_at: string;
   updated_at: string;
-}
-
-interface FakeFeedItem {
-  readonly webhookId: string;
-  readonly cursor: string;
-  readonly createdAt: string;
-  readonly deliveryId: string;
-  readonly body: string;
 }
 
 /** backend-uatis `deliverySchema`. */
@@ -141,9 +131,6 @@ export class FakeUatisServer {
   readonly deliveries: FakeUatisDelivery[] = [];
   /** Every envelope rendered for a webhook, in order (the bytes a push would carry). */
   readonly pushBodies: string[] = [];
-  /** False mimics a backend-uatis without the event feed: `/events` answers 404. */
-  feedSupported = true;
-  private readonly feed: FakeFeedItem[] = [];
   private readonly scripts: { match: string; script: FakeUatisScript }[] = [];
   private readonly enforceWindow: boolean;
   private server: ReturnType<typeof Bun.serve> | null = null;
@@ -208,8 +195,6 @@ export class FakeUatisServer {
       const deliveryId = randomUUID();
       const createdAt = this.stamp();
       const body = uatisWebhookBody({ type, organizationId: this.organizationId, row, deliveryId, createdAt });
-      const cursor = Buffer.from(JSON.stringify({ t: createdAt, id: deliveryId })).toString("base64url");
-      this.feed.push({ webhookId: hook.id, cursor, createdAt, deliveryId, body });
       this.pushBodies.push(body);
       this.recordDelivery(hook.id, { id: deliveryId, event_type: type, status: "pending", http_status: null, created_at: createdAt });
     }
@@ -297,12 +282,11 @@ export class FakeUatisServer {
         created_at: "2026-01-01T00:00:00.000Z",
       });
     }
-    const hookPath = /^\/v1\/webhooks(?:\/([^/]+))?(\/deliveries|\/events)?$/.exec(url.pathname);
+    const hookPath = /^\/v1\/webhooks(?:\/([^/]+))?(\/deliveries)?$/.exec(url.pathname);
     if (hookPath) {
       if (this.apiKeyRole === "member") return error(403, "forbidden", "This route needs the admin role.");
       const [, id, sub] = hookPath;
       const deliveries = sub === "/deliveries";
-      if (req.method === "GET" && id !== undefined && sub === "/events") return this.events(id, url.searchParams);
       if (req.method === "POST" && id === undefined) return this.createWebhook(body);
       if (req.method === "GET" && id !== undefined && sub === undefined) {
         const hook = this.webhooks.get(id);
@@ -394,34 +378,6 @@ export class FakeUatisServer {
     this.webhooks.set(hook.id, hook);
     const { secret, ...rest } = hook;
     return Response.json(secret === null ? rest : hook, { status: 201 });
-  }
-
-  private events(webhookId: string, params: URLSearchParams): Response {
-    if (!this.feedSupported) return error(404, "not_found", "No route.");
-    if (!this.webhooks.has(webhookId)) return error(404, "not_found", "No webhook with this id.");
-    const limit = params.has("limit") ? Number(params.get("limit")) : 50;
-    if (!Number.isInteger(limit) || limit < 1 || limit > 100) return error(400, "validation_failed", "Bad limit.");
-    let after: { t: string; id: string } | null = null;
-    const raw = params.get("after");
-    if (raw !== null) {
-      try {
-        after = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as { t: string; id: string };
-        if (typeof after.t !== "string" || typeof after.id !== "string") throw new Error("bad");
-      } catch {
-        return Response.json(
-          { error: { code: "validation_failed", message: "Invalid cursor.", details: [{ path: "after", code: "invalid", message: "Not a cursor this API issued." }] } },
-          { status: 400 },
-        );
-      }
-    }
-    const key = (t: string, id: string) => `${t}|${id}`;
-    const rest = this.feed
-      .filter((f) => f.webhookId === webhookId)
-      .filter((f) => after === null || key(f.createdAt, f.deliveryId) > key(after.t, after.id));
-    const page = rest.slice(0, limit);
-    const data = page.map((f) => ({ cursor: f.cursor, ...(JSON.parse(f.body) as Record<string, unknown>) }));
-    // backend-uatis: the last event's cursor, or the `after` that was sent when nothing is new.
-    return Response.json({ data, next_cursor: page.at(-1)?.cursor ?? raw });
   }
 
   private send(raw: unknown): Response {

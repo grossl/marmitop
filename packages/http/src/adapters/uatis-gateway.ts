@@ -35,11 +35,8 @@ import {
   type SendTemplateInput,
   type SendTextInput,
   tryMapUatisMessage,
-  type UatisFeedEvent,
-  type UatisFeedPage,
   type UatisOrganization,
   type UatisWebhookDelivery,
-  type UatisWebhookInfo,
   type WhatsAppGateway,
 } from "@mt/core";
 
@@ -213,41 +210,20 @@ export class UatisGateway implements WhatsAppGateway {
   }
 
   async createWebhook(input: CreateWebhookInput): Promise<CreatedUatisWebhook> {
-    // A pull webhook sends no `url` at all (ADR-023): backend-uatis validates a present url.
-    const body =
-      input.mode === "push"
-        ? { mode: "push", url: input.url, events: input.events, description: input.description }
-        : { mode: "pull", events: input.events, description: input.description };
+    // ADR-042: push is the only mode.
+    const body = { mode: "push", url: input.url, events: input.events, description: input.description };
     const { json } = await this.call("POST", "/v1/webhooks", body);
     if (!isRecord(json) || typeof json.id !== "string") throw GatewayError.network();
     const secret = typeof json.secret === "string" && json.secret !== "" ? json.secret : null;
     // A push webhook without its one-time secret could never be verified: treat it as unreadable.
-    if (input.mode === "push" && secret === null) throw GatewayError.network();
+    if (secret === null) throw GatewayError.network();
     return {
       id: json.id,
-      mode: json.mode === "pull" || json.mode === "push" ? json.mode : input.mode,
+      mode: "push",
       url: typeof json.url === "string" ? json.url : null,
       events: Array.isArray(json.events) ? json.events.filter((e): e is string => typeof e === "string") : [],
       status: json.status === "disabled" ? "disabled" : "active",
       secret,
-    };
-  }
-
-  async getWebhook(webhookId: string): Promise<UatisWebhookInfo | null> {
-    let json: unknown;
-    try {
-      json = await this.get(`/v1/webhooks/${encodeURIComponent(webhookId)}`, {});
-    } catch (e) {
-      if (e instanceof GatewayError && e.failure.kind === "http" && e.failure.status === 404) return null;
-      throw e;
-    }
-    if (!isRecord(json) || typeof json.id !== "string") throw GatewayError.network();
-    return {
-      id: json.id,
-      // A backend-uatis without modes has push webhooks only.
-      mode: json.mode === "pull" ? "pull" : "push",
-      url: typeof json.url === "string" ? json.url : null,
-      status: json.status === "disabled" ? "disabled" : "active",
     };
   }
 
@@ -288,30 +264,6 @@ export class UatisGateway implements WhatsAppGateway {
       ];
     });
   }
-
-  async listWebhookEvents(
-    webhookId: string,
-    options: { readonly after: string | null; readonly limit?: number },
-  ): Promise<UatisFeedPage> {
-    const query: Record<string, string> = { limit: String(Math.min(MAX_LIMIT, Math.max(1, options.limit ?? 50))) };
-    if (options.after !== null) query.after = options.after;
-    const page = await this.get(`/v1/webhooks/${encodeURIComponent(webhookId)}/events`, query);
-    if (!isRecord(page) || !Array.isArray(page.data)) throw GatewayError.network();
-    const events: UatisFeedEvent[] = [];
-    for (const raw of page.data) {
-      const e = toFeedEvent(raw);
-      if (e === null) throw GatewayError.network();
-      events.push(e);
-    }
-    return { events, nextCursor: typeof page.next_cursor === "string" ? page.next_cursor : null };
-  }
-}
-
-/** Feed item: the envelope without `cursor`, so it equals the push body (ADR-023). */
-function toFeedEvent(raw: unknown): UatisFeedEvent | null {
-  if (!isRecord(raw) || typeof raw.cursor !== "string" || raw.cursor === "") return null;
-  const { cursor, ...event } = raw;
-  return { cursor, event };
 }
 
 const DELIVERY_STATUSES = ["pending", "delivered", "failed", "exhausted"] as const;

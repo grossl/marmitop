@@ -18,12 +18,10 @@ import {
   deliveryStatusLabel,
   formatBRL,
   parseBRLToCents,
-  uatisModeExplanation,
   uatisModeLabel,
-  uatisNextModeText,
-  uatisPullInProduction,
-  UATIS_PULL_IN_PRODUCTION_TEXT,
-  UATIS_PULL_IN_PRODUCTION_TITLE,
+  UATIS_NOT_REGISTERED_EXPLANATION,
+  UATIS_PUSH_EXPLANATION,
+  uatisPublicUrlText,
   usagePercent,
   WEEKDAY_NAMES,
   WEEKDAY_ORDER,
@@ -740,7 +738,7 @@ const UATIS_EVENT_LABELS: Record<string, string> = {
   "conversation.updated": "Conversa atualizada",
 };
 
-/** FR-170..FR-173, FR-178 (ADR-021, ADR-023): the backend-uatis webhook, push or pull. */
+/** FR-170..FR-173, FR-178 (ADR-021, ADR-042): the backend-uatis push webhook. */
 function UatisWebhookPanel({ status }: { status: UatisWebhookStatus | null }) {
   const section = useSection();
   if (status === null) {
@@ -774,27 +772,13 @@ function UatisWebhookPanel({ status }: { status: UatisWebhookStatus | null }) {
           <span className="text-muted-foreground">
             Último recebimento por push: {status.lastWebhookAt ? formatWhen(status.lastWebhookAt) : "nenhum"}
             {" · "}
-            Última leitura: {status.lastSyncedAt ? formatWhen(status.lastSyncedAt) : "nenhuma"}
+            Última atualização manual: {status.lastSyncedAt ? formatWhen(status.lastSyncedAt) : "nenhuma"}
           </span>
         </div>
-        {active && status.mode ? (
-          <p className="text-sm text-muted-foreground">{uatisModeExplanation(status.mode)}</p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Sem webhook, o Marmitop consulta as mensagens recebidas a cada 30 segundos e não recebe as confirmações de entrega e leitura.
-          </p>
-        )}
-        {uatisPullInProduction(status) && (
-          <div
-            className="rounded-lg border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 p-4"
-            role="alert"
-            data-testid="uatis-pull-in-production"
-          >
-            <p className="text-sm font-semibold text-amber-900 dark:text-amber-300">{UATIS_PULL_IN_PRODUCTION_TITLE}</p>
-            <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">{UATIS_PULL_IN_PRODUCTION_TEXT}</p>
-          </div>
-        )}
-        <p className="text-sm text-muted-foreground">{uatisNextModeText(status)}</p>
+        <p className="text-sm text-muted-foreground">
+          {active ? UATIS_PUSH_EXPLANATION : UATIS_NOT_REGISTERED_EXPLANATION}
+        </p>
+        <p className="text-sm text-muted-foreground">{uatisPublicUrlText(status.publicUrl)}</p>
         {active && (
           <div>
             <Label>Últimas entregas no backend-uatis</Label>
@@ -837,7 +821,7 @@ function UatisWebhookPanel({ status }: { status: UatisWebhookStatus | null }) {
               variant="outline"
               disabled={section.pending}
               onClick={() => {
-                if (window.confirm("Desativar o webhook? O Marmitop volta a consultar as mensagens a cada 30 segundos.")) {
+                if (window.confirm('Desativar o webhook? As mensagens só vão aparecer quando alguém clicar em "Atualizar" em Conversas.')) {
                   section.run(
                     () => disableUatisWebhookAction(undefined),
                     (r) => (r.ok ? "Webhook desativado." : null),

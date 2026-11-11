@@ -98,7 +98,7 @@ export const disconnectWhatsAppAction = adminAction(
   ({ deps, ctx }) => saved(disconnectWhatsApp(deps, ctx, undefined)),
 );
 
-/** FR-170..FR-172 (ADR-021, ADR-023): push when MT_PUBLIC_URL is public, pull otherwise. */
+/** FR-170..FR-172 (ADR-021, ADR-042): push to MT_PUBLIC_URL, the only mode. */
 export const enableUatisWebhookAction = adminAction(
   { name: "settings.enableUatisWebhook", input: none },
   ({ deps, ctx }) => saved(enableUatisWebhook(deps, ctx, undefined)),

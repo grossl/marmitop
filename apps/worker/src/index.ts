@@ -2,12 +2,10 @@
 // SIGTERM and SIGINT stop reading, wait for running jobs, then close the pool.
 
 import { ScriptedAssistantModel } from "@mt/core";
-import { withoutContext } from "@mt/db";
 import { createServiceDeps, readServerConfig } from "@mt/http";
 
 import { AnthropicAssistantModel } from "./ai/anthropic-model";
 import { readAiConfig } from "./ai/config";
-import { FeedPullTimer, feedTimerIntervalMs } from "./feed-timer";
 import { createLogger } from "./framework/logger";
 import { PgmqQueueClient } from "./framework/pgmq-client";
 import { QueueWorker } from "./framework/worker";
@@ -57,28 +55,14 @@ const server = Bun.serve({
       ? healthResponse(worker.health())
       : new Response("not found", { status: 404 }),
 });
-// ADR-023, FR-174: enqueue event-feed reads every MT_UATIS_PULL_SECONDS; every 60 s in production (ADR-041).
-const feedTimerMs = feedTimerIntervalMs(config.env, config.uatisPullSeconds);
-const feedTimer = new FeedPullTimer({
-  pullSeconds: config.uatisPullSeconds,
-  intervalMs: feedTimerMs,
-  enqueue: (seconds) =>
-    withoutContext(deps.db, async (tx) => {
-      const [row] = await tx<{ n: number }[]>`select mt.enqueue_uatis_feed_pulls(${seconds}::int) as n`;
-      return row?.n ?? 0;
-    }),
-  log,
-});
 worker.start();
-feedTimer.start();
-log.info("worker health listening", { port: server.port, uatisPullSeconds: config.uatisPullSeconds, feedTimerMs });
+log.info("worker health listening", { port: server.port });
 
 let stopping = false;
 async function shutdown(signal: string) {
   if (stopping) return;
   stopping = true;
   log.info("worker stopping", { signal });
-  await feedTimer.stop();
   await worker.stop();
   await server.stop();
   await deps.db.end({ timeout: 5 });

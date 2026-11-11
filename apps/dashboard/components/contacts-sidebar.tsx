@@ -1,13 +1,15 @@
 "use client";
 
 import type { ConversationSummary } from "@mt/http";
-import { useMemo, useState } from "react";
-import { Search, Store } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { RefreshCw, Search, Store } from "lucide-react";
+import { toast } from "sonner";
 import { Input } from "@mt/ui/components/input";
 import { Badge } from "@mt/ui/components/badge";
 import { ScrollArea } from "@mt/ui/components/scroll-area";
 import { cn } from "@mt/ui/lib/utils";
 
+import { refreshWhatsAppAction } from "@/app/(app)/messages/actions";
 import { formatListTime, initials } from "@/components/messaging-format";
 import { SimulateInboundForm } from "@/components/simulate-inbound-form";
 
@@ -36,6 +38,18 @@ export function ContactsSidebar({
   onToggleNeedsAttendant,
 }: ContactsSidebarProps) {
   const [search, setSearch] = useState("");
+  // FR-174 (ADR-042): the only read of backend-uatis besides the push webhook, on demand.
+  const [refreshing, startRefresh] = useTransition();
+  const refreshWhatsApp = () =>
+    startRefresh(async () => {
+      const result = await refreshWhatsAppAction(undefined);
+      if (!result.ok) {
+        toast.error(result.error.message);
+        return;
+      }
+      if (result.data.result === "enqueued") toast.success(result.data.message);
+      else toast.info(result.data.message);
+    });
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -56,10 +70,21 @@ export function ContactsSidebar({
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary">
             <Store className="w-4 h-4 text-primary-foreground" />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-sidebar-foreground leading-tight">Marmitop</p>
             <p className="text-xs text-sidebar-foreground/50 leading-tight">{restaurantName}</p>
           </div>
+          <button
+            type="button"
+            onClick={refreshWhatsApp}
+            disabled={refreshing}
+            title="Buscar no WhatsApp as mensagens que não chegaram"
+            className="flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground disabled:opacity-50"
+            data-testid="refresh-whatsapp"
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} aria-hidden="true" />
+            Atualizar
+          </button>
         </div>
 
         {/* Search */}

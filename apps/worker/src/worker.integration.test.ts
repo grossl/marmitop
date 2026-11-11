@@ -4,16 +4,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { FakeGateway, FixedClock, GatewayError, ScriptedAssistantModel } from "@mt/core";
 import { type Db, QUEUES, sendJob } from "@mt/db";
 import { asService, createTestDb, type RestaurantFixture, seedRestaurant, truncateQueues } from "@mt/db/test-harness";
-import { connectWhatsApp, enableUatisWebhook, type GatewayFactory, type ServiceDeps } from "@mt/http";
+import { connectWhatsApp, type GatewayFactory, type ServiceDeps } from "@mt/http";
 import { createTestServiceDeps, userCtx } from "@mt/http/testing";
 
 import { PgmqQueueClient } from "./framework/pgmq-client";
 import { QueueWorker } from "./framework/worker";
 import { createOutboundMessageHandler } from "./handlers/outbound-message";
-import { createUatisFeedHandler } from "./handlers/uatis-feed";
 import { createWhatsAppReconcileHandler } from "./handlers/whatsapp-reconcile";
 import { buildRegistry } from "./registry";
-import { DbFeedStore } from "./stores/feed-store";
 import { DbOutboundStore } from "./stores/outbound-store";
 import { DbReconcileStore } from "./stores/reconcile-store";
 
@@ -197,78 +195,5 @@ describe("DbReconcileStore with the poll handler (FR-107)", () => {
     const [w] = await db<{ last_sync_cursor: Date }[]>`
       select last_sync_cursor from public.integrations_whatsapp where restaurant_id = ${a.restaurantId}`;
     expect(w?.last_sync_cursor.toISOString()).toBe(m.createdAt.toISOString());
-  });
-
-  test("mt.enqueue_whatsapp_sync enqueues one job per connected restaurant, not twice", async () => {
-    const [first] = await db<{ n: number }[]>`select mt.enqueue_whatsapp_sync() as n`;
-    const [second] = await db<{ n: number }[]>`select mt.enqueue_whatsapp_sync() as n`;
-    expect(first?.n).toBeGreaterThanOrEqual(1);
-    expect(second?.n).toBe(0);
-  });
-});
-
-// covers FR-174, FR-176 (ADR-023): the event feed against the database.
-describe("DbFeedStore with the feed handler", () => {
-  const run = () =>
-    createUatisFeedHandler({
-      store: new DbFeedStore(deps),
-      reconcileStore: new DbReconcileStore(deps),
-      gatewayFor: () => gateway,
-      clock: deps.clock,
-      log: quiet,
-    }).run({
-      queue: QUEUES.sync,
-      msgId: 1,
-      payload: { v: 1, restaurantId: a.restaurantId, op: "uatis_feed_pull" },
-      attempt: 1,
-      readCount: 1,
-      signal: new AbortController().signal,
-    });
-
-  test("a pull webhook's inbound event lands in messages once and the cursor is stored", async () => {
-    const enabled = await enableUatisWebhook(deps, userCtx(a.restaurantId, a.adminId, "admin"), undefined);
-    expect(enabled).toMatchObject({ ok: true, mode: "pull" });
-    if (!enabled.ok) return;
-    const m = gateway.simulateInbound({
-      from: "+5511955553333",
-      body: "Oi pelo feed",
-      at: new Date(NOW.getTime() - 5_000),
-    });
-    expect(await run()).toEqual({ kind: "ok" });
-    const feed = gateway.feeds.get(enabled.webhookId) ?? [];
-    const [w] = await db<{ uatis_feed_cursor: string; last_synced_at: Date }[]>`
-      select uatis_feed_cursor, last_synced_at from public.integrations_whatsapp where restaurant_id = ${a.restaurantId}`;
-    expect(w?.uatis_feed_cursor).toBe(feed.at(-1)?.cursor ?? "missing");
-    expect(w?.last_synced_at).toEqual(NOW);
-
-    // Reading from the start again applies nothing twice (receipts).
-    await db`update public.integrations_whatsapp set uatis_feed_cursor = null where restaurant_id = ${a.restaurantId}`;
-    expect(await run()).toEqual({ kind: "ok" });
-    const rows = await db<{ body: string }[]>`
-      select body from public.messages where restaurant_id = ${a.restaurantId} and external_id = ${m.externalId}`;
-    expect([...rows]).toEqual([{ body: "Oi pelo feed" }]);
-    // The fixture seeds one push receipt; the feed adds one pull receipt per event.
-    const receipts = await db<{ source: string }[]>`
-      select source from public.uatis_event_receipts where restaurant_id = ${a.restaurantId} and source = 'pull'`;
-    expect(receipts.length).toBe(feed.length);
-  });
-
-  test("a status update read from the feed moves an outbound message to read", async () => {
-    const id = await pendingMessage("Seu pedido saiu");
-    await createOutboundMessageHandler({ store: new DbOutboundStore(deps), gatewayFor: () => gateway }).run(ctx(id));
-    const sent = await message(id);
-    gateway.setMessageStatus(sent?.external_id ?? "", "read");
-    expect(await run()).toEqual({ kind: "ok" });
-    expect((await message(id))?.status).toBe("read");
-  });
-
-  test("the timer function enqueues a feed pull for the restaurant in pull mode", async () => {
-    await db`update public.integrations_whatsapp set last_synced_at = now() - interval '10 seconds'
-             where restaurant_id = ${a.restaurantId}`;
-    const [row] = await db<{ n: number }[]>`select mt.enqueue_uatis_feed_pulls(3) as n`;
-    expect(row?.n).toBeGreaterThanOrEqual(1);
-    const jobs = await db<{ op: string }[]>`
-      select message ->> 'op' as op from pgmq.q_mt_sync where message ->> 'restaurantId' = ${a.restaurantId}`;
-    expect(jobs.map((j) => j.op)).toEqual(["uatis_feed_pull"]);
   });
 });

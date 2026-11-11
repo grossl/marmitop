@@ -16,12 +16,9 @@ export type {
   SendResult,
   SendTemplateInput,
   SendTextInput,
-  UatisFeedEvent,
-  UatisFeedPage,
   UatisOrganization,
   UatisWebhookDelivery,
   UatisWebhookEventName,
-  UatisWebhookInfo,
   UatisWebhookMode,
   WhatsAppGateway,
 } from "./whatsapp-gateway";

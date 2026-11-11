@@ -17,7 +17,6 @@ const config = (over: Partial<ServerConfig> = {}): ServerConfig => ({
   env: "test",
   allowPrivateHosts: true,
   publicUrl: undefined,
-  uatisPullSeconds: 3,
   ...over,
 });
 
