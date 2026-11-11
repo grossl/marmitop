@@ -62,5 +62,5 @@ export const webhookEnvelopeSchema = z.object({
   type: z.enum(WEBHOOK_EVENTS),
   created_at: z.string().datetime({ offset: true }),
   restaurant_id: uuidSchema,
-  data: z.record(z.unknown()),
+  data: z.record(z.string(), z.unknown()),
 });

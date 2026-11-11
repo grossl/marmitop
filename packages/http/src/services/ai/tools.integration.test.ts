@@ -126,6 +126,12 @@ describe("update_cart", () => {
     expect(r.content).toContain("items.0.quantity");
     expect(r.content).not.toContain("51");
   });
+  test("an enum error lists the allowed values and never echoes the rejected one", async () => {
+    const r = await run("update_cart", { ...cartInput("pickup"), fulfillment: "drone" });
+    expect(r).toMatchObject({ ok: false, errorCode: "invalid_input" });
+    expect(r.content).toContain("fulfillment: Expected one of pickup | delivery");
+    expect(r.content).not.toContain("drone");
+  });
 });
 
 describe("summary and place_order", () => {

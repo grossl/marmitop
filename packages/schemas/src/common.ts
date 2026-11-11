@@ -24,7 +24,8 @@ export {
   UF_CODES,
 } from "@mt/core";
 
-export const uuidSchema = z.string().uuid();
+// z.guid(): any 8-4-4-4-12 hex id, as Postgres accepts. Zod 4 `uuid()` also checks the RFC version.
+export const uuidSchema = z.guid();
 
 /** Blank strings and `undefined` become `null`; anything else must satisfy `inner`. */
 export function optionalOf<T extends ZodTypeAny>(inner: T) {
@@ -133,11 +134,11 @@ export const apiErrorSchema = z.object({
   }),
 });
 
-function formatPath(path: readonly (string | number)[]): string {
+function formatPath(path: readonly PropertyKey[]): string {
   let out = "";
   for (const part of path) {
     if (typeof part === "number") out += `[${part}]`;
-    else out += out === "" ? part : `.${part}`;
+    else out += out === "" ? String(part) : `.${String(part)}`;
   }
   return out;
 }

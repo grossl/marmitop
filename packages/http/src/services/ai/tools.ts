@@ -58,13 +58,12 @@ const MAX_ISSUES = 3;
  * no limits (strict tool use), so this is how it learns them. Never echoes the rejected value.
  */
 function describeIssue(issue: ZodIssue): string {
-  const path = issue.path.length === 0 ? "(input)" : issue.path.join(".");
+  const path = issue.path.length === 0 ? "(input)" : issue.path.map(String).join(".");
   switch (issue.code) {
-    case "invalid_enum_value":
-      // Zod's own message quotes the received value.
-      return `${path}: Expected one of ${issue.options.join(" | ")}`;
+    case "invalid_value":
+      return `${path}: Expected one of ${issue.values.map(String).join(" | ")}`;
     case "invalid_type":
-      return `${path}: Expected ${issue.expected}, received ${issue.received}`;
+      return `${path}: Expected ${issue.expected}`;
     default:
       return `${path}: ${issue.message}`;
   }

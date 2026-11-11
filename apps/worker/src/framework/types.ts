@@ -6,7 +6,7 @@
 // schedule (1m/5m/30m/2h/8h, six attempts), archiving, and shutdown.
 
 import type { QueueMessage, QueueName } from "@mt/db";
-import type { ZodType, ZodTypeDef } from "zod";
+import type { ZodType } from "zod";
 
 /** `job_attempts.subject_type`. */
 export type SubjectType = "message" | "webhook_delivery" | "order_invoice" | "sync" | "ai_turn";
@@ -42,7 +42,7 @@ export interface JobHandler<P extends JobPayload> {
   readonly queue: QueueName;
   /** Matches `payload.op`. Undefined serves every payload of the queue. */
   readonly op?: string | undefined;
-  readonly schema: ZodType<P, ZodTypeDef, unknown>;
+  readonly schema: ZodType<P, unknown>;
   readonly subjectType: SubjectType;
   subjectId(payload: P): string | null;
   /** Seconds. Default 60; set it higher when one run can take longer than the HTTP timeout times the pages. */

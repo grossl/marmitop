@@ -122,7 +122,7 @@ export const rotateWebhookSecretAction = adminAction(
 
 /** FR-149: send a delivered or exhausted webhook delivery again. */
 export const redeliverWebhookAction = adminAction(
-  { name: "settings.redeliverWebhook", input: z.object({ deliveryId: z.string().uuid() }) },
+  { name: "settings.redeliverWebhook", input: z.object({ deliveryId: z.guid() }) },
   ({ deps, ctx, input }) => saved(redeliverWebhook(deps, ctx, input)),
 );
 

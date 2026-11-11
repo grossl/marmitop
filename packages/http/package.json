@@ -21,6 +21,6 @@
     "@mt/core": "workspace:*",
     "@mt/db": "workspace:*",
     "@mt/schemas": "workspace:*",
-    "zod": "^3.24.1"
+    "zod": "^4.6.7"
   }
 }
