@@ -54,3 +54,4 @@ Option 4.
 
 * `backend-uatis` gets its own ADR and migration for `webhooks.mode`, the nullable `url`, the feed endpoint, and retention.
 * Changes to `backend-uatis` are made on a branch and are never pushed by Marmitop work, because its CI deploys on push.
+* ADR-041 amends this ADR: production refuses pull and runs the worker feed timer every 60 seconds.
