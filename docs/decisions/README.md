@@ -14,7 +14,7 @@ ADR-014 to ADR-017 amend earlier ADRs. When two ADRs conflict, the newest wins. 
 | [008](ADR-008-billing-interface.md) | Billing interface | A `BillingProvider` port with a null adapter. Usage is recorded and no provider is wired. |
 | [009](ADR-009-outbound-webhooks-and-api-keys.md) | Outbound webhooks and API keys | Signed outbound webhooks to one URL per restaurant, and hashed `mtk_` API keys for integrators. |
 | [010](ADR-010-document-style-skill.md) | Document style skill | Documents follow the `orwell-writing` skill. |
-| [011](ADR-011-branch-and-push.md) | Branch and push | Work on `feat/v1-platform`, commit and push per phase, and open one pull request into `master`. |
+| [011](ADR-011-branch-and-push.md) | Branch and push (superseded by 043) | Work on `feat/v1-platform`, commit and push per phase, and open one pull request into `master`. |
 | [012](ADR-012-secret-storage.md) | Secret storage | Per-restaurant secrets are encrypted in the `secrets` table with envelope encryption under `MT_KEK`. |
 | [013](ADR-013-doc-08-fiscal-mapping.md) | Doc 08 becomes the fiscal mapping | `08.validation-templates.md` is replaced by `08.fiscal-mapping.md`: how an order becomes a `web-nf` request. |
 | [014](ADR-014-whatsapp-service-window.md) | WhatsApp 24-hour service window | Send free text inside the window and an approved template for `order_received` outside it. With no template, mark the message `failed`. |
