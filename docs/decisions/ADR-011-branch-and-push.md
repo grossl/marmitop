@@ -1,6 +1,6 @@
 # ADR-011 — Branch and push policy
 
-**Status:** accepted · 2026-10-13
+**Status:** superseded by [ADR-043](ADR-043-main-and-develop.md) · 2026-10-13
 
 ## Question
 
